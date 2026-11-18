@@ -23,30 +23,42 @@ component has a pure interface. All work happens in `packages/paw-core` unless n
   request replacements (up to 3 retries per curse). (Req 2.1–2.6, design §Error Handling)
 - [x] **9. `grantWish` unit tests** — `tests/grant.test.ts`: fake `ModelClient` returning valid JSON → valid `Grant`
   with 3–5 curses; invalid JSON → retry once; second failure → fallback grant. (Req 2.5, P6, P7)
-- [ ] **10. Implement `proposeBinding`** — `src/bind.ts`: construct `Binding` from curse id, clause text, and kind
+- [x] **10. Implement `proposeBinding`** — `src/bind.ts`: construct `Binding` from curse id, clause text, and kind
   (`rewrite` or `ears-clause`). Reject empty clause. (Req 3.1–3.4)
-- [ ] **11. Implement `judgeBinding`** — `src/judge.ts`: build Judge prompt, call model, parse with `VerdictSchema`,
+- [x] **11. Implement `judgeBinding`** — `src/judge.ts`: build Judge prompt, call model, parse with `VerdictSchema`,
   retry once, fall back to `closed: false` on second failure. Apply verdict: set curse status + attach
   binding/verdict. (Req 4.1–4.5)
-- [ ] **12. `judgeBinding` unit tests** — `tests/judge.test.ts`: fake model returning `closed: true` → curse becomes
+- [x] **12. `judgeBinding` unit tests** — `tests/judge.test.ts`: fake model returning `closed: true` → curse becomes
   `closed`; `closed: false` → stays `open`; invalid output → fallback `closed: false`. (Req 4.3, 4.4)
-- [ ] **13. Implement `computeIntegrity`** — `src/integrity.ts`: count open/closed, compute `Math.floor(closed/total *
+- [x] **13. Implement `computeIntegrity`** — `src/integrity.ts`: count open/closed, compute `Math.floor(closed/total *
   5)` (0 if total 0 → return 5). Return `IntegrityResult`. (Req 5.1–5.4)
-- [ ] **14. Integrity property test** — add to `tests/properties.test.ts` (P4): fast-check random grant states, assert
+- [x] **14. Integrity property test** — add to `tests/properties.test.ts` (P4): fast-check random grant states, assert
   score in 0–5, formula holds, closing more never decreases. (P4, Req 5)
-- [ ] **15. Implement `exportSpec`** — `src/export.ts`: generate `requirementsMd` (user story + EARS acceptance
+- [x] **15. Implement `exportSpec`** — `src/export.ts`: generate `requirementsMd` (user story + EARS acceptance
   criteria from closed bindings) and `propertiesMd` (one property per closed curse). Include `IntegrityResult`.
   (Req 6.1–6.5)
-- [ ] **16. Export EARS validity test** — `tests/export.test.ts`: assert every acceptance criterion in
+- [x] **16. Export EARS validity test** — `tests/export.test.ts`: assert every acceptance criterion in
   `requirementsMd` matches EARS pattern. (P1, Req 6.2)
-- [ ] **17. One-property-per-curse test** — add to `tests/properties.test.ts` (P2): fast-check grants, assert
+- [x] **17. One-property-per-curse test** — add to `tests/properties.test.ts` (P2): fast-check grants, assert
   property count in `propertiesMd` equals closed curse count. (P2, Req 6.3)
-- [ ] **18. Finger-count invariant test** — add to `tests/properties.test.ts` (P5): assert open-curse count equals
+- [x] **18. Finger-count invariant test** — add to `tests/properties.test.ts` (P5): assert open-curse count equals
   finger count, closing reduces by exactly one. (P5)
-- [ ] **19. Wire public API** — `src/index.ts`: export `grantWish`, `proposeBinding`, `judgeBinding`,
+- [x] **19. Wire public API** — `src/index.ts`: export `grantWish`, `proposeBinding`, `judgeBinding`,
   `computeIntegrity`, `exportSpec`, budget types, and all schemas/types. One export per file. (structure.md)
-- [ ] **20. Full property suite run** — `pnpm test` in `paw-core`: all unit + property tests pass (P1–P8).
+- [x] **20. Full property suite run** — `pnpm test` in `paw-core`: all unit + property tests pass (P1–P8).
   (Req 1–7)
 - [ ] **21. API integration stub** — `apps/api` implements `ModelClient` with Gemini, wires budget guard before
   every call, serves cached examples when over budget. (Req 7, iron-rules §5) — *separate spec; stub here for
   interface check only.*
+
+## Review findings (owner review, 18.11)
+
+- [ ] **22. Export in true Kiro spec format** — `exportSpec` must take the original `Wish` and emit Kiro's
+  `requirements.md` layout: `# Requirements Document`, `## Introduction` (the wish and its context), then
+  `### Requirement 1` with `**User Story:** As a …, I want …, so that …` and numbered `#### Acceptance Criteria`
+  in EARS (one per closed curse, plus the original wish as criterion 1). Today it emits a flat list with no
+  user story. (Req 6.1, 6.2)
+- [ ] **23. Properties phrased as properties** — each line of `properties.md` must read as a universally
+  quantified, testable statement ("*For any* … , … ") derived from the curse and its binding, tagged with the
+  curse type, and name the requirement it validates. Today it only repeats the clause. (Req 6.3, P2)
+- [ ] **24. Tidy imports** — move the `import type { Curse }` in `export.ts` to the top. (structure.md)

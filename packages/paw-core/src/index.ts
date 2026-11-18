@@ -39,3 +39,11 @@ export {
 } from './prompts';
 
 export { grantWish } from './grant';
+
+export { proposeBinding } from './bind';
+
+export { judgeBinding } from './judge';
+
+export { computeIntegrity } from './integrity';
+
+export { exportSpec } from './export';

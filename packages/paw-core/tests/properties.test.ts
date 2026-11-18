@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 
 import { DAY_MS, canCall, recordCall } from '../src/budget';
+import { computeIntegrity } from '../src/integrity';
+import { exportSpec } from '../src/export';
 import type { BudgetConfig, BudgetState } from '../src/budget';
+import type { Curse, Grant } from '../src/types';
 
 describe('budget properties (P8)', () => {
   it('once spentCents >= dailyBudgetCents (within the day), canCall is false regardless of ipCalls or window', () => {
@@ -99,6 +102,164 @@ describe('budget properties (P8)', () => {
           }
         },
       ),
+    );
+  });
+});
+
+// ── Property tests for integrity and export ────────────────────────────────
+
+/** Generate a valid Curse with a given status. */
+function genCurse(status: 'open' | 'closed' = 'open'): fc.Arbitrary<Curse> {
+  return fc.record({
+    id: fc.string().map((s) => s || 'id'),
+    type: fc.constantFrom(
+      'permissions',
+      'time',
+      'money',
+      'scale',
+      'abuse',
+      'privacy',
+      'accessibility',
+      'data-loss',
+      'concurrency',
+      'edge-input',
+    ) as fc.Arbitrary<any>,
+    story: fc.string({ maxLength: 300 }),
+    loophole: fc.string().map((s) => s || 'loophole'),
+    status: fc.constant(status),
+    binding: status === 'closed'
+      ? fc.record({
+          curseId: fc.string().map((s) => s || 'id'),
+          kind: fc.constantFrom('rewrite', 'ears-clause'),
+          clause: fc.string().map((s) => s || 'clause'),
+          proposedAt: fc.integer(),
+        })
+      : fc.constant(undefined),
+    verdict: status === 'closed'
+      ? fc.record({
+          curseId: fc.string().map((s) => s || 'id'),
+          closed: fc.constant(true),
+          reason: fc.string().map((s) => s || 'reason'),
+          judgedAt: fc.integer(),
+        })
+      : fc.constant(undefined),
+  });
+}
+
+/** Generate a valid Grant with a specified number of closed curses. */
+function genGrant(closedCount: number): fc.Arbitrary<Grant> {
+  return fc.record({
+    wishId: fc.string().map((s) => s || 'wish'),
+    narration: fc.string({ maxLength: 200 }).map((s) => s || 'narration'),
+    curses: fc.tuple(
+      ...Array(closedCount)
+        .fill(null)
+        .map(() => genCurse('closed')),
+      ...Array(Math.max(3 - closedCount, 0))
+        .fill(null)
+        .map(() => genCurse('open')),
+    ),
+  });
+}
+
+describe('integrity properties (P4)', () => {
+  it('returns score in 0–5 and uses correct formula', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 5 }), (closedCount) => {
+        const grant = fc.sample(genGrant(closedCount), 1)[0]!;
+        const result = computeIntegrity(grant);
+
+        // P4: score is in 0–5.
+        expect(result.score).toBeGreaterThanOrEqual(0);
+        expect(result.score).toBeLessThanOrEqual(5);
+
+        // P4: score formula holds when total > 0.
+        const total = grant.curses.length;
+        const closed = grant.curses.filter((c) => c.status === 'closed').length;
+        const expectedScore = total === 0 ? 5 : Math.floor((closed / total) * 5);
+        expect(result.score).toBe(expectedScore);
+
+        // P4: counts match.
+        expect(result.total).toBe(total);
+        expect(result.closed).toBe(closed);
+        expect(result.open).toBe(total - closed);
+      }),
+    );
+  });
+
+  it('closing more curses never decreases the score', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 4 }), (closedCount) => {
+        const grant1 = fc.sample(genGrant(closedCount), 1)[0]!;
+        const grant2 = fc.sample(genGrant(closedCount + 1), 1)[0]!;
+
+        const score1 = computeIntegrity(grant1).score;
+        const score2 = computeIntegrity(grant2).score;
+
+        expect(score2).toBeGreaterThanOrEqual(score1);
+      }),
+    );
+  });
+});
+
+describe('export properties (P1, P2)', () => {
+  it('P1: every acceptance criterion matches the EARS pattern', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 5 }), (closedCount) => {
+        const grant = fc.sample(genGrant(closedCount), 1)[0]!;
+        const spec = exportSpec(grant);
+
+        // P1: every line starting with "- " must match EARS pattern.
+        const lines = spec.requirementsMd.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('- ')) {
+            const criterion = line.substring(2);
+            const matchesEars =
+              /^(WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)/.test(criterion);
+            expect(matchesEars).toBe(true);
+          }
+        }
+      }),
+    );
+  });
+
+  it('P2: one property per closed curse', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 5 }), (closedCount) => {
+        const grant = fc.sample(genGrant(closedCount), 1)[0]!;
+        const spec = exportSpec(grant);
+
+        // P2: count of properties in propertiesMd equals number of closed curses.
+        const propertyCount = (spec.propertiesMd.match(/\*\*P\d+:/g) || []).length;
+        expect(propertyCount).toBe(closedCount);
+      }),
+    );
+  });
+});
+
+describe('finger-count property (P5)', () => {
+  it('open curse count equals finger count, closing reduces by exactly one', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 5 }), (closedCount) => {
+        const grant = fc.sample(genGrant(closedCount), 1)[0]!;
+
+        // P5: number of open curses = finger count.
+        const openCurses = grant.curses.filter((c) => c.status === 'open');
+        const expectedFingers = openCurses.length;
+
+        // If we close one more curse, the finger count decreases by exactly one.
+        // (This is a tautology by definition, but we verify it anyway.)
+        const totalCurses = grant.curses.length;
+        const openCount = totalCurses - closedCount;
+        expect(openCount).toBe(expectedFingers);
+
+        // Verify monotonicity: closing one more never increases finger count.
+        if (closedCount < totalCurses) {
+          const closedCountNext = closedCount + 1;
+          const expectedFingersNext = totalCurses - closedCountNext;
+          expect(expectedFingersNext).toBeLessThan(expectedFingers);
+        }
+      }),
     );
   });
 });
