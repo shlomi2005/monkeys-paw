@@ -1,0 +1,527 @@
+[
+  {
+    "wish": {
+      "id": "w01",
+      "text": "Only the owner can delete a project.",
+      "context": "a team project-management app",
+      "createdAt": 1794990975112
+    },
+    "grant": {
+      "wishId": "w01",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w02",
+      "text": "Users must confirm their email before they can log in.",
+      "context": "a SaaS signup flow",
+      "createdAt": 1794991358758
+    },
+    "grant": {
+      "wishId": "w02",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w03",
+      "text": "Send a reminder 24 hours before every appointment.",
+      "context": "a clinic booking app",
+      "createdAt": 1794991619223
+    },
+    "grant": {
+      "wishId": "w03",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w04",
+      "text": "Refund the customer if the order arrives late.",
+      "context": "an online store",
+      "createdAt": 1794991740879
+    },
+    "grant": {
+      "wishId": "w04",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w05",
+      "text": "Passwords must be at least 8 characters.",
+      "context": "any login form",
+      "createdAt": 1794991882877
+    },
+    "grant": {
+      "wishId": "w05",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w06",
+      "text": "Show the cheapest flight first.",
+      "context": "a flight search site",
+      "createdAt": 1794992249986
+    },
+    "grant": {
+      "wishId": "w06",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w07",
+      "text": "Delete inactive accounts after 30 days.",
+      "context": "a social app",
+      "createdAt": 1794992494696
+    },
+    "grant": {
+      "wishId": "w07",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w08",
+      "text": "Every user gets one free trial.",
+      "context": "a subscription app",
+      "createdAt": 1794992506588
+    },
+    "grant": {
+      "wishId": "w08",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w09",
+      "text": "Users can undo any action.",
+      "context": "a document editor",
+      "createdAt": 1794992508749
+    },
+    "grant": {
+      "wishId": "w09",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w10",
+      "text": "The leaderboard shows the top 10 players.",
+      "context": "a mobile game",
+      "createdAt": 1794992534092
+    },
+    "grant": {
+      "wishId": "w10",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w11",
+      "text": "Messages are deleted after they are read.",
+      "context": "a chat app",
+      "createdAt": 1794992536814
+    },
+    "grant": {
+      "wishId": "w11",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w12",
+      "text": "Students can submit homework until midnight.",
+      "context": "a school homework portal",
+      "createdAt": 1794992539045
+    },
+    "grant": {
+      "wishId": "w12",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w13",
+      "text": "Split the bill equally between all friends.",
+      "context": "a group expenses app",
+      "createdAt": 1794992541215
+    },
+    "grant": {
+      "wishId": "w13",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w14",
+      "text": "The smart lock opens when the owner's phone is nearby.",
+      "context": "a smart-home app",
+      "createdAt": 1794992543278
+    },
+    "grant": {
+      "wishId": "w14",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w15",
+      "text": "Show a low-stock warning when fewer than 5 items remain.",
+      "context": "a shop inventory dashboard",
+      "createdAt": 1794992545968
+    },
+    "grant": {
+      "wishId": "w15",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w16",
+      "text": "Give 10% off for every friend a user invites.",
+      "context": "a referral program",
+      "createdAt": 1794992548082
+    },
+    "grant": {
+      "wishId": "w16",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w17",
+      "text": "Auto-save the document every minute.",
+      "context": "a writing app",
+      "createdAt": 1794992550180
+    },
+    "grant": {
+      "wishId": "w17",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w18",
+      "text": "Children under 13 cannot create an account.",
+      "context": "a kids' game",
+      "createdAt": 1794992552539
+    },
+    "grant": {
+      "wishId": "w18",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w19",
+      "text": "Charge the subscription on the first day of every month.",
+      "context": "a streaming service",
+      "createdAt": 1794992555145
+    },
+    "grant": {
+      "wishId": "w19",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w20",
+      "text": "Users can change their username at any time.",
+      "context": "a forum",
+      "createdAt": 1794992557899
+    },
+    "grant": {
+      "wishId": "w20",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w21",
+      "text": "The chatbot always answers the user's question.",
+      "context": "a customer-support bot",
+      "createdAt": 1794992560395
+    },
+    "grant": {
+      "wishId": "w21",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w22",
+      "text": "Notify everyone in the group when a new message arrives.",
+      "context": "a group chat",
+      "createdAt": 1794992608663
+    },
+    "grant": {
+      "wishId": "w22",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w23",
+      "text": "Sort search results by relevance.",
+      "context": "a marketplace",
+      "createdAt": 1794992610867
+    },
+    "grant": {
+      "wishId": "w23",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w24",
+      "text": "Keep backups for 7 days.",
+      "context": "a cloud notes app",
+      "createdAt": 1794992613082
+    },
+    "grant": {
+      "wishId": "w24",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  },
+  {
+    "wish": {
+      "id": "w25",
+      "text": "Doctors can see the records of their patients.",
+      "context": "a hospital records system",
+      "createdAt": 1794992691323
+    },
+    "grant": {
+      "wishId": "w25",
+      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "curses": [
+        {
+          "id": "fallback-curse",
+          "type": "scale",
+          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
+          "loophole": "The wish does not bound the scale at which it must hold.",
+          "status": "open"
+        }
+      ]
+    }
+  }
+]

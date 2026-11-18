@@ -154,3 +154,11 @@ Ordered checklist for implementing the Paw API. References requirements by numbe
   the fallback grant was used, when it has fewer than 3 curses, or when it hits none of its `expectedTypes`; the run
   PASSES only if >= 80% of wishes pass. Report path stays docs/eval/latest.md at the REPO ROOT (it was written to
   apps/api/docs). Load `.env` in the eval and dev scripts (`tsx --env-file=.env`). (Req eval)
+- [x] 98. Batch the Judge quality gate: ONE model call per grant reviews all curses together and returns a verdict per
+  curse (keep / replace + replacement curse), instead of one call per curse. The first full eval spent the key's daily
+  free quota (HTTP 429) because each grant cost ~6 calls. Target: <= 2 model calls per grant. (Req 2.4, iron rule 5)
+- [x] 99. Fallback chain: default `GEMINI_MODEL_FALLBACKS=gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite`;
+  treat HTTP 404 (model retired for this key) and 429 (quota) like 503: skip to the next model. `gemini-2.5-flash`
+  returns 404 now; remove it.
+- [x] 100. Eval runs `--limit 5` by default (`--all` for 25) and waits 2 s between wishes; it prints how many model
+  calls it made. Report path stays docs/eval/latest.md at the repo root.

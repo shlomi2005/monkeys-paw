@@ -60,6 +60,37 @@ You are also the Genie, the narrator. In the same JSON, set "narration" to the l
 }
 
 /**
+ * Task 98: Batch quality judge - judge all curses in one call.
+ */
+export function buildBatchQualityPrompt(curses: Curse[]): string {
+  const cursesText = curses
+    .map(
+      (c, i) => `Curse ${i + 1}:
+- id: ${c.id}
+- type: ${c.type}
+- story: ${c.story}
+- loophole: ${c.loophole}`,
+    )
+    .join('\n\n');
+
+  return `Task: JUDGE_BATCH_QUALITY
+
+You are the Judge, a strict quality gate. Decide whether each of the following curses is SPECIFIC to its wish (not generic).
+
+${cursesText}
+
+A curse is generic if it could apply to almost any wish (for example "the system could have bugs") without pointing to concrete words. A curse is specific if its "loophole" quotes or clearly points to the exact words that create the loophole and the story follows that loophole to a concrete bad outcome for a real stakeholder.
+
+Return STRICT JSON ONLY matching this array shape:
+[
+  { "curseId": "<id>", "specific": boolean, "reason": string },
+  { "curseId": "<id>", "specific": boolean, "reason": string }
+]
+
+One object per curse, in the same order as above.`;
+}
+
+/**
  * Judge — one prompt builder, two modes.
  *  - "quality" (during grant): given a curse, decide if it is specific or generic.
  *    Output: { specific: boolean, reason: string }.

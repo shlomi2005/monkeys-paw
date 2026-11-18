@@ -19,6 +19,7 @@ export type {
 export {
   BindingKindSchema,
   BindingSchema,
+  BatchQualityGateSchema,
   CurseSchema,
   CurseTypeSchema,
   GrantSchema,
@@ -32,6 +33,7 @@ export type { BudgetConfig, BudgetState } from './budget';
 export { DAY_MS, canCall, recordCall } from './budget';
 
 export {
+  buildBatchQualityPrompt,
   buildGeniePrompt,
   buildJudgePrompt,
   buildPawPrompt,

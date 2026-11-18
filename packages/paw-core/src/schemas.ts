@@ -69,3 +69,12 @@ export const QualityGateSchema = z.object({
   specific: z.boolean(),
   reason: z.string().min(1),
 });
+
+/** Task 98: Batch quality-gate output - array of verdicts for multiple curses */
+export const BatchQualityGateSchema = z.array(
+  z.object({
+    curseId: z.string().min(1),
+    specific: z.boolean(),
+    reason: z.string().min(1),
+  }),
+);

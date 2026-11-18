@@ -3,9 +3,9 @@ import type { ModelClient } from 'paw-core';
 import { GrantSchema, VerdictSchema, QualityGateSchema } from 'paw-core';
 
 /**
- * Task 95: Gemini resilience. Default model `gemini-3.5-flash`; on 503/429
+ * Task 95: Gemini resilience. Default model `gemini-3.5-flash`; on 503/429/404
  * try the next model in GEMINI_MODEL_FALLBACKS before paw-core's retry/fallback.
- * Models: gemini-3.5-flash, gemini-3.8-flash, gemini-flash-latest, gemini-2.5-flash
+ * Task 99: Remove gemini-2.5-flash from defaults, treat 404 like 503/429
  */
 export class GeminiModelClient implements ModelClient {
   private client: GoogleGenerativeAI;
@@ -18,11 +18,14 @@ export class GeminiModelClient implements ModelClient {
       throw new Error('GEMINI_API_KEY env var is not set');
     }
     this.client = new GoogleGenerativeAI(apiKey);
-    
-    // Task 95: Primary model and fallbacks
+
+    // Task 99: Primary model and fallbacks (no gemini-2.5-flash)
     const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
-    const fallbacks = (process.env.GEMINI_MODEL_FALLBACKS || 'gemini-3.8-flash,gemini-flash-latest,gemini-2.5-flash').split(',');
-    
+    const fallbacks = (
+      process.env.GEMINI_MODEL_FALLBACKS ||
+      'gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite'
+    ).split(',');
+
     // Build the full list: primary first, then fallbacks, deduplicated
     const allModels = [primaryModel, ...fallbacks];
     this.models = Array.from(new Set(allModels));
@@ -31,7 +34,7 @@ export class GeminiModelClient implements ModelClient {
 
   /**
    * Call Gemini with structured JSON output mode.
-   * Tries each model in sequence on 503/429; throws on other errors.
+   * Tries each model in sequence on 503/429/404; throws on other errors.
    * paw-core retries once then falls back.
    */
   async generate(prompt: string): Promise<unknown> {
@@ -43,16 +46,21 @@ export class GeminiModelClient implements ModelClient {
         return await this.callModel(modelName, prompt);
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
-        
-        // Task 95: On 503/429, try next model; on other errors, throw immediately
+
+        // Task 99: On 503/429/404, try next model; on other errors, throw immediately
         const message = lastError.message.toLowerCase();
-        const isRetryable = message.includes('503') || message.includes('429') || 
-                           message.includes('high demand') || message.includes('resource exhausted');
-        
+        const isRetryable =
+          message.includes('503') ||
+          message.includes('429') ||
+          message.includes('404') ||
+          message.includes('high demand') ||
+          message.includes('resource exhausted') ||
+          message.includes('not found');
+
         if (!isRetryable) {
           throw lastError;
         }
-        
+
         // Continue to next model
       }
     }
@@ -71,7 +79,7 @@ export class GeminiModelClient implements ModelClient {
       // Task 96: Use Gemini structured output with responseSchema matching GrantSchema/VerdictSchema.
       // The prompt determines which schema to use based on the "Task:" prefix.
       let responseSchema: unknown;
-      
+
       if (prompt.includes('Task: GRANT_WISH')) {
         // Convert Zod schema to JSON schema for Gemini
         responseSchema = this.zodToJsonSchema(GrantSchema);
@@ -79,24 +87,52 @@ export class GeminiModelClient implements ModelClient {
         responseSchema = this.zodToJsonSchema(VerdictSchema);
       } else if (prompt.includes('Task: JUDGE_QUALITY')) {
         responseSchema = this.zodToJsonSchema(QualityGateSchema);
+      } else if (prompt.includes('Task: JUDGE_BATCH_QUALITY')) {
+        // Task 98: Batch quality judge returns an array of verdicts
+        responseSchema = {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              curseId: { type: 'string' },
+              specific: { type: 'boolean' },
+              reason: { type: 'string' },
+            },
+            required: ['curseId', 'specific', 'reason'],
+          },
+        };
       } else if (prompt.includes('Task: REPLACE_CURSE')) {
         // For curse replacement, we expect a single curse object
         responseSchema = {
           type: 'object',
           properties: {
             id: { type: 'string' },
-            type: { type: 'string', enum: ['permissions', 'time', 'money', 'scale', 'abuse', 'privacy', 'accessibility', 'data-loss', 'concurrency', 'edge-input'] },
+            type: {
+              type: 'string',
+              enum: [
+                'permissions',
+                'time',
+                'money',
+                'scale',
+                'abuse',
+                'privacy',
+                'accessibility',
+                'data-loss',
+                'concurrency',
+                'edge-input',
+              ],
+            },
             story: { type: 'string', maxLength: 360 },
             loophole: { type: 'string' },
           },
           required: ['id', 'type', 'story', 'loophole'],
         };
       }
-      
+
       const generationConfig: any = {
         responseMimeType: 'application/json',
       };
-      
+
       if (responseSchema) {
         generationConfig.responseSchema = responseSchema;
       }

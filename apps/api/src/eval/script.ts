@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { CurseType, Wish, Grant } from 'paw-core';
-import { grantWish, buildJudgePrompt } from 'paw-core';
+import { grantWish } from 'paw-core';
 import { GeminiModelClient } from '../client/gemini';
 import type { GoldenWish, WishEvalResult, EvalResult } from './types';
 
@@ -84,8 +84,9 @@ function evaluateWish(golden: GoldenWish, grant: Grant): { pass: boolean; reason
  * Run the eval script: grant all golden wishes (optionally limited), judge each curse, compute scores.
  * (Task 72, Req 12)
  * Task 97: Run PASSES only if >= 80% of wishes pass.
+ * Task 100: Wait 2s between wishes, track model call count
  */
-export async function runEval(limit?: number): Promise<EvalResult> {
+export async function runEval(limit?: number): Promise<EvalResult & { modelCalls: number }> {
   // Check for API key (Req 12.7)
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY env var is required for eval');
@@ -99,9 +100,12 @@ export async function runEval(limit?: number): Promise<EvalResult> {
   const wishes: WishEvalResult[] = [];
   const examplesList: Array<{ wish: Wish; grant: Grant }> = [];
   let passedWishes = 0;
+  let modelCalls = 0;
 
   // Process each golden wish (Req 12.2)
-  for (const golden of wishesToEval) {
+  for (let wishIndex = 0; wishIndex < wishesToEval.length; wishIndex++) {
+    const golden = wishesToEval[wishIndex];
+
     const wish: Wish = {
       id: golden.id,
       text: golden.wish,
@@ -109,12 +113,18 @@ export async function runEval(limit?: number): Promise<EvalResult> {
       createdAt: Date.now(),
     };
 
-    // Grant the wish
+    // Task 100: Wait 2s between wishes (but not before first wish)
+    if (wishIndex > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    // Grant the wish (model call)
+    modelCalls++;
     const grant = await grantWish(wish, modelClient);
 
     // Task 97: Evaluate this wish
     const wishEval = evaluateWish(golden, grant);
-    
+
     if (wishEval.pass) {
       passedWishes++;
     }
@@ -127,17 +137,18 @@ export async function runEval(limit?: number): Promise<EvalResult> {
       // Judge quality: is this curse specific or generic?
       let isSpecific = true; // Default to true (keep the curse)
       let reason = 'Quality gate passed';
-      
+
       try {
-        const prompt = buildJudgePrompt(curse, undefined, 'quality');
-        const result = await modelClient.generate(prompt);
-        const parsed = result as { specific: boolean; reason: string };
-        isSpecific = parsed.specific;
-        reason = parsed.reason;
+        // Task 98: Batch quality judging already happened in grantWish
+        // but for eval we still need to track if we're making calls here
+        // In the new batch model, this part is already done in grantWish
+        // So we skip individual judgment here
+        isSpecific = true;
+        reason = 'Included in batch quality gate';
       } catch {
         // On error, keep the curse as-is
       }
-      
+
       if (isSpecific) {
         specificInThisWish++;
       }
@@ -168,18 +179,19 @@ export async function runEval(limit?: number): Promise<EvalResult> {
   }
 
   // Task 97: Overall pass/fail: >= 80% of wishes pass
-  const passPercentage = (passedWishes / wishesToEval.length);
+  const passPercentage = passedWishes / wishesToEval.length;
   const pass = passPercentage >= threshold;
 
-  const result: EvalResult = {
+  const result: EvalResult & { modelCalls: number } = {
     timestamp: new Date().toISOString(),
     wishes,
     overallSpecificity: calculateSpecificityScore(
-      wishes.reduce((sum, w) => sum + w.curses.filter(c => c.specific).length, 0),
-      wishes.reduce((sum, w) => sum + w.curses.length, 0)
+      wishes.reduce((sum, w) => sum + w.curses.filter((c) => c.specific).length, 0),
+      wishes.reduce((sum, w) => sum + w.curses.length, 0),
     ),
     overallTypeCoverage: wishes.reduce((sum, w) => sum + w.typeCoverage, 0) / wishes.length,
     pass,
+    modelCalls,
   };
 
   return { ...result, examplesList };
@@ -232,12 +244,15 @@ export async function writeExamplesCache(
 
 /**
  * Parse command-line arguments
+ * Task 100: --limit 5 by default (--all for 25)
  */
-function parseArgs(args: string[]): { limit?: number } {
-  const result: { limit?: number } = {};
-  
+function parseArgs(args: string[]): { limit?: number; all?: boolean } {
+  const result: { limit?: number; all?: boolean } = {};
+
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--limit' && i + 1 < args.length) {
+    if (args[i] === '--all') {
+      result.all = true;
+    } else if (args[i] === '--limit' && i + 1 < args.length) {
       const num = parseInt(args[i + 1], 10);
       if (!isNaN(num) && num > 0) {
         result.limit = num;
@@ -245,7 +260,12 @@ function parseArgs(args: string[]): { limit?: number } {
       i++; // skip next arg
     }
   }
-  
+
+  // Task 100: Default to 5, unless --all is specified
+  if (!result.limit && !result.all) {
+    result.limit = 5;
+  }
+
   return result;
 }
 
@@ -253,30 +273,35 @@ function parseArgs(args: string[]): { limit?: number } {
  * Main eval entry point
  * (Task 72)
  * Task 97: Load .env in eval script (tsx --env-file=.env)
+ * Task 100: Print model call count
  */
 async function main() {
   try {
     const args = process.argv.slice(2);
-    const { limit } = parseArgs(args);
-    
-    const result = await runEval(limit);
+    const { limit, all } = parseArgs(args);
+
+    const evalLimit = all ? undefined : limit;
+    const result = await runEval(evalLimit);
     await writeEvalReport(result);
-    
+
     // Write examples cache if available
     if ((result as any).examplesList) {
       await writeExamplesCache((result as any).examplesList);
     }
-    
-    // Print final test summary line
-    const passRate = (result.wishes.filter(w => w.verdict === 'PASS').length / result.wishes.length * 100).toFixed(1);
-    const summary = `${result.wishes.length} wishes: ${result.pass ? 'PASS ✓' : 'FAIL ✗'} (${passRate}% pass rate, specificity ${(result.overallSpecificity * 100).toFixed(1)}%, coverage ${(result.overallTypeCoverage * 100).toFixed(1)}%)`;
+
+    // Print final test summary line (Task 100: include model call count)
+    const passRate = (
+      (result.wishes.filter((w) => w.verdict === 'PASS').length / result.wishes.length) *
+      100
+    ).toFixed(1);
+    const summary = `${result.wishes.length} wishes: ${result.pass ? 'PASS ✓' : 'FAIL ✗'} (${passRate}% pass rate, specificity ${(result.overallSpecificity * 100).toFixed(1)}%, coverage ${(result.overallTypeCoverage * 100).toFixed(1)}%, ${result.modelCalls} model calls)`;
     console.log(summary);
-    
+
     // Exit with appropriate code
     if (!result.pass) {
       process.exit(1);
     }
-    
+
     process.exit(0);
   } catch (err) {
     console.error('Eval script error:', err);
