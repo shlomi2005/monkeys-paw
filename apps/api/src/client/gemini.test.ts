@@ -54,3 +54,112 @@ describe('GeminiModelClient', () => {
     expect(client).toBeDefined();
   });
 });
+
+describe('Task 101: Gemini structured output schemas', () => {
+  beforeEach(() => {
+    process.env.GEMINI_API_KEY = 'test-key';
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /** Helper to get private schema methods via reflection */
+  function getSchema(client: GeminiModelClient, methodName: string): any {
+    return (client as any)[methodName]();
+  }
+
+  it('grant wish schema has required properties and curse type enum', () => {
+    const client = new GeminiModelClient();
+    const schema = getSchema(client, 'grantWishSchema');
+
+    // Top-level required fields
+    expect(schema.required).toContain('narration');
+    expect(schema.required).toContain('curses');
+
+    // Curse array items
+    const curseItems = schema.properties.curses.items;
+    expect(curseItems.required).toContain('id');
+    expect(curseItems.required).toContain('type');
+    expect(curseItems.required).toContain('story');
+    expect(curseItems.required).toContain('loophole');
+
+    // Curse type enum includes all 10 taxonomy tags
+    const typeEnum = curseItems.properties.type.enum;
+    const expectedTags = [
+      'permissions',
+      'time',
+      'money',
+      'scale',
+      'abuse',
+      'privacy',
+      'accessibility',
+      'data-loss',
+      'concurrency',
+      'edge-input',
+    ];
+    for (const tag of expectedTags) {
+      expect(typeEnum).toContain(tag);
+    }
+    expect(typeEnum).toHaveLength(10);
+  });
+
+  it('verdict schema has required properties', () => {
+    const client = new GeminiModelClient();
+    const schema = getSchema(client, 'verdictSchema');
+
+    expect(schema.required).toContain('curseId');
+    expect(schema.required).toContain('closed');
+    expect(schema.required).toContain('reason');
+    expect(schema.required).toContain('judgedAt');
+    // property is optional, so not in required
+  });
+
+  it('quality gate schema has required properties', () => {
+    const client = new GeminiModelClient();
+    const schema = getSchema(client, 'qualityGateSchema');
+
+    expect(schema.required).toContain('specific');
+    expect(schema.required).toContain('reason');
+  });
+
+  it('batch quality gate schema is array of required properties', () => {
+    const client = new GeminiModelClient();
+    const schema = getSchema(client, 'batchQualityGateSchema');
+
+    expect(schema.type).toBe('array');
+    const itemSchema = schema.items;
+    expect(itemSchema.required).toContain('curseId');
+    expect(itemSchema.required).toContain('specific');
+    expect(itemSchema.required).toContain('reason');
+  });
+
+  it('replace curse schema has required properties and type enum', () => {
+    const client = new GeminiModelClient();
+    const schema = getSchema(client, 'replaceCurseSchema');
+
+    expect(schema.required).toContain('id');
+    expect(schema.required).toContain('type');
+    expect(schema.required).toContain('story');
+    expect(schema.required).toContain('loophole');
+
+    // Type enum includes all 10 taxonomy tags
+    const typeEnum = schema.properties.type.enum;
+    const expectedTags = [
+      'permissions',
+      'time',
+      'money',
+      'scale',
+      'abuse',
+      'privacy',
+      'accessibility',
+      'data-loss',
+      'concurrency',
+      'edge-input',
+    ];
+    for (const tag of expectedTags) {
+      expect(typeEnum).toContain(tag);
+    }
+    expect(typeEnum).toHaveLength(10);
+  });
+});

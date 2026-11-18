@@ -1,6 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { ModelClient } from 'paw-core';
-import { GrantSchema, VerdictSchema, QualityGateSchema } from 'paw-core';
 
 /**
  * Task 95: Gemini resilience. Default model `gemini-3.5-flash`; on 503/429/404
@@ -76,57 +75,20 @@ export class GeminiModelClient implements ModelClient {
     const timeoutHandle = setTimeout(() => abortController.abort(), this.timeoutMs);
 
     try {
-      // Task 96: Use Gemini structured output with responseSchema matching GrantSchema/VerdictSchema.
+      // Task 101: Use hand-written Gemini structured output schemas.
       // The prompt determines which schema to use based on the "Task:" prefix.
       let responseSchema: unknown;
 
       if (prompt.includes('Task: GRANT_WISH')) {
-        // Convert Zod schema to JSON schema for Gemini
-        responseSchema = this.zodToJsonSchema(GrantSchema);
+        responseSchema = this.grantWishSchema();
       } else if (prompt.includes('Task: JUDGE_VERDICT')) {
-        responseSchema = this.zodToJsonSchema(VerdictSchema);
+        responseSchema = this.verdictSchema();
       } else if (prompt.includes('Task: JUDGE_QUALITY')) {
-        responseSchema = this.zodToJsonSchema(QualityGateSchema);
+        responseSchema = this.qualityGateSchema();
       } else if (prompt.includes('Task: JUDGE_BATCH_QUALITY')) {
-        // Task 98: Batch quality judge returns an array of verdicts
-        responseSchema = {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              curseId: { type: 'string' },
-              specific: { type: 'boolean' },
-              reason: { type: 'string' },
-            },
-            required: ['curseId', 'specific', 'reason'],
-          },
-        };
+        responseSchema = this.batchQualityGateSchema();
       } else if (prompt.includes('Task: REPLACE_CURSE')) {
-        // For curse replacement, we expect a single curse object
-        responseSchema = {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            type: {
-              type: 'string',
-              enum: [
-                'permissions',
-                'time',
-                'money',
-                'scale',
-                'abuse',
-                'privacy',
-                'accessibility',
-                'data-loss',
-                'concurrency',
-                'edge-input',
-              ],
-            },
-            story: { type: 'string', maxLength: 360 },
-            loophole: { type: 'string' },
-          },
-          required: ['id', 'type', 'story', 'loophole'],
-        };
+        responseSchema = this.replaceCurseSchema();
       }
 
       const generationConfig: any = {
@@ -157,16 +119,127 @@ export class GeminiModelClient implements ModelClient {
   }
 
   /**
-   * Convert a Zod schema to a simple JSON schema for Gemini structured output.
-   * This is a simplified converter for the schemas used in paw-core.
+   * Task 101: Grant output schema for buildPawPrompt + buildGeniePrompt.
+   * Matches GrantSchema: {narration, userStory?, curses[{id, type, story, loophole}]}
    */
-  private zodToJsonSchema(schema: any): any {
-    // For now, return a basic object schema. In production, use a proper zod-to-json-schema converter.
-    // The responseSchema is primarily for field name consistency; paw-core still validates with zod.
+  private grantWishSchema(): any {
     return {
       type: 'object',
-      properties: {},
-      required: [],
+      properties: {
+        narration: { type: 'string' },
+        userStory: { type: 'string' },
+        curses: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              type: {
+                type: 'string',
+                enum: [
+                  'permissions',
+                  'time',
+                  'money',
+                  'scale',
+                  'abuse',
+                  'privacy',
+                  'accessibility',
+                  'data-loss',
+                  'concurrency',
+                  'edge-input',
+                ],
+              },
+              story: { type: 'string' },
+              loophole: { type: 'string' },
+            },
+            required: ['id', 'type', 'story', 'loophole'],
+          },
+        },
+      },
+      required: ['narration', 'curses'],
+    };
+  }
+
+  /**
+   * Task 101: Verdict schema for buildJudgePrompt (verdict mode).
+   * Matches VerdictSchema: {curseId, closed, reason, judgedAt, property?}
+   */
+  private verdictSchema(): any {
+    return {
+      type: 'object',
+      properties: {
+        curseId: { type: 'string' },
+        closed: { type: 'boolean' },
+        reason: { type: 'string' },
+        judgedAt: { type: 'number' },
+        property: { type: 'string' },
+      },
+      required: ['curseId', 'closed', 'reason', 'judgedAt'],
+    };
+  }
+
+  /**
+   * Task 101: Quality gate schema for buildJudgePrompt (quality mode).
+   * Matches QualityGateSchema: {specific, reason}
+   */
+  private qualityGateSchema(): any {
+    return {
+      type: 'object',
+      properties: {
+        specific: { type: 'boolean' },
+        reason: { type: 'string' },
+      },
+      required: ['specific', 'reason'],
+    };
+  }
+
+  /**
+   * Task 101: Batch quality gate schema for buildBatchQualityPrompt.
+   * Matches BatchQualityGateSchema: array of {curseId, specific, reason}
+   */
+  private batchQualityGateSchema(): any {
+    return {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          curseId: { type: 'string' },
+          specific: { type: 'boolean' },
+          reason: { type: 'string' },
+        },
+        required: ['curseId', 'specific', 'reason'],
+      },
+    };
+  }
+
+  /**
+   * Task 101: Curse replacement schema for buildReplacementPrompt.
+   * Matches a single curse: {id, type, story, loophole}
+   */
+  private replaceCurseSchema(): any {
+    return {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        type: {
+          type: 'string',
+          enum: [
+            'permissions',
+            'time',
+            'money',
+            'scale',
+            'abuse',
+            'privacy',
+            'accessibility',
+            'data-loss',
+            'concurrency',
+            'edge-input',
+          ],
+        },
+        story: { type: 'string' },
+        loophole: { type: 'string' },
+      },
+      required: ['id', 'type', 'story', 'loophole'],
     };
   }
 }

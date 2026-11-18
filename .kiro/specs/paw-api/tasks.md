@@ -162,3 +162,9 @@ Ordered checklist for implementing the Paw API. References requirements by numbe
   returns 404 now; remove it.
 - [x] 100. Eval runs `--limit 5` by default (`--all` for 25) and waits 2 s between wishes; it prints how many model
   calls it made. Report path stays docs/eval/latest.md at the repo root.
+- [x] 101. Real structured output. `zodToJsonSchema` in apps/api/src/client/gemini.ts returns a basic empty object
+  schema, so Gemini answers `{}` and EVERY grant falls back (eval 0% pass). Remove it. Hand-write explicit Gemini
+  `responseSchema` objects (OpenAPI subset the @google/generative-ai SDK accepts, with SchemaType) for the
+  model-facing shapes only: grant output {narration, userStory, curses[{type: enum of the 10 taxonomy tags, story,
+  loophole}]} with required fields; batched quality gate {verdicts[{index, keep, replacement?}]}; binding verdict
+  {closed, reason, property}. Add unit tests that assert each schema lists its required properties and the enum.
