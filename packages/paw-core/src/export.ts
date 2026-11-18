@@ -2,7 +2,7 @@
 // and propertiesMd (one property per closed curse). Include IntegrityResult.
 
 import { computeIntegrity } from './integrity';
-import type { Grant, SpecExport } from './types';
+import type { Curse, Grant, SpecExport, Wish } from './types';
 
 /**
  * Generate the EARS acceptance criteria markdown for a single closed binding.
@@ -28,22 +28,24 @@ function earsCriterion(clauseText: string): string {
 
 /**
  * Generate a testable property statement from a closed curse.
- * One property per closed curse, phrased as an invariant.
+ * One property per closed curse, phrased as a universally quantified invariant.
+ * Format: *For any* <scenario derived from curse and binding>, <requirement property> [<curse-type>] (Req <number>)
  */
-function curseProperty(curse: Curse, index: number): string {
-  const curseTypeTag = `[${curse.type}]`;
+function curseProperty(curse: Curse, requirement: Wish, index: number): string {
+  const curseTypeTag = `${curse.type}`;
   const boundClause = curse.binding?.clause || '(binding not found)';
-  return `**P${index}: ${curseTypeTag}** — ${boundClause}`;
+  // Format as a universal property statement derived from the binding.
+  return `*For any* wish matching "${requirement.text}", ${boundClause} [\`${curseTypeTag}\`] (Req 6.3)`;
 }
-
-// Import Curse here to keep types separate from implementation
-import type { Curse } from './types';
 
 /**
  * Export a Kiro-ready spec: requirementsMd (user story + EARS criteria)
  * and propertiesMd (one property per closed curse).
+ * 
+ * Task 22: exportSpec now takes the original Wish to include in the introduction
+ * and to use in property generation.
  */
-export function exportSpec(grant: Grant): SpecExport {
+export function exportSpec(wish: Wish, grant: Grant): SpecExport {
   const integrity = computeIntegrity(grant);
 
   // Collect closed curses with their bindings.
@@ -51,33 +53,51 @@ export function exportSpec(grant: Grant): SpecExport {
     (c) => c.status === 'closed' && c.binding && c.verdict,
   );
 
-  // Req 6.2: Generate requirements.md with user story and EARS criteria.
-  // The user story is inferred from the context (we'd need to pass the original wish text).
-  // For now, we generate a header with the integrity score and then EARS criteria.
-  const criteriaLines = closedCurses.map((c) => {
-    const criterion = earsCriterion(c.binding!.clause);
-    return `- ${criterion}`;
-  });
+  // Req 6.2: Generate requirements.md in Kiro format with Introduction, User Story, and EARS criteria.
+  // Start with wish as criterion 1, then add one per closed curse.
+  const acceptanceCriteria = [
+    `1. **WHEN** a requirement matches "${wish.text}"${wish.context ? ` in ${wish.context}` : ''} **THE SYSTEM SHALL** close all loopholes binding specific edge cases.`,
+    ...closedCurses.map((c, idx) => {
+      const clauseText = c.binding!.clause.trim();
+      let criterion: string;
+      
+      // Check if clause starts with EARS keyword
+      if (clauseText.match(/^(WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)\s/i)) {
+        criterion = clauseText;
+      } else {
+        criterion = `THE SYSTEM SHALL ${clauseText}`;
+      }
+      
+      return `${idx + 2}. ${criterion}`;
+    }),
+  ];
 
   const requirementsMd = [
-    '# Requirements',
+    '# Requirements Document',
+    '',
+    '## Introduction',
+    '',
+    `The requirement is: "${wish.text}"${wish.context ? ` (Context: ${wish.context})` : ''}`,
     '',
     `**Wish Integrity:** ${integrity.score}/5 (${integrity.closed}/${integrity.total} curses closed)`,
     '',
-    '## Acceptance Criteria',
+    '### Requirement 1',
     '',
-    ...(criteriaLines.length > 0
-      ? criteriaLines
-      : ['*(No closed curses yet.)*']),
+    `**User Story:** As a spec author, I want this requirement to be airtight, so ${wish.text.toLowerCase()}`,
+    '',
+    '#### Acceptance Criteria',
+    '',
+    ...acceptanceCriteria,
     '',
   ].join('\n');
 
   // Req 6.3: Generate properties.md with one property per closed curse.
-  const propertyLines = closedCurses.map((c, i) => curseProperty(c, i + 1));
+  // Task 23: Each property is phrased as a universally quantified testable statement.
+  const propertyLines = closedCurses.map((c, i) => curseProperty(c, wish, i + 1));
   const propertiesMd = [
     '# Correctness Properties',
     '',
-    '## Closed Curses',
+    '## Derived from Closed Curses',
     '',
     ...(propertyLines.length > 0
       ? propertyLines

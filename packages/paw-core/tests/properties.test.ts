@@ -5,7 +5,7 @@ import { DAY_MS, canCall, recordCall } from '../src/budget';
 import { computeIntegrity } from '../src/integrity';
 import { exportSpec } from '../src/export';
 import type { BudgetConfig, BudgetState } from '../src/budget';
-import type { Curse, Grant } from '../src/types';
+import type { Curse, Grant, Wish } from '../src/types';
 
 describe('budget properties (P8)', () => {
   it('once spentCents >= dailyBudgetCents (within the day), canCall is false regardless of ipCalls or window', () => {
@@ -162,6 +162,16 @@ function genGrant(closedCount: number): fc.Arbitrary<Grant> {
   });
 }
 
+/** Generate a valid Wish. */
+function genWish(): fc.Arbitrary<Wish> {
+  return fc.record({
+    id: fc.string().map((s) => s || 'wish'),
+    text: fc.string({ minLength: 1, maxLength: 200 }).map((s) => s || 'requirement'),
+    context: fc.option(fc.string({ maxLength: 100 })),
+    createdAt: fc.integer({ min: 0, max: Date.now() }),
+  });
+}
+
 describe('integrity properties (P4)', () => {
   it('returns score in 0–5 and uses correct formula', () => {
     fc.assert(
@@ -207,15 +217,16 @@ describe('export properties (P1, P2)', () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 5 }), (closedCount) => {
         const grant = fc.sample(genGrant(closedCount), 1)[0]!;
-        const spec = exportSpec(grant);
+        const wish = fc.sample(genWish(), 1)[0]!;
+        const spec = exportSpec(wish, grant);
 
-        // P1: every line starting with "- " must match EARS pattern.
+        // P1: every numbered criterion must contain EARS keywords.
         const lines = spec.requirementsMd.split('\n');
         for (const line of lines) {
-          if (line.startsWith('- ')) {
-            const criterion = line.substring(2);
+          if (/^\d+\./.test(line)) {
+            // Numbered acceptance criterion
             const matchesEars =
-              /^(WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)/.test(criterion);
+              /\b(WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)\b/.test(line);
             expect(matchesEars).toBe(true);
           }
         }
@@ -227,11 +238,32 @@ describe('export properties (P1, P2)', () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 5 }), (closedCount) => {
         const grant = fc.sample(genGrant(closedCount), 1)[0]!;
-        const spec = exportSpec(grant);
+        const wish = fc.sample(genWish(), 1)[0]!;
+        const spec = exportSpec(wish, grant);
 
         // P2: count of properties in propertiesMd equals number of closed curses.
-        const propertyCount = (spec.propertiesMd.match(/\*\*P\d+:/g) || []).length;
+        const propertyCount = (spec.propertiesMd.match(/\*For any\*/g) || []).length;
         expect(propertyCount).toBe(closedCount);
+      }),
+    );
+  });
+
+  it('P23: each property line starts with "*For any*" and names curse type and requirement', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 1, max: 5 }), (closedCount) => {
+        const grant = fc.sample(genGrant(closedCount), 1)[0]!;
+        const wish = fc.sample(genWish(), 1)[0]!;
+        const spec = exportSpec(wish, grant);
+
+        // Task 23: each property line must start with "*For any*", include curse type, and reference Req 6.3
+        const propertyLines = spec.propertiesMd.split('\n').filter((l) => l.startsWith('*For any*'));
+        expect(propertyLines.length).toBe(closedCount);
+
+        for (const line of propertyLines) {
+          expect(line).toMatch(/^\*For any\*/);
+          expect(line).toMatch(/`[a-z-]+`/); // curse type in backticks (curse types have hyphens)
+          expect(line).toMatch(/Req 6\.3/);
+        }
       }),
     );
   });

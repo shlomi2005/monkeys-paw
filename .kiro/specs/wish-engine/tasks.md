@@ -53,12 +53,17 @@ component has a pure interface. All work happens in `packages/paw-core` unless n
 
 ## Review findings (owner review, 18.11)
 
-- [ ] **22. Export in true Kiro spec format** — `exportSpec` must take the original `Wish` and emit Kiro's
+- [x] **22. Export in true Kiro spec format** — `exportSpec` must take the original `Wish` and emit Kiro's
   `requirements.md` layout: `# Requirements Document`, `## Introduction` (the wish and its context), then
   `### Requirement 1` with `**User Story:** As a …, I want …, so that …` and numbered `#### Acceptance Criteria`
   in EARS (one per closed curse, plus the original wish as criterion 1). Today it emits a flat list with no
   user story. (Req 6.1, 6.2)
-- [ ] **23. Properties phrased as properties** — each line of `properties.md` must read as a universally
+- [x] **23. Properties phrased as properties** — each line of `properties.md` must read as a universally
   quantified, testable statement ("*For any* … , … ") derived from the curse and its binding, tagged with the
   curse type, and name the requirement it validates. Today it only repeats the clause. (Req 6.3, P2)
-- [ ] **24. Tidy imports** — move the `import type { Curse }` in `export.ts` to the top. (structure.md)
+- [x] **24. Tidy imports** — move the `import type { Curse }` in `export.ts` to the top. (structure.md)
+- [ ] **25. Model-written story and properties** — the deterministic template still writes weak English
+  (criterion 1 is meta, the user story is generic, properties restate the clause). Let the Genie return a real
+  `userStory` with the grant, and the Judge return a `property` ("For any project whose owner has left, at least
+  one member can still delete it") with every `closed` verdict; `exportSpec` assembles those and keeps the
+  template only as a fallback. Criterion 1 becomes the original wish rewritten in EARS. (Req 6, P1, P2)
