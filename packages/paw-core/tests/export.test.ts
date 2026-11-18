@@ -186,6 +186,90 @@ describe('exportSpec (task 16)', () => {
     expect(property).toMatch(/Req 6\.3/);
   });
 
+  it('export with model-written userStory and property includes them verbatim (Task 65)', () => {
+    const wish = makeWish('w1', 'Only the owner can delete a project.');
+    
+    // Create a grant with userStory field
+    const grant: Grant = {
+      wishId: 'w1',
+      narration: 'The wish is granted literally.',
+      curses: [
+        {
+          id: 'c0',
+          type: 'permissions',
+          story: 'The owner leaves.',
+          loophole: 'Only the owner',
+          status: 'closed',
+          binding: {
+            curseId: 'c0',
+            kind: 'ears-clause',
+            clause: 'An admin takes over.',
+            proposedAt: 1_700_000_000_000,
+          },
+          verdict: {
+            curseId: 'c0',
+            closed: true,
+            reason: 'The binding prevents the loophole.',
+            judgedAt: 1_700_000_001_000,
+            property: 'For any permission system where deletion is restricted to one user, at least one other user must be able to take over that right.',
+          },
+        },
+      ],
+      userStory: 'As a project manager, I want to delete my projects so that I can manage project lifecycle. But if I leave, an admin should be able to take over that responsibility.',
+    };
+    
+    const spec = exportSpec(wish, grant);
+    
+    // The userStory should be included in the requirements
+    expect(spec.requirementsMd).toContain(grant.userStory);
+    
+    // The property should be included in the properties
+    expect(spec.propertiesMd).toContain(grant.curses[0].verdict?.property);
+  });
+
+  it('export without userStory/property falls back to template (Task 66)', () => {
+    const wish = makeWish('w1', 'Only the owner can delete a project.');
+    
+    // Create a grant WITHOUT userStory and property fields
+    const grant: Grant = {
+      wishId: 'w1',
+      narration: 'The wish is granted literally.',
+      curses: [
+        {
+          id: 'c0',
+          type: 'permissions',
+          story: 'The owner leaves.',
+          loophole: 'Only the owner',
+          status: 'closed',
+          binding: {
+            curseId: 'c0',
+            kind: 'ears-clause',
+            clause: 'An admin takes over.',
+            proposedAt: 1_700_000_000_000,
+          },
+          verdict: {
+            curseId: 'c0',
+            closed: true,
+            reason: 'The binding prevents the loophole.',
+            judgedAt: 1_700_000_001_000,
+            // No property field
+          },
+        },
+      ],
+      // No userStory field
+    };
+    
+    const spec = exportSpec(wish, grant);
+    
+    // Should fall back to default template for user story
+    expect(spec.requirementsMd).toContain('**User Story:**');
+    expect(spec.requirementsMd).toContain('As a spec author'); // part of the default template
+    
+    // Should fall back to template for properties
+    expect(spec.propertiesMd).toContain('*For any*');
+    expect(spec.propertiesMd).toContain('`permissions`'); // curse type should be mentioned
+  });
+
   it('example: produces correct format for "Only the owner can delete a project" with 2 closed curses', () => {
     const wish: Wish = {
       id: 'w1',

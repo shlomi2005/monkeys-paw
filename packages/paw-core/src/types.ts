@@ -46,6 +46,8 @@ export interface Verdict {
   readonly closed: boolean;
   readonly reason: string;
   readonly judgedAt: number;
+  /** Optional: a correctness property for fast-check, written by the Judge when closed is true (Task 25, Req 11.2). */
+  readonly property?: string;
 }
 
 /** A loophole the Paw found, told as a short disaster story. */
@@ -71,6 +73,8 @@ export interface Grant {
   readonly narration: string;
   /** 3–5 curses. */
   readonly curses: Curse[];
+  /** Optional: a user story written by the Genie (Task 25, Req 11.1). */
+  readonly userStory?: string;
 }
 
 /** Wish Integrity score 0–5 with counts. */

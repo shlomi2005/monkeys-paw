@@ -29,12 +29,19 @@ function earsCriterion(clauseText: string): string {
 /**
  * Generate a testable property statement from a closed curse.
  * One property per closed curse, phrased as a universally quantified invariant.
- * Format: *For any* <scenario derived from curse and binding>, <requirement property> [<curse-type>] (Req <number>)
+ * If the curse.verdict.property is present (Task 25), use it; otherwise fall back to template.
+ * Format: *For any* <scenario derived from curse and binding>, <property> [<curse-type>] (Req <number>)
  */
 function curseProperty(curse: Curse, requirement: Wish, index: number): string {
   const curseTypeTag = `${curse.type}`;
+  
+  // Task 25: Use verdict.property if available, otherwise fall back to template
+  if (curse.verdict?.property) {
+    return `- ${curse.verdict.property}`;
+  }
+  
   const boundClause = curse.binding?.clause || '(binding not found)';
-  // Format as a universal property statement derived from the binding.
+  // Fall back to template format
   return `*For any* wish matching "${requirement.text}", ${boundClause} [\`${curseTypeTag}\`] (Req 6.3)`;
 }
 
@@ -83,7 +90,8 @@ export function exportSpec(wish: Wish, grant: Grant): SpecExport {
     '',
     '### Requirement 1',
     '',
-    `**User Story:** As a spec author, I want this requirement to be airtight, so ${wish.text.toLowerCase()}`,
+    // Task 25: Use grant.userStory if available, otherwise fall back to template
+    `**User Story:** ${grant.userStory || `As a spec author, I want this requirement to be airtight, so ${wish.text.toLowerCase()}`}`,
     '',
     '#### Acceptance Criteria',
     '',

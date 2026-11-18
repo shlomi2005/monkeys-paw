@@ -21,6 +21,7 @@ export const VerdictSchema = z.object({
   closed: z.boolean(),
   reason: z.string().min(1),
   judgedAt: z.number(),
+  property: z.string().optional(), // Task 25, Req 11.2
 });
 
 export const BindingSchema = z.object({
@@ -44,6 +45,7 @@ export const GrantSchema = z.object({
   wishId: z.string().min(1),
   narration: z.string().min(1).max(200),
   curses: z.array(CurseSchema).min(3).max(5),
+  userStory: z.string().optional(), // Task 25, Req 11.1
 });
 
 export const IntegrityResultSchema = z.object({
