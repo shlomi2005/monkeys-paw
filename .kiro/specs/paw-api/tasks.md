@@ -4,44 +4,44 @@ Ordered checklist for implementing the Paw API. References requirements by numbe
 
 ## Setup and Infrastructure
 
-- [ ] 1. Create `apps/api` workspace with `package.json` (name `@monkeyspaw/api`, type `module`, scripts: `dev`, `build`, `start`, `test`, `eval`). (Req 1–12)
-- [ ] 2. Install dependencies: `hono`, `@hono/node-server`, `zod`, `@google/generative-ai`, `vitest`, `fast-check`. (Req 6, tech.md)
-- [ ] 3. Create `.env.example` with variable names: `GEMINI_API_KEY`, `CORS_ORIGIN`, `PER_IP_LIMIT`, `RATE_WINDOW_MS`, `DAILY_BUDGET_CENTS`, `EVAL_SPECIFICITY_THRESHOLD`. (Req 6, 7, 10, 12, iron-rules §1)
-- [ ] 4. Add `.env` to `.gitignore` if not already present. (iron-rules §1)
-- [ ] 5. Create `apps/api/src/index.ts` with Hono app scaffold, CORS middleware, health route stub. (Req 5, 10)
+- [x] 1. Create `apps/api` workspace with `package.json` (name `@monkeyspaw/api`, type `module`, scripts: `dev`, `build`, `start`, `test`, `eval`). (Req 1–12)
+- [x] 2. Install dependencies: `hono`, `@hono/node-server`, `zod`, `@google/generative-ai`, `vitest`, `fast-check`. (Req 6, tech.md)
+- [x] 3. Create `.env.example` with variable names: `GEMINI_API_KEY`, `CORS_ORIGIN`, `PER_IP_LIMIT`, `RATE_WINDOW_MS`, `DAILY_BUDGET_CENTS`, `EVAL_SPECIFICITY_THRESHOLD`. (Req 6, 7, 10, 12, iron-rules §1)
+- [x] 4. Add `.env` to `.gitignore` if not already present. (iron-rules §1)
+- [x] 5. Create `apps/api/src/index.ts` with Hono app scaffold, CORS middleware, health route stub. (Req 5, 10)
 
 ## Model Client
 
-- [ ] 6. Write `apps/api/src/client/gemini.test.ts`: test that `GeminiModelClient.generate` throws when API key is missing. (Req 6.2, 8.1)
-- [ ] 7. Write `apps/api/src/client/gemini.test.ts`: test timeout behavior (mock slow response, expect throw). (Req 6.4)
-- [ ] 8. Implement `apps/api/src/client/gemini.ts`: `GeminiModelClient` class implementing `ModelClient`, reads `GEMINI_API_KEY`, calls Gemini Flash with structured JSON output, 30s timeout, logs metadata only. (Req 6)
-- [ ] 9. Verify tests pass: `pnpm test` in `apps/api`. (Req 6)
+- [x] 6. Write `apps/api/src/client/gemini.test.ts`: test that `GeminiModelClient.generate` throws when API key is missing. (Req 6.2, 8.1)
+- [x] 7. Write `apps/api/src/client/gemini.test.ts`: test timeout behavior (mock slow response, expect throw). (Req 6.4)
+- [x] 8. Implement `apps/api/src/client/gemini.ts`: `GeminiModelClient` class implementing `ModelClient`, reads `GEMINI_API_KEY`, calls Gemini Flash with structured JSON output, 30s timeout, logs metadata only. (Req 6)
+- [x] 9. Verify tests pass: `pnpm test` in `apps/api`. (Req 6)
 
 ## Budget and Rate-Limit Logic
 
-- [ ] 10. Write `apps/api/src/budget/middleware.test.ts`: test `canCall` returns false when per-IP limit exceeded. (Req 7.1)
-- [ ] 11. Write `apps/api/src/budget/middleware.test.ts`: test `canCall` returns false when daily budget exhausted. (Req 7.6)
-- [ ] 12. Write `apps/api/src/budget/middleware.test.ts`: test per-IP counter resets after window elapses. (Req 7.5)
-- [ ] 13. Implement `apps/api/src/budget/state.ts`: in-memory `GlobalState` (spentCents, dayStart, ipStates Map). (Req 7.3)
-- [ ] 14. Implement `apps/api/src/budget/config.ts`: load env vars with defaults (perIpLimit=10, windowMs=60000, dailyBudgetCents=500). (Req 7, design.md)
-- [ ] 15. Implement `apps/api/src/budget/middleware.ts`: `checkBudget` middleware that calls paw-core `canCall`, rejects with 503 if false, attaches state to Hono context. (Req 7.1, 7.2)
-- [ ] 16. Implement `apps/api/src/budget/record.ts`: helper that calls paw-core `recordCall` and updates `GlobalState`. (Req 7.2)
-- [ ] 17. Verify budget tests pass. (Req 7)
+- [x] 10. Write `apps/api/src/budget/middleware.test.ts`: test `canCall` returns false when per-IP limit exceeded. (Req 7.1)
+- [x] 11. Write `apps/api/src/budget/middleware.test.ts`: test `canCall` returns false when daily budget exhausted. (Req 7.6)
+- [x] 12. Write `apps/api/src/budget/middleware.test.ts`: test per-IP counter resets after window elapses. (Req 7.5)
+- [x] 13. Implement `apps/api/src/budget/state.ts`: in-memory `GlobalState` (spentCents, dayStart, ipStates Map). (Req 7.3)
+- [x] 14. Implement `apps/api/src/budget/config.ts`: load env vars with defaults (perIpLimit=10, windowMs=60000, dailyBudgetCents=500). (Req 7, design.md)
+- [x] 15. Implement `apps/api/src/budget/middleware.ts`: `checkBudget` middleware that calls paw-core `canCall`, rejects with 503 if false, attaches state to Hono context. (Req 7.1, 7.2)
+- [x] 16. Implement `apps/api/src/budget/record.ts`: helper that calls paw-core `recordCall` and updates `GlobalState`. (Req 7.2)
+- [x] 17. Verify budget tests pass. (Req 7)
 
 ## Schemas and Validation
 
-- [ ] 18. Create `apps/api/src/schemas.ts`: define `GrantRequestSchema`, `GrantResponseSchema`, `BindRequestSchema`, `BindResponseSchema`, `ExportRequestSchema`, `WishSchema` (id, text, context, createdAt). (Req 1–3, design.md)
-- [ ] 19. Write `apps/api/src/schemas.test.ts`: test each schema rejects invalid input (empty text, missing curseId, etc.). (Req 1.2, 2.2, 3.3)
-- [ ] 20. Verify schema tests pass. (Req 1–3)
+- [x] 18. Create `apps/api/src/schemas.ts`: define `GrantRequestSchema`, `GrantResponseSchema`, `BindRequestSchema`, `BindResponseSchema`, `ExportRequestSchema`, `WishSchema` (id, text, context, createdAt). (Req 1–3, design.md)
+- [x] 19. Write `apps/api/src/schemas.test.ts`: test each schema rejects invalid input (empty text, missing curseId, etc.). (Req 1.2, 2.2, 3.3)
+- [x] 20. Verify schema tests pass. (Req 1–3)
 
 ## Routes
 
-- [ ] 21. Write `apps/api/src/routes/grant.test.ts`: test POST /api/grant with valid wish returns 200 with Grant (mock model). (Req 1.5)
-- [ ] 22. Write `apps/api/src/routes/grant.test.ts`: test empty wish returns 400. (Req 1.2)
-- [ ] 23. Write `apps/api/src/routes/grant.test.ts`: test harmful wish (e.g. "kill all users") returns 400 with in-character refusal. (Req 1.3)
-- [ ] 24. Write `apps/api/src/routes/grant.test.ts`: test over-budget returns 503. (Req 1.4)
-- [ ] 25. Implement `apps/api/src/routes/grant.ts`: parse request, validate, create Wish (generate id with `crypto.randomUUID()`, set createdAt), check budget, call `grantWish(wish, modelClient)`, record cost, return Grant. Handle fallback on validation failure (Req 1.6). (Req 1)
-- [ ] 26. Verify grant route tests pass. (Req 1)
+- [x] 21. Write `apps/api/src/routes/grant.test.ts`: test POST /api/grant with valid wish returns 200 with Grant (mock model). (Req 1.5)
+- [x] 22. Write `apps/api/src/routes/grant.test.ts`: test empty wish returns 400. (Req 1.2)
+- [x] 23. Write `apps/api/src/routes/grant.test.ts`: test harmful wish (e.g. "kill all users") returns 400 with in-character refusal. (Req 1.3)
+- [x] 24. Write `apps/api/src/routes/grant.test.ts`: test over-budget returns 503. (Req 1.4)
+- [x] 25. Implement `apps/api/src/routes/grant.ts`: parse request, validate, create Wish (generate id with `crypto.randomUUID()`, set createdAt), check budget, call `grantWish(wish, modelClient)`, record cost, return Grant. Handle fallback on validation failure (Req 1.6). (Req 1)
+- [x] 26. Verify grant route tests pass. (Req 1)
 
 - [ ] 27. Write `apps/api/src/routes/bind.test.ts`: test POST /api/bind with valid binding returns 200 with updated Grant and Verdict. (Req 2.4)
 - [ ] 28. Write `apps/api/src/routes/bind.test.ts`: test empty clause returns 400. (Req 2.2)

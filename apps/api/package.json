@@ -1,0 +1,28 @@
+{
+  "name": "@monkeyspaw/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The Monkey's Paw API server.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "tsx --watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "eval": "tsx src/eval/script.ts"
+  },
+  "dependencies": {
+    "paw-core": "workspace:*",
+    "hono": "^4.5.3",
+    "@hono/node-server": "^1.13.6",
+    "zod": "^3.23.8",
+    "@google/generative-ai": "^0.12.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8",
+    "tsx": "^4.17.0",
+    "fast-check": "^3.23.0"
+  }
+}
