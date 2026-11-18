@@ -1,0 +1,227 @@
+[
+  {
+    "id": "w01",
+    "wish": "Only the owner can delete a project.",
+    "context": "a team project-management app",
+    "expectedTypes": [
+      "permissions",
+      "data-loss"
+    ]
+  },
+  {
+    "id": "w02",
+    "wish": "Users must confirm their email before they can log in.",
+    "context": "a SaaS signup flow",
+    "expectedTypes": [
+      "time",
+      "accessibility"
+    ]
+  },
+  {
+    "id": "w03",
+    "wish": "Send a reminder 24 hours before every appointment.",
+    "context": "a clinic booking app",
+    "expectedTypes": [
+      "time",
+      "privacy"
+    ]
+  },
+  {
+    "id": "w04",
+    "wish": "Refund the customer if the order arrives late.",
+    "context": "an online store",
+    "expectedTypes": [
+      "money",
+      "abuse"
+    ]
+  },
+  {
+    "id": "w05",
+    "wish": "Passwords must be at least 8 characters.",
+    "context": "any login form",
+    "expectedTypes": [
+      "edge-input",
+      "abuse"
+    ]
+  },
+  {
+    "id": "w06",
+    "wish": "Show the cheapest flight first.",
+    "context": "a flight search site",
+    "expectedTypes": [
+      "money",
+      "scale"
+    ]
+  },
+  {
+    "id": "w07",
+    "wish": "Delete inactive accounts after 30 days.",
+    "context": "a social app",
+    "expectedTypes": [
+      "data-loss",
+      "time"
+    ]
+  },
+  {
+    "id": "w08",
+    "wish": "Every user gets one free trial.",
+    "context": "a subscription app",
+    "expectedTypes": [
+      "abuse",
+      "money"
+    ]
+  },
+  {
+    "id": "w09",
+    "wish": "Users can undo any action.",
+    "context": "a document editor",
+    "expectedTypes": [
+      "data-loss",
+      "privacy"
+    ]
+  },
+  {
+    "id": "w10",
+    "wish": "The leaderboard shows the top 10 players.",
+    "context": "a mobile game",
+    "expectedTypes": [
+      "abuse",
+      "edge-input"
+    ]
+  },
+  {
+    "id": "w11",
+    "wish": "Messages are deleted after they are read.",
+    "context": "a chat app",
+    "expectedTypes": [
+      "privacy",
+      "data-loss"
+    ]
+  },
+  {
+    "id": "w12",
+    "wish": "Students can submit homework until midnight.",
+    "context": "a school homework portal",
+    "expectedTypes": [
+      "time",
+      "concurrency"
+    ]
+  },
+  {
+    "id": "w13",
+    "wish": "Split the bill equally between all friends.",
+    "context": "a group expenses app",
+    "expectedTypes": [
+      "money",
+      "edge-input"
+    ]
+  },
+  {
+    "id": "w14",
+    "wish": "The smart lock opens when the owner's phone is nearby.",
+    "context": "a smart-home app",
+    "expectedTypes": [
+      "abuse",
+      "permissions"
+    ]
+  },
+  {
+    "id": "w15",
+    "wish": "Show a low-stock warning when fewer than 5 items remain.",
+    "context": "a shop inventory dashboard",
+    "expectedTypes": [
+      "scale",
+      "concurrency"
+    ]
+  },
+  {
+    "id": "w16",
+    "wish": "Give 10% off for every friend a user invites.",
+    "context": "a referral program",
+    "expectedTypes": [
+      "abuse",
+      "money"
+    ]
+  },
+  {
+    "id": "w17",
+    "wish": "Auto-save the document every minute.",
+    "context": "a writing app",
+    "expectedTypes": [
+      "data-loss",
+      "concurrency"
+    ]
+  },
+  {
+    "id": "w18",
+    "wish": "Children under 13 cannot create an account.",
+    "context": "a kids' game",
+    "expectedTypes": [
+      "privacy",
+      "abuse"
+    ]
+  },
+  {
+    "id": "w19",
+    "wish": "Charge the subscription on the first day of every month.",
+    "context": "a streaming service",
+    "expectedTypes": [
+      "money",
+      "time"
+    ]
+  },
+  {
+    "id": "w20",
+    "wish": "Users can change their username at any time.",
+    "context": "a forum",
+    "expectedTypes": [
+      "abuse",
+      "permissions"
+    ]
+  },
+  {
+    "id": "w21",
+    "wish": "The chatbot always answers the user's question.",
+    "context": "a customer-support bot",
+    "expectedTypes": [
+      "abuse",
+      "privacy"
+    ]
+  },
+  {
+    "id": "w22",
+    "wish": "Notify everyone in the group when a new message arrives.",
+    "context": "a group chat",
+    "expectedTypes": [
+      "scale",
+      "accessibility"
+    ]
+  },
+  {
+    "id": "w23",
+    "wish": "Sort search results by relevance.",
+    "context": "a marketplace",
+    "expectedTypes": [
+      "abuse",
+      "edge-input"
+    ]
+  },
+  {
+    "id": "w24",
+    "wish": "Keep backups for 7 days.",
+    "context": "a cloud notes app",
+    "expectedTypes": [
+      "data-loss",
+      "time"
+    ]
+  },
+  {
+    "id": "w25",
+    "wish": "Doctors can see the records of their patients.",
+    "context": "a hospital records system",
+    "expectedTypes": [
+      "permissions",
+      "privacy"
+    ]
+  }
+]

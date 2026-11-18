@@ -3,25 +3,25 @@
 Ordered implementation checklist. Each task references the requirement(s) it satisfies. Tests first where the
 component has a pure interface. All work happens in `packages/paw-core` unless noted.
 
-- [ ] **1. Scaffold `packages/paw-core`** — `package.json`, `tsconfig.json` (strict, `noImplicitAny`), `src/index.ts`
+- [x] **1. Scaffold `packages/paw-core`** — `package.json`, `tsconfig.json` (strict, `noImplicitAny`), `src/index.ts`
   barrel. No DOM/Node imports; may import `zod` and `fast-check` (dev). (structure.md, tech.md)
-- [ ] **2. Define core types** — `src/types.ts` with `Wish`, `Curse`, `CurseType`, `CurseStatus`, `Grant`, `Binding`,
+- [x] **2. Define core types** — `src/types.ts` with `Wish`, `Curse`, `CurseType`, `CurseStatus`, `Grant`, `Binding`,
   `BindingKind`, `Verdict`, `IntegrityResult`, `SpecExport`, `ModelClient`. (Req 1–6, design §Core types)
-- [ ] **3. Write zod schemas** — `src/schemas.ts` with `CurseTypeSchema`, `CurseSchema`, `GrantSchema`,
+- [x] **3. Write zod schemas** — `src/schemas.ts` with `CurseTypeSchema`, `CurseSchema`, `GrantSchema`,
   `BindingSchema`, `VerdictSchema`, `IntegrityResultSchema`, `SpecExportSchema`. (Req 2.5, 4.4, design §Zod Schemas)
-- [ ] **4. Schema round-trip test** — `tests/schemas.test.ts`: verify `GrantSchema.parse(JSON.parse(JSON.stringify(x)))`
+- [x] **4. Schema round-trip test** — `tests/schemas.test.ts`: verify `GrantSchema.parse(JSON.parse(JSON.stringify(x)))`
   round-trips for generated valid grants. (P3)
-- [ ] **5. Implement budget guard** — `src/budget.ts`: `canCall(state, config, now)` and `recordCall(state, cost, now)`.
+- [x] **5. Implement budget guard** — `src/budget.ts`: `canCall(state, config, now)` and `recordCall(state, cost, now)`.
   Pure, no side effects. (Req 7)
-- [ ] **6. Budget property test** — `tests/properties.test.ts` (P8): fast-check any call sequence, assert
+- [x] **6. Budget property test** — `tests/properties.test.ts` (P8): fast-check any call sequence, assert
   `canCall` is false once over budget and `spentCents` never exceeds `dailyBudgetCents`. (P8, Req 7.3)
-- [ ] **7. Write prompt builders** — `src/prompts.ts`: `buildPawPrompt(wish)` (adversary, taxonomy + guardrails),
+- [x] **7. Write prompt builders** — `src/prompts.ts`: `buildPawPrompt(wish)` (adversary, taxonomy + guardrails),
   `buildGeniePrompt(wish)` (narrator, 1–2 sentences), `buildJudgePrompt(curse, binding)` (quality gate + binding
   verdict modes). All return strings; no model calls. (Req 2, 4, design §Prompted Roles)
-- [ ] **8. Implement `grantWish`** — `src/grant.ts`: build Paw+Genie prompt, call `ModelClient.generate`, parse with
+- [x] **8. Implement `grantWish`** — `src/grant.ts`: build Paw+Genie prompt, call `ModelClient.generate`, parse with
   `GrantSchema`, retry once on failure, fall back on second failure. Run Judge quality gate: reject generic curses,
   request replacements (up to 3 retries per curse). (Req 2.1–2.6, design §Error Handling)
-- [ ] **9. `grantWish` unit tests** — `tests/grant.test.ts`: fake `ModelClient` returning valid JSON → valid `Grant`
+- [x] **9. `grantWish` unit tests** — `tests/grant.test.ts`: fake `ModelClient` returning valid JSON → valid `Grant`
   with 3–5 curses; invalid JSON → retry once; second failure → fallback grant. (Req 2.5, P6, P7)
 - [ ] **10. Implement `proposeBinding`** — `src/bind.ts`: construct `Binding` from curse id, clause text, and kind
   (`rewrite` or `ears-clause`). Reject empty clause. (Req 3.1–3.4)
