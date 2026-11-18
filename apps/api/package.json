@@ -6,11 +6,11 @@
   "description": "The Monkey's Paw API server.",
   "license": "MIT",
   "scripts": {
-    "dev": "tsx --watch src/index.ts",
+    "dev": "tsx --env-file=.env --watch src/index.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "eval": "tsx src/eval/script.ts"
+    "eval": "tsx --env-file=.env src/eval/script.ts"
   },
   "dependencies": {
     "paw-core": "workspace:*",

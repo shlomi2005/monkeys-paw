@@ -34,7 +34,8 @@ export const BindingSchema = z.object({
 export const CurseSchema = z.object({
   id: z.string().min(1),
   type: CurseTypeSchema,
-  story: z.string().max(300),
+  // Task 94: Brevity by prompt, not by failure. Max 30 words ≈ 360 chars.
+  story: z.string().max(360),
   loophole: z.string().min(1),
   status: z.enum(['open', 'closed']).default('open'),
   binding: BindingSchema.optional(),
@@ -43,7 +44,8 @@ export const CurseSchema = z.object({
 
 export const GrantSchema = z.object({
   wishId: z.string().min(1),
-  narration: z.string().min(1).max(200),
+  // Task 94: Narration max 25 words ≈ 260 chars.
+  narration: z.string().min(1).max(260),
   curses: z.array(CurseSchema).min(3).max(5),
   userStory: z.string().optional(), // Task 25, Req 11.1
 });

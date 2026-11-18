@@ -139,3 +139,18 @@ Ordered checklist for implementing the Paw API. References requirements by numbe
 
 - [ ] 91. Write `apps/api/README.md`: environment variables, how to run locally, how to run eval, deployment instructions. (Req intro)
 - [ ] 92. Update root `README.md`: link to paw-api spec and eval docs. (Req intro)
+
+## First real run (owner, 18.11): findings
+- [x] 93. `grantWish` assigns `wishId` and curse ids itself after parsing; the model never supplies them (the real
+  model output failed zod only because `wishId` was missing). (Req 1, 2)
+- [x] 94. Brevity by prompt, not by failure: Paw prompt demands each curse story <= 30 words (2 short sentences) and
+  the Genie narration <= 25 words; zod limits become story <= 360 chars, narration <= 260 chars. Real Gemini output
+  was rich but ran 300-450 chars. Circles in the UI need short text. (Req 2.1)
+- [x] 95. Gemini resilience: default model `gemini-3.5-flash`; on 503/429 try the next model in `GEMINI_MODEL_FALLBACKS`
+  (default `gemini-3.8-flash,gemini-flash-latest,gemini-2.5-flash`) before paw-core's retry/fallback. `gemini-3.8-flash`
+  and `gemini-flash-latest` returned 503 "high demand" today. Fix the default in code AND in .env.example. (Req 6)
+- [x] 96. Use Gemini structured output (`responseSchema` matching GrantSchema/VerdictSchema) so field names are fixed.
+- [x] 97. The eval gate lied: it printed PASS with one fallback curse per wish and 0% type coverage. A wish FAILS when
+  the fallback grant was used, when it has fewer than 3 curses, or when it hits none of its `expectedTypes`; the run
+  PASSES only if >= 80% of wishes pass. Report path stays docs/eval/latest.md at the REPO ROOT (it was written to
+  apps/api/docs). Load `.env` in the eval and dev scripts (`tsx --env-file=.env`). (Req eval)

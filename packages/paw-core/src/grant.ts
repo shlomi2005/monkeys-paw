@@ -105,13 +105,26 @@ export async function grantWish(wish: Wish, model: ModelClient): Promise<Grant> 
     try {
       const raw = await model.generate(prompt);
       const data = asObject(toJson(raw));
-      const parsed = GrantSchema.parse({ ...data, wishId: wish.id }) as unknown as Grant;
+      
+      // Task 93: grantWish assigns wishId and curse ids itself; the model never supplies them.
+      // Inject wishId and generate stable curse ids.
+      const curseArray = Array.isArray(data.curses) ? data.curses : [];
+      const dataWithIds = {
+        ...data,
+        wishId: wish.id,
+        curses: curseArray.map((curse: any, idx: number) => ({
+          ...(curse && typeof curse === 'object' ? curse : {}),
+          id: `curse-${idx}`,
+        })),
+      };
+      
+      const parsed = GrantSchema.parse(dataWithIds) as unknown as Grant;
 
       const curses: Curse[] = [];
       for (const curse of parsed.curses) {
         curses.push(await ensureSpecific(wish, curse, model));
       }
-      return { wishId: parsed.wishId, narration: parsed.narration, curses };
+      return { wishId: parsed.wishId, narration: parsed.narration, curses, userStory: parsed.userStory };
     } catch {
       // retry once, then fall back below
     }

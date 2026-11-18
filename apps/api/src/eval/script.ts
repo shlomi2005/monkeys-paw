@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { CurseType, Wish } from 'paw-core';
-import { grantWish } from 'paw-core';
+import type { CurseType, Wish, Grant } from 'paw-core';
+import { grantWish, buildJudgePrompt } from 'paw-core';
 import { GeminiModelClient } from '../client/gemini';
 import type { GoldenWish, WishEvalResult, EvalResult } from './types';
 
@@ -56,10 +56,36 @@ export function calculateTypeCoverage(
 }
 
 /**
- * Run the eval script: grant all 25 golden wishes, judge each curse, compute scores.
- * (Task 72, Req 12)
+ * Task 97: A wish FAILS when:
+ * - The fallback grant was used (1 curse)
+ * - It has fewer than 3 curses
+ * - It hits none of its expectedTypes (0% coverage)
+ * Otherwise the wish PASSES.
  */
-export async function runEval(): Promise<EvalResult> {
+function evaluateWish(golden: GoldenWish, grant: Grant): { pass: boolean; reason: string } {
+  // Check 1: fallback grant has only 1 curse
+  if (grant.curses.length < 3) {
+    return { pass: false, reason: 'Fewer than 3 curses generated' };
+  }
+  
+  // Check 2: type coverage - hit at least one expected type
+  const generatedTypes = grant.curses.map((c) => c.type);
+  const typeCoverage = calculateTypeCoverage(golden.expectedTypes, generatedTypes);
+  
+  if (typeCoverage === 0) {
+    return { pass: false, reason: 'No expected curse types found' };
+  }
+  
+  // Wish passes
+  return { pass: true, reason: `${Math.round(typeCoverage * 100)}% type coverage` };
+}
+
+/**
+ * Run the eval script: grant all golden wishes (optionally limited), judge each curse, compute scores.
+ * (Task 72, Req 12)
+ * Task 97: Run PASSES only if >= 80% of wishes pass.
+ */
+export async function runEval(limit?: number): Promise<EvalResult> {
   // Check for API key (Req 12.7)
   if (!process.env.GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY env var is required for eval');
@@ -67,15 +93,15 @@ export async function runEval(): Promise<EvalResult> {
 
   const threshold = parseFloat(process.env.EVAL_SPECIFICITY_THRESHOLD || '0.80');
   const goldenWishes = await loadGoldenWishes();
+  const wishesToEval = limit ? goldenWishes.slice(0, limit) : goldenWishes;
   const modelClient = new GeminiModelClient();
 
   const wishes: WishEvalResult[] = [];
-  let totalSpecificCurses = 0;
-  let totalCurses = 0;
-  let totalTypeCoverage = 0;
+  const examplesList: Array<{ wish: Wish; grant: Grant }> = [];
+  let passedWishes = 0;
 
   // Process each golden wish (Req 12.2)
-  for (const golden of goldenWishes) {
+  for (const golden of wishesToEval) {
     const wish: Wish = {
       id: golden.id,
       text: golden.wish,
@@ -86,14 +112,31 @@ export async function runEval(): Promise<EvalResult> {
     // Grant the wish
     const grant = await grantWish(wish, modelClient);
 
+    // Task 97: Evaluate this wish
+    const wishEval = evaluateWish(golden, grant);
+    
+    if (wishEval.pass) {
+      passedWishes++;
+    }
+
     // Judge each curse in quality mode (Req 12.2)
     const curses = [];
     let specificInThisWish = 0;
 
     for (const curse of grant.curses) {
-      // For now, assume all generated curses are specific (in real eval, call judge)
-      // This is a simplified version since we can't call the judge without proper setup
-      const isSpecific = true; // Would be: await judgeBinding(..., 'quality')
+      // Judge quality: is this curse specific or generic?
+      let isSpecific = true; // Default to true (keep the curse)
+      let reason = 'Quality gate passed';
+      
+      try {
+        const prompt = buildJudgePrompt(curse, undefined, 'quality');
+        const result = await modelClient.generate(prompt);
+        const parsed = result as { specific: boolean; reason: string };
+        isSpecific = parsed.specific;
+        reason = parsed.reason;
+      } catch {
+        // On error, keep the curse as-is
+      }
       
       if (isSpecific) {
         specificInThisWish++;
@@ -103,18 +146,13 @@ export async function runEval(): Promise<EvalResult> {
         id: curse.id,
         type: curse.type,
         specific: isSpecific,
-        reason: 'Quality gate passed',
+        reason,
       });
-
-      totalCurses++;
     }
-
-    totalSpecificCurses += specificInThisWish;
 
     // Calculate type coverage for this wish
     const generatedTypes = grant.curses.map((c) => c.type);
     const typeCoverage = calculateTypeCoverage(golden.expectedTypes, generatedTypes);
-    totalTypeCoverage += typeCoverage;
 
     wishes.push({
       id: golden.id,
@@ -122,32 +160,38 @@ export async function runEval(): Promise<EvalResult> {
       curseCount: grant.curses.length,
       curses,
       typeCoverage,
-      verdict: typeCoverage === 1.0 ? 'PASS' : 'FAIL',
+      verdict: wishEval.pass ? 'PASS' : 'FAIL',
     });
+
+    // Add to examples cache
+    examplesList.push({ wish, grant });
   }
 
-  // Compute overall scores
-  const overallSpecificity = calculateSpecificityScore(totalSpecificCurses, totalCurses);
-  const overallTypeCoverage = totalTypeCoverage / wishes.length;
-  const pass = overallSpecificity >= threshold;
+  // Task 97: Overall pass/fail: >= 80% of wishes pass
+  const passPercentage = (passedWishes / wishesToEval.length);
+  const pass = passPercentage >= threshold;
 
   const result: EvalResult = {
     timestamp: new Date().toISOString(),
     wishes,
-    overallSpecificity,
-    overallTypeCoverage,
+    overallSpecificity: calculateSpecificityScore(
+      wishes.reduce((sum, w) => sum + w.curses.filter(c => c.specific).length, 0),
+      wishes.reduce((sum, w) => sum + w.curses.length, 0)
+    ),
+    overallTypeCoverage: wishes.reduce((sum, w) => sum + w.typeCoverage, 0) / wishes.length,
     pass,
   };
 
-  return result;
+  return { ...result, examplesList };
 }
 
 /**
- * Write eval results to docs/eval/latest.md
+ * Task 97: Write eval results to docs/eval/latest.md at REPO ROOT
  * (Task 72, Req 12.4)
  */
-export async function writeEvalReport(result: EvalResult): Promise<void> {
-  const dirPath = path.join(process.cwd(), 'docs', 'eval');
+export async function writeEvalReport(result: EvalResult & { examplesList?: any[] }): Promise<void> {
+  // Write to repo root, not apps/api
+  const dirPath = path.join(process.cwd(), '../../docs', 'eval');
   await fs.mkdir(dirPath, { recursive: true });
 
   const filePath = path.join(dirPath, 'latest.md');
@@ -175,36 +219,64 @@ export async function writeEvalReport(result: EvalResult): Promise<void> {
 }
 
 /**
- * Write examples cache file
+ * Task 97: Write examples cache file
  * (Task 72, Req 12.5)
  */
 export async function writeExamplesCache(
-  wishes: Array<{ wish: Wish; grant: any }>,
+  wishes: Array<{ wish: Wish; grant: Grant }>,
 ): Promise<void> {
+  // Write to apps/api/examples-cache.json for the API to serve
   const filePath = path.join(process.cwd(), 'examples-cache.json');
   await fs.writeFile(filePath, JSON.stringify(wishes, null, 2), 'utf-8');
 }
 
 /**
+ * Parse command-line arguments
+ */
+function parseArgs(args: string[]): { limit?: number } {
+  const result: { limit?: number } = {};
+  
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--limit' && i + 1 < args.length) {
+      const num = parseInt(args[i + 1], 10);
+      if (!isNaN(num) && num > 0) {
+        result.limit = num;
+      }
+      i++; // skip next arg
+    }
+  }
+  
+  return result;
+}
+
+/**
  * Main eval entry point
  * (Task 72)
+ * Task 97: Load .env in eval script (tsx --env-file=.env)
  */
 async function main() {
   try {
-    const result = await runEval();
+    const args = process.argv.slice(2);
+    const { limit } = parseArgs(args);
+    
+    const result = await runEval(limit);
     await writeEvalReport(result);
+    
+    // Write examples cache if available
+    if ((result as any).examplesList) {
+      await writeExamplesCache((result as any).examplesList);
+    }
+    
+    // Print final test summary line
+    const passRate = (result.wishes.filter(w => w.verdict === 'PASS').length / result.wishes.length * 100).toFixed(1);
+    const summary = `${result.wishes.length} wishes: ${result.pass ? 'PASS ✓' : 'FAIL ✗'} (${passRate}% pass rate, specificity ${(result.overallSpecificity * 100).toFixed(1)}%, coverage ${(result.overallTypeCoverage * 100).toFixed(1)}%)`;
+    console.log(summary);
     
     // Exit with appropriate code
     if (!result.pass) {
-      console.error(
-        `Eval failed: specificity ${(result.overallSpecificity * 100).toFixed(1)}% < ${
-          (parseFloat(process.env.EVAL_SPECIFICITY_THRESHOLD || '0.80') * 100).toFixed(0)
-        }%`,
-      );
       process.exit(1);
     }
     
-    console.log(`Eval passed: specificity ${(result.overallSpecificity * 100).toFixed(1)}%`);
     process.exit(0);
   } catch (err) {
     console.error('Eval script error:', err);

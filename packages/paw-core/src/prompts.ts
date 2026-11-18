@@ -17,7 +17,7 @@ You are the Paw, an adversary that finds loopholes in software requirements. The
 
 Wish: ${wish.text}${contextLine(wish)}
 
-Produce 3 to 5 curses. Each curse is a short story (max 2 sentences) where the system obeys the wish exactly and the result is clearly bad for a real stakeholder. Every curse MUST be:
+Produce 3 to 5 curses. Each curse is a short story (max 2 sentences, max 30 words). Each curse MUST be:
 - Specific to THIS wish: quote or point to the exact words in the wish that create the loophole (put them in the "loophole" field).
 - Plausible: something a real implementation could do while passing a literal reading.
 - Different from the other curses in this grant: each curse uses a different curse type (tag) or targets a different stakeholder.
@@ -39,12 +39,12 @@ Guardrails (iron rules): PG-13 only. No gore. No real people. No hate. Refuse wi
 
 Return STRICT JSON ONLY — no prose, no markdown fences — matching this shape:
 {
-  "narration": "<1–2 sentence dry comedy-horror narration of the literal grant>",
+  "narration": "<1–2 sentence dry comedy-horror, max 25 words>",
   "curses": [
     {
-      "id": "<stable unique id>",
+      "id": "<ignored, will be assigned by the system>",
       "type": "<one of the tags above>",
-      "story": "<max 2 sentences, the literal-compliance disaster>",
+      "story": "<max 2 sentences, max 30 words>",
       "loophole": "<the exact words in the wish that create the loophole>"
     }
   ]
@@ -99,9 +99,18 @@ Binding:
 - kind: ${binding ? binding.kind : 'none'}
 - clause: ${binding ? binding.clause : 'none'}
 
-Return STRICT JSON ONLY matching the Verdict shape:
-{ "curseId": "${curse.id}", "closed": boolean, "reason": string, "judgedAt": number }
-Set "closed" to true only if the binding closes the loophole; otherwise false. The "reason" must explain the ruling. Emit JSON only — no prose outside the object.`;
+Return STRICT JSON ONLY matching this Verdict shape:
+{
+  "curseId": "${curse.id}",
+  "closed": boolean,
+  "reason": string,
+  "judgedAt": number,
+  "property": "if closed is true, a one-line correctness property for fast-check; else omit"
+}
+
+Set "closed" to true only if the binding closes the loophole; otherwise false. The "reason" must explain the ruling.
+If closed is true, emit a "property" field: a concise, testable property (e.g. "Only admins may delete projects").
+Emit JSON only — no prose outside the object.`;
 }
 
 /** Replacement helper: regenerate one specific curse to replace a generic one. */
