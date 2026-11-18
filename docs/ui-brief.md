@@ -36,4 +36,6 @@ frames, one accent colour only: blood red. Reference: `docs/art/concept-victoria
 - `prefers-reduced-motion`: no finger animation, swap to instant state + text cue.
 - Keyboard: tab through wish line, example cards, circles, binding card; Enter to submit.
 - Sound (off by default, a small engraved toggle): creak on curl, sigh on open, stamp on "Granted."
-- Load fast: the 3D paw under 1.5 MB, a static engraved fallback image while it loads or if WebGL is missing.
+- Load fast: `docs/art/paw/paw-mobile.glb` (2.0 MB) on phones, `paw-web.glb` (2.9 MB) on desktop, and `paw-poster.jpg`
+  as the static fallback while it loads or if WebGL is missing. Asset contract: `docs/art/paw/PAW-ASSET.md`.
+- Finger order: curses curl thumb, index, middle, ring, little; a closed loophole opens the most recently curled digit.

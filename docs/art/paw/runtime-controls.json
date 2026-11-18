@@ -1,0 +1,412 @@
+{
+  "source_glb_sha256": "11ac4b60f8de66fe77e0b8864bee735ec4c7a968c162d5970bd97fb8f0e37113",
+  "coordinate_system": "glTF Y up; xyzw quaternions; axis_joint is in this joint bind space",
+  "composition": "local quaternion = bind_local_rotation_xyzw multiplied by axis-angle operations in listed order; operation angle = max_degrees * clamp(amount,0,1)",
+  "gesture": "Thumb curls first into palm toward wrist; then index, middle, ring, little each independently. Open little, ring, middle, index, thumb. Never move two digits together. Preserve cumulative clip baselines. Stop competing animation actions before direct control.",
+  "rebuild_from_bind": true,
+  "joints": {
+    "wrist": {
+      "bind_local_rotation_xyzw": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": []
+    },
+    "index_mcp": {
+      "bind_local_rotation_xyzw": [
+        -0.05084369704127312,
+        0.003304205136373639,
+        -0.06476636976003647,
+        0.9965988397598267
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "adduction",
+          "axis_joint": [
+            -0.1294281830688756,
+            0.9864404706807576,
+            0.10091354334585163
+          ],
+          "max_degrees": -3
+        },
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9999999999999996,
+            2.8333351649866305e-08,
+            1.3599473742877816e-08
+          ],
+          "max_degrees": 90
+        }
+      ]
+    },
+    "index_pip": {
+      "bind_local_rotation_xyzw": [
+        0.09565319865942001,
+        -0.0015439175767824054,
+        -0.016064630821347237,
+        0.995283842086792
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9994790869524228,
+            0.03168240668878516,
+            -0.006146531636420708
+          ],
+          "max_degrees": 50
+        }
+      ]
+    },
+    "index_dip": {
+      "bind_local_rotation_xyzw": [
+        -0.09565316885709763,
+        0.001543911173939705,
+        0.016064604744315147,
+        0.9952839016914368
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9999999999999963,
+            8.328938447813754e-08,
+            4.701304924786126e-09
+          ],
+          "max_degrees": 20
+        }
+      ]
+    },
+    "middle_mcp": {
+      "bind_local_rotation_xyzw": [
+        0.0022748932242393494,
+        -4.919481943943538e-05,
+        -0.021619588136672974,
+        0.9997637271881104
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "adduction",
+          "axis_joint": [
+            -0.04322917977876573,
+            0.9990548366284154,
+            -0.004546583885194197
+          ],
+          "max_degrees": 0
+        },
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9999999999999999,
+            3.057626341306652e-09,
+            -1.896890534018147e-09
+          ],
+          "max_degrees": 80
+        }
+      ]
+    },
+    "middle_pip": {
+      "bind_local_rotation_xyzw": [
+        0.10948334634304047,
+        0.0005641221650876105,
+        0.005121531896293163,
+        0.9939752817153931
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9999469033865876,
+            -0.010057825560999371,
+            0.002242889332703104
+          ],
+          "max_degrees": 65
+        }
+      ]
+    },
+    "middle_dip": {
+      "bind_local_rotation_xyzw": [
+        -0.10948334634304047,
+        -0.0005641225725412369,
+        -0.005121537949889898,
+        0.9939752817153931
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "flexion",
+          "axis_joint": [
+            1.0,
+            1.5181095996769614e-08,
+            -1.381352150943611e-09
+          ],
+          "max_degrees": 12
+        }
+      ]
+    },
+    "ring_mcp": {
+      "bind_local_rotation_xyzw": [
+        0.017393315210938454,
+        0.00048704506480135024,
+        0.027986615896224976,
+        0.9994568824768066
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "adduction",
+          "axis_joint": [
+            0.05595977019644397,
+            0.9978284439966587,
+            -0.034740473093612154
+          ],
+          "max_degrees": 4
+        },
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9999999999999997,
+            -2.408414461620163e-08,
+            1.8593766872325099e-09
+          ],
+          "max_degrees": 100
+        }
+      ]
+    },
+    "ring_pip": {
+      "bind_local_rotation_xyzw": [
+        0.09631699323654175,
+        0.0011973928194493055,
+        0.012373017147183418,
+        0.9952731132507324
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9996909488135609,
+            -0.024398425887895103,
+            0.004766935539188608
+          ],
+          "max_degrees": 50
+        }
+      ]
+    },
+    "ring_dip": {
+      "bind_local_rotation_xyzw": [
+        -0.09631700813770294,
+        -0.0011973971268162131,
+        -0.012373028323054314,
+        0.9952731132507324
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9999999999999999,
+            -1.0439981530489128e-09,
+            -4.930528300689432e-09
+          ],
+          "max_degrees": 20
+        }
+      ]
+    },
+    "little_mcp": {
+      "bind_local_rotation_xyzw": [
+        0.10267961770296097,
+        0.01228108536452055,
+        0.1181228905916214,
+        0.9875996708869934
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "adduction",
+          "axis_joint": [
+            0.23583827679905434,
+            0.951007760405063,
+            -0.19991134746631828
+          ],
+          "max_degrees": 3
+        },
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9999999999999992,
+            -1.931899507989082e-09,
+            -3.5121310323557586e-08
+          ],
+          "max_degrees": 105
+        }
+      ]
+    },
+    "little_pip": {
+      "bind_local_rotation_xyzw": [
+        0.07057932019233704,
+        0.0008178729913197458,
+        0.011557942256331444,
+        0.9974388480186462
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9997314900511955,
+            -0.022941239363492426,
+            0.003263025663886556
+          ],
+          "max_degrees": 40
+        }
+      ]
+    },
+    "little_dip": {
+      "bind_local_rotation_xyzw": [
+        -0.07057930529117584,
+        -0.0008178575662896037,
+        -0.011557859368622303,
+        0.9974388480186462
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.9999999999999855,
+            -1.6943575281615914e-07,
+            -1.5706121025277353e-08
+          ],
+          "max_degrees": 4
+        }
+      ]
+    },
+    "thumb_cmc": {
+      "bind_local_rotation_xyzw": [
+        0.19628769159317017,
+        -0.07890947163105011,
+        -0.3645549416542053,
+        0.9068319201469421
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "opposition",
+          "axis_joint": [
+            -0.6921580319109114,
+            0.6571416731059462,
+            -0.2984662130438408
+          ],
+          "max_degrees": -8.611394849765114
+        },
+        {
+          "name": "flexion",
+          "axis_joint": [
+            0.796520092457029,
+            0.5878754431617973,
+            -0.14127351358115975
+          ],
+          "max_degrees": 29.29635965454605
+        }
+      ]
+    },
+    "thumb_mcp": {
+      "bind_local_rotation_xyzw": [
+        -0.07535535842180252,
+        0.004642237909138203,
+        -0.061311956495046616,
+        0.995259165763855
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "flexion",
+          "axis_joint": [
+            -0.27440101461206673,
+            -0.0362752718877227,
+            0.960930896490138
+          ],
+          "max_degrees": 76.46210783900906
+        }
+      ]
+    },
+    "thumb_ip": {
+      "bind_local_rotation_xyzw": [
+        0.0753554180264473,
+        -0.0046422104351222515,
+        0.06131182238459587,
+        0.995259165763855
+      ],
+      "amount_range": [
+        0,
+        1
+      ],
+      "operations_after_bind": [
+        {
+          "name": "flexion",
+          "axis_joint": [
+            -0.2589691677600088,
+            0.14167906678608716,
+            0.9554381257749306
+          ],
+          "max_degrees": 22.818862186124317
+        }
+      ]
+    }
+  }
+}
