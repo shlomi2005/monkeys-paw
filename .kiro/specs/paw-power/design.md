@@ -179,7 +179,8 @@ packages from the metafile, reads each `package.json` for version, licence and a
 package name appears in it). The test `bundle-fresh.test.ts` runs the same esbuild call, with the same alias, with `write: false` and compares
 bytes to the committed file, so it depends on nothing outside git. Size rule: if the unminified bundle is over 1 MB,
 the script and the test use `minify: true`. When task 3 is done, the final size and the `minify` value are recorded
-here: _not yet built_. The SDK is imported only through `server/mcp.js` and `server/stdio.js`, which keeps
+here: **770,678 bytes, `minify: false`** (task 3, esbuild 0.28.2 pinned exactly, eight third-party packages; the script is
+`packages/paw-mcp/scripts/build-bundle.mjs`, run with `pnpm bundle`, and the test imports its `bundleOptions()`). The SDK is imported only through `server/mcp.js` and `server/stdio.js`, which keeps
 HTTP and SSE transports out of the bundle.
 
 ---

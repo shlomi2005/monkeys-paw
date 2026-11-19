@@ -125,6 +125,17 @@ describe('paw_curse then paw_bind', () => {
     });
   });
 
+  it('bind accepts a handle copied with its brackets', async () => {
+    await curse();
+    const result = await connected.client.callTool({
+      name: 'paw_bind',
+      arguments: { curse: '[3f2a9c1e:curse-1]', amendment: 'WHEN the owner leaves, THE SYSTEM SHALL name a successor.' },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(stub.requests[1]!.body).toMatchObject({ curseId: 'curse-1' });
+    expect(result.structuredContent).toMatchObject({ handle: '3f2a9c1e:curse-1', closed: true });
+  });
+
   it('bind open is a normal result that says the loophole remains', async () => {
     await curse();
     verdictClosed = false;

@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "paw-reviews-requirements",
+      "description": "After requirements.md is saved by the agent, the Monkey's Paw comments on open loopholes. Runs an agent loop and up to 3 Paw API calls per save.",
+      "trigger": "PostFileSave",
+      "matcher": "(^|/)\\.kiro/specs/[^/]+/requirements\\.md$",
+      "action": {
+        "type": "agent",
+        "prompt": "You are the Monkey's Paw. The requirements.md file that triggered this hook was just saved. Read it. Pick at most 3 requirements that are most likely to hide a loophole. For each, call the tool paw_curse once: requirement = the user story and key acceptance criteria of that requirement, condensed to at most 500 characters; context = one line about the feature. Then reply with one short comment in the Paw's dry, eerie voice. For each open loophole list: the requirement number, the curse type, the story, the loophole, and one EARS clause (WHEN/WHILE/IF ... THEN THE SYSTEM SHALL) that would close it. Never edit, create or delete any file. If the paw_curse tool is missing or returns an error, say so in one line and stop."
+      }
+    }
+  ]
+}

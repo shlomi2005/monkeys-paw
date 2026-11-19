@@ -22,6 +22,15 @@ export function openHandles(grant: Grant): string[] {
   return grant.curses.filter((c) => c.status === 'open').map((c) => toHandle(grant.wishId, c.id));
 }
 
+/** Agents may copy a handle with its brackets or quotes. Strip one surrounding pair. */
+function cleanReference(text: string): string {
+  const trimmed = text.trim();
+  const first = trimmed[0];
+  const last = trimmed[trimmed.length - 1];
+  const wrapped = (first === '[' && last === ']') || (first === '"' && last === '"') || (first === "'" && last === "'");
+  return trimmed.length >= 2 && wrapped ? trimmed.slice(1, -1).trim() : trimmed;
+}
+
 /** In-process store only. Holds no timers and writes nothing. */
 export function createGrantMemory(max: number = MAX_REMEMBERED_GRANTS): GrantMemory {
   const grants = new Map<string, Grant>();
@@ -38,7 +47,8 @@ export function createGrantMemory(max: number = MAX_REMEMBERED_GRANTS): GrantMem
         grants.delete(oldest.value);
       }
     },
-    resolve(text) {
+    resolve(raw) {
+      const text = cleanReference(raw);
       const parsed = parseHandle(text);
       if (parsed) {
         for (const grant of newestFirst()) {

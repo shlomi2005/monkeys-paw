@@ -18,7 +18,7 @@ install a power, so tasks 7 and 8 are the reviewer's. Do not change `apps/api` o
   `curseId` and `clause`), `errors.test.ts` (400, 503, 500, non-JSON error, unreachable host, timeout, invalid shape,
   unknown curse with no API call, over-long and empty input). Close every server. (Req 1.4–1.5, 2, 3, 5.4–5.6, 6, 7.1–7.4,
   16.1–16.5)
-- [ ] 3. The bundle: `scripts/build-bundle.mjs`, the committed `powers/monkeys-paw/server/paw-mcp.mjs`,
+- [x] 3. The bundle: `scripts/build-bundle.mjs`, the committed `powers/monkeys-paw/server/paw-mcp.mjs`,
   `server/NOTICE.md` (from the metafile's package list). The esbuild call aliases `paw-core` to
   `packages/paw-core/src/index.ts`, never to `dist/` (design.md "The bundle", D12). If the unminified bundle is over 1 MB,
   set `minify: true` in the script and in the test; record the final size and the `minify` value in design.md "The
@@ -26,7 +26,7 @@ install a power, so tasks 7 and 8 are the reviewer's. Do not change `apps/api` o
   names every bundled package), `stdio.test.ts` (spawn the bundle against the stub; stdout is JSON-RPC only; stderr never
   has the requirement). Check that the build and the tests pass on a tree with no `packages/paw-core/dist/`. Confirm with
   `git check-ignore` that no new file is ignored. (Req 7.1, 8.4, 8.5, 8.7, 16.6)
-- [ ] 4. The power folder: `powers/monkeys-paw/plugin.json`, `mcp.json`, `README.md`, the three skills, and
+- [x] 4. The power folder: `powers/monkeys-paw/plugin.json`, `mcp.json`, `README.md`, the three skills, and
   `references/paw-reviews-requirements.json` (a copy of the hook from task 5; if task 5 is not done, write the hook file
   first, exactly as in design.md, and let task 5 only verify it). Confirm with `git check-ignore` that no new file is
   ignored. Test: `power-format.test.ts`. (Req 8.1–8.3, 8.6, 9, 17.3, 17.5)

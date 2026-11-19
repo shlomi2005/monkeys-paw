@@ -50,6 +50,24 @@ describe('grant memory', () => {
     expect(memory.resolve('curse-4')).toBeNull();
   });
 
+  it('strips one pair of brackets or quotes and surrounding spaces', () => {
+    const memory = createGrantMemory();
+    memory.remember(makeGrant('aaaaaaaa-1'));
+    for (const text of ['[aaaaaaaa:curse-2]', '"aaaaaaaa:curse-2"', "'aaaaaaaa:curse-2'", '  [aaaaaaaa:curse-2]  ', '[ aaaaaaaa:curse-2 ]']) {
+      expect(memory.resolve(text)?.handle, text).toBe('aaaaaaaa:curse-2');
+    }
+    expect(memory.resolve('[curse-1]')?.curse.id).toBe('curse-1');
+    expect(memory.resolve('"curse-1"')?.curse.id).toBe('curse-1');
+  });
+
+  it('strips only one pair and only a matching pair', () => {
+    const memory = createGrantMemory();
+    memory.remember(makeGrant('aaaaaaaa-1'));
+    for (const text of ['[[aaaaaaaa:curse-2]]', '[aaaaaaaa:curse-2', 'aaaaaaaa:curse-2]', '"aaaaaaaa:curse-2\'', '[]', '"', '']) {
+      expect(memory.resolve(text), text).toBeNull();
+    }
+  });
+
   it('a bare id on an empty memory is unknown', () => {
     expect(createGrantMemory().resolve('curse-0')).toBeNull();
   });
