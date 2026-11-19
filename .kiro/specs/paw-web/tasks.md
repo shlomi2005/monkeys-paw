@@ -23,31 +23,31 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## State machine (tests first)
 
-- [ ] 4. Create `state/paw-machine-types.ts` (`Digit`, `Phase`, `EndReason`, `AnimCommand`, `PawContext`, `PawEvent`,
+- [x] 4. Create `state/paw-machine-types.ts` (`Digit`, `Phase`, `EndReason`, `AnimCommand`, `PawContext`, `PawEvent`,
   `PawEffect`, `Transition`) exactly as in design section 5, and `state/arbitraries.ts` with `arbGrant`, `arbIntent`,
   `arbSession`, the intent interpreter, `drain` and the reference model described in "Event-sequence generator".
   Export a stub `reduce` that throws `not implemented` so the property tests compile and fail. Add one unit test that
   the generator produces grants with 3–5 curses and that shrinking returns a shorter intent list.
   (Req 5.1, 5.2, 6.7, 6.9; design Correctness Properties)
-- [ ] 5. **[PBT]** `state/paw-machine.properties.test.ts`, written before the reducer:
-  - [ ] 5.1 **[PBT]** P1 curl order, P2 LIFO (including "thumb opens last whichever circle is bound"), P3 finger-count
+- [x] 5. **[PBT]** `state/paw-machine.properties.test.ts`, written before the reducer:
+  - [x] 5.1 **[PBT]** P1 curl order, P2 LIFO (including "thumb opens last whichever circle is bound"), P3 finger-count
     invariant after `drain`. (Req 5.1, 5.2, 5.3, 5.6, 6.1)
-  - [ ] 5.2 **[PBT]** P4 idempotent close, P5 failed verdict changes nothing, P7 circles equal the closed set and are
+  - [x] 5.2 **[PBT]** P4 idempotent close, P5 failed verdict changes nothing, P7 circles equal the closed set and are
     independent of the stack. (Req 5.5, 5.7, 5.8, 4.3)
-  - [ ] 5.3 **[PBT]** P6 never more than one active animation (state and effect-stream form), P11 reduced motion never
+  - [x] 5.3 **[PBT]** P6 never more than one active animation (state and effect-stream form), P11 reduced motion never
     queues. (Req 5.4, 2.7, 2.9, 6.1)
-  - [ ] 5.4 **[PBT]** P8 lock after the end (no `request-bind` between `ended` and `rewrite`), P9 rewrite equals
+  - [x] 5.4 **[PBT]** P8 lock after the end (no `request-bind` between `ended` and `rewrite`), P9 rewrite equals
     `initialState`, P10 stop (including stop during queued curls and during an open animation). (Req 6.7, 6.9, 6.10,
     4.4, 6.1)
-- [ ] 6. Implement `state/paw-machine.ts` until all of task 5 passes. No React, three, DOM, timers or `Date` imports.
-  - [ ] 6.1 `initialState`, `enqueue`, `complete` (id and kind match, single active command, `play` effects). (Req 5.4)
-  - [ ] 6.2 `grant_requested`, `grant_received` (push `[0..k-1]`, queue k curls, all curses start open), `grant_failed`,
+- [x] 6. Implement `state/paw-machine.ts` until all of task 5 passes. No React, three, DOM, timers or `Date` imports.
+  - [x] 6.1 `initialState`, `enqueue`, `complete` (id and kind match, single active command, `play` effects). (Req 5.4)
+  - [x] 6.2 `grant_requested`, `grant_received` (push `[0..k-1]`, queue k curls, all curses start open), `grant_failed`,
     `curl_done`, move to `ready` when quiescent. Reduced motion uses one `snap`. (Req 5.1, 5.2, 2.7, 2.9)
-  - [ ] 6.3 `circle_activated`, `card_closed`, `bind_submitted`, `bind_failed`, and the verdict rules (not closed,
+  - [x] 6.3 `circle_activated`, `card_closed`, `bind_submitted`, `bind_failed`, and the verdict rules (not closed,
     idempotent close, LIFO pop, all-closed ending with `open` then `rest`). (Req 4.3, 5.3, 5.5, 5.7, 5.8, 6.1)
-  - [ ] 6.4 `stop` (one `snap` of the logical pose, queue cleared, `abort-requests` when judging), `rewrite`,
+  - [x] 6.4 `stop` (one `snap` of the logical pose, queue cleared, `abort-requests` when judging), `rewrite`,
     the lock after the end, `motion_preference_changed`. (Req 6.7, 6.9, 6.10, 4.4, 2.9)
-- [ ] 7. `state/paw-machine.test.ts`: one example-based test per row of the design's transition table, plus the three
+- [x] 7. `state/paw-machine.test.ts`: one example-based test per row of the design's transition table, plus the three
   worked scenarios: a 4-curse grant closed in the order 2, 0, 3, 1 (digits open 3, 2, 1, 0), a stop during curl 3 of 5 (the `snap` shows all five digits curled, one per open curse), and a late `*_done` after a `snap` that is ignored.
   (Req 5.2, 5.3, 6.7, 6.10)
 - [ ] 8. `state/paw-selectors.ts`: `projectGrant`, `curseTypeLabel`, `CircleView` (status and `aria-label` strings),

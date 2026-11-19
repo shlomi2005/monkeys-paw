@@ -483,11 +483,13 @@ for a phase is ignored the same way (for example `stop` while `granting`, or `gr
 | idle | `grant_requested` | text non-blank | granting | — | `request-grant` |
 | idle | `rewrite`, others | — | idle | — | — |
 | granting | `grant_received` | grant has 3–5 curses | curling, or ready if reduced motion | `wish`, `grant` set, `closedIds = []`, `curled = [0..k-1]` | k × `curl` enqueued (first `play`), or one `snap` |
+| granting | `grant_received` | grant does not have 3–5 curses | idle | — (handled like `grant_failed`) | — |
 | granting | `grant_failed` | — | idle | — | — |
 | granting | `rewrite` | — | idle | reset to initial | `abort-requests` |
 | curling | `curl_done` | matches active | curling; ready when quiescent | queue advances | next `play` |
 | curling | `stop` | — | ended (stopped) | queue and active cleared | `snap(curled, 'upright')` |
 | curling | `circle_activated` | — | — (circles are "arriving") | — | — |
+| curling | `motion_preference_changed` | `reduced` is true | ready | `reducedMotion = true`, `anim.active` and `queue` cleared | `snap(curled, 'upright')` |
 | curling | `rewrite` | — | idle | reset to initial | `snap(zeros, 'upright')` |
 | ready | `circle_activated` | index < k and curse open | binding | `pendingCurseId`, `lastVerdict = null` | — |
 | ready | `circle_activated` | curse closed or index invalid | — | — | — |
