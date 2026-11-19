@@ -54,7 +54,6 @@ export function PawModel({
     scene.traverse((object) => {
       if (!(object as Mesh).isMesh) return;
       const mesh = object as Mesh;
-      mesh.castShadow = true;
       if (material !== null) mesh.material = material;
     });
     countedInvalidate(invalidate)();

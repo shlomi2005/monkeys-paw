@@ -18,7 +18,7 @@ with the same ink lines over it. `docs/art/concept-victorian.png` is the referen
 **Scope:** one new material for the paw, made by extending three's standard material; its pure maths, its GLSL
 injection, its uniforms, and the one-line switch back to the placeholder.
 
-**Out of scope:** the drop shadow behind the paw and the lights (`PawLights.tsx`), handled separately; the poster image;
+**Out of scope:** the lights (`PawLights.tsx`); the drop shadow is removed (paw-web design, Deviation batch 6); the poster image;
 Playwright end-to-end tests and receipts (paw-web tasks 42 onward); any change to the GLB, the joint driver, the state
 machine or the layout.
 
@@ -92,7 +92,7 @@ noise.
 2. **THE SYSTEM SHALL** let the full normal map act only through the lighting term that drives darkness (density and
    width).
 3. **THE SYSTEM SHALL** compute the lighting term as a diffuse term that treats the surface as non-metal, although the
-   GLB's metalness is 1, using three's own lights, so the existing lights and the key light's shadow keep working.
+   GLB's metalness is 1, using three's own lights, so the existing lights keep working.
 4. **WHEN** the surface faces the viewer and the projected normal has no stable direction, **THE SYSTEM SHALL** fall back
    to a fixed base angle, with no visible pop.
 5. **THE SYSTEM SHALL** draw families B and C at fixed angles to family A, so they cross it.

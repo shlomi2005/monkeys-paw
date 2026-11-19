@@ -309,7 +309,7 @@ Sequence on mount:
 
 #### Canvas, camera, lights
 
-- `<Canvas frameloop="demand" dpr={[1, 2]} (mobile [1, 1.5]) gl={{ alpha: true, antialias: true }} shadows="percentage" aria-hidden>`
+- `<Canvas frameloop="demand" dpr={[1, 2]} (mobile [1, 1.5]) gl={{ alpha: true, antialias: true }} aria-hidden>`
   with `pointer-events: none` so circles near the edge stay clickable. The canvas background is transparent so
   the parchment and the red ray disc show through.
 - **Camera:** perspective, fov 30°, on the **+Z side** looking straight down -Z at `(cx, 0.5, 0)`, where `cx` is the
@@ -324,13 +324,11 @@ Sequence on mount:
   as the model is placed, `use-paw-camera.ts` measures the bounds once, from the mesh geometry's bounding box (the
   bind pose, before any pose is applied), sets the camera and invalidates once. That happens in the same commit as the
   model, so the first frame that reports ready already uses the centred camera and the paw never jumps sideways
-  after the fade-in. The camera is never refit while fingers move. The shadow plane sits at the same x. A unit test
+  after the fade-in. The camera is never refit while fingers move. A unit test
   checks the real bounds fit the frustum at the 1:1 aspect with margin.
 - **Lights:** one ambient light, sepia-tinted (`#f0dcb8`, intensity 1.8); one key directional light from
-  upper-left-front (`#ffe2b0`, intensity 4.8) that casts a soft shadow (1024 map, 512 on mobile; three 0.187 removed `PCFSoftShadowMap`, so the canvas uses
-`shadows="percentage"`, which is the soft PCF filter there); one faint
-  blood-red rim light from behind-right (`#8f1d14`, intensity 1.0). A transparent `ShadowMaterial` plane behind the
-  paw receives the drop shadow. Intensities are constants in `PawLights.tsx`, tuned in the browser in task 31. They are high because the GLB
+  upper-left-front (`#ffe2b0`, intensity 4.8); one faint
+  blood-red rim light from behind-right (`#8f1d14`, intensity 1.0). **Deviation (batch 6):** the drop shadow (shadow-casting key light and `ShadowMaterial` plane) is removed, because the engraving has no cast shadow and the ink shader's hatching carries the form. Intensities are constants in `PawLights.tsx`, tuned in the browser in task 31. They are high because the GLB
   material has metalness 1 and roughness 1, there is no environment map to reflect, and the sepia tint is applied in
   linear space, which lowers the albedo a lot.
 - No environment map from a CDN. All values are local.

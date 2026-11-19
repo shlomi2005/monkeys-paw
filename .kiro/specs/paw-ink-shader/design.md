@@ -8,7 +8,7 @@ of `usePawMaterial` (paw-web task 41, design.md "Material seam") and touches no 
 Three choices shape everything else:
 
 1. **Patch three's standard material, do not replace it.** The ink material is a clone of the GLB's
-   `MeshStandardMaterial`, patched with `onBeforeCompile`. Skinning, the normal map, the lights and the key light's shadow
+   `MeshStandardMaterial`, patched with `onBeforeCompile`. Skinning, the normal map and the lights
    come from three's own shader. The patch changes three things: the metalness (to 0, so the diffuse term exists), the
    albedo (stashed, then set to white, so the lighting term is pure light), and the final colour (replaced by the ink
    colour).
@@ -99,7 +99,7 @@ Why this works:
 - The normal map stays: `normal_fragment_maps` runs as normal and perturbs `normal`. `nonPerturbedNormal` keeps the
   interpolated geometric normal (both declared in `normal_fragment_begin`, with the face flip for the double-sided material).
 - With `metalnessFactor = 0` and `diffuseColor.rgb = 1`, three's own lights fill `reflectedLight.directDiffuse` and
-  `.indirectDiffuse` with pure light: key (with its shadow), rim and ambient. Metalness 1 would have made both zero.
+  `.indirectDiffuse` with pure light: key, rim and ambient. Metalness 1 would have made both zero.
 - The ink block assigns `outgoingLight`, then three's `opaque_fragment` writes `gl_FragColor`. The specular and
   environment terms are computed and ignored (no gloss, Req 2.4).
 
@@ -116,7 +116,7 @@ lightness = clamp( ( L - uLightLo ) / ( uLightHi - uLightLo ), 0, 1 )
 ```
 
 `luma(c) = dot(c, vec3(0.2126, 0.7152, 0.0722))`. Because the albedo is white, `L` includes the full normal map and the
-key light's cast shadow. (three's diffuse BRDF is Lambert/π with a `1 - F` factor; the `uLightLo/Hi` window absorbs it.)
+key light. (three's diffuse BRDF is Lambert/π with a `1 - F` factor; the `uLightLo/Hi` window absorbs it.)
 
 **2. Albedo.** `a = luma( pow( inkAlbedo, vec3(1/2.2) ) )` (an sRGB-like luma), then `a01 = clamp( a / uAlbedoWhite, 0, 1 )`.
 On the cord, `a01` is replaced by 0.5 (`mix(a01, 0.5, mask)`), so the cord's tone comes from light alone and red does not

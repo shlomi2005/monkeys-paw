@@ -61,7 +61,7 @@ export default function PawScene({
 
   return (
     <PawCanvas mobile={glb === 'mobile'} onContextLost={handleFailure}>
-      <PawLights mobile={glb === 'mobile'} />
+      <PawLights />
       <PawModel
         glb={glb}
         bridge={bridge}
