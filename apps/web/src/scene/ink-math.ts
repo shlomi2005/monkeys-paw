@@ -13,7 +13,7 @@ export const INK_PALETTE = {
 } as const;
 
 /** Width of the smooth step at which each hatch family grows in. */
-export const INK_FADE = 0.12;
+export const INK_FADE = 0.2;
 /** Edges of the value gate in `cordMask` (fixed, not a uniform). */
 export const INK_CORD_VALUE: readonly [number, number] = [0.08, 0.15];
 /** Luma weights (Rec. 709), shared with the GLSL. */
@@ -21,14 +21,21 @@ export const INK_LUMA: readonly [number, number, number] = [0.2126, 0.7152, 0.07
 /** Gamma used for the sRGB-like albedo luma and the cord mask. */
 export const INK_GAMMA = 2.2;
 
-/** Starting values of every tunable uniform. Task 5 (the reviewer's browser check) tunes them. */
+/** Family A's angle (0 to 180 degrees) is quantised to this many bins; each bin has a constant line direction (D7). */
+export const INK_BIN_COUNT = 8;
+/** Angle between two neighbouring bins, in radians (22.5 degrees). */
+export const INK_BIN_STEP = Math.PI / INK_BIN_COUNT;
+/** Width of the crossfade between two neighbouring bins, as a fraction of one bin, centred on the half-way point. */
+export const INK_BIN_BLEND = 0.4;
+
+/** Starting values of every tunable uniform, as tuned in the reviewer's browser check (task 5, first pass). */
 export const INK_DEFAULTS = {
   pixelRatio: 1,
   viewport: [1, 1] as readonly [number, number],
   spacing: 3.5,
-  widthMin: 0.4,
+  widthMin: 0.6,
   widthMax: 1.7,
-  thresholds: [0.15, 0.42, 0.7] as readonly [number, number, number],
+  thresholds: [0.1, 0.38, 0.62] as readonly [number, number, number],
   /** Angle of families B and C to family A, in radians (55 degrees). */
   crossAngle: (55 * Math.PI) / 180,
   /** Fallback line angle in radians (25 degrees). */
@@ -36,11 +43,13 @@ export const INK_DEFAULTS = {
   /** 0 gives straight lines. Must stay at 0.9 or below. */
   follow: 0.85,
   normalBend: 0.25,
-  lightLo: 0.4,
-  lightHi: 1.45,
-  lightWeight: 0.75,
-  albedoWhite: 0.75,
-  toneStrength: 0.85,
+  lightLo: 0.45,
+  lightHi: 1.8,
+  lightWeight: 0.8,
+  albedoWhite: 0.9,
+  toneStrength: 1,
+  /** Share of the light that lifts the flat base tone toward parchment. Small: the lines carry the form. */
+  baseLight: 0.15,
   contourPx: 1.4,
   /** Hue distance to red, as fractions of a turn: full at 10 degrees, zero at 13.5 degrees. */
   cordHue: [0.0278, 0.0375] as readonly [number, number],
@@ -68,6 +77,44 @@ export function hexToLinear(hex: string): [number, number, number] {
   const g = ((value >> 8) & 0xff) / 255;
   const b = (value & 0xff) / 255;
   return [srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)];
+}
+
+/** The two bin angles around a line angle, and the weight of the second (0 to 1). */
+export interface BinBlend {
+  index0: number;
+  index1: number;
+  angle0: number;
+  angle1: number;
+  weight: number;
+}
+
+/**
+ * Quantises a line angle (radians, any value; lines have no sign so it wraps at 180 degrees) to the two nearest bin
+ * angles and a crossfade weight. The weight is 0 near `angle0`, 1 near `angle1`, and runs through a smoothstep of width
+ * `INK_BIN_BLEND` bins around the half-way point. Bin 8 is bin 0 again, so the result is continuous at 180 degrees.
+ */
+export function binBlend(angle: number): BinBlend {
+  let theta = angle % Math.PI;
+  if (theta < 0) theta += Math.PI;
+  const pos = theta / INK_BIN_STEP;
+  const index0 = Math.min(Math.floor(pos), INK_BIN_COUNT - 1);
+  const half = 0.5 * INK_BIN_BLEND;
+  return {
+    index0,
+    index1: (index0 + 1) % INK_BIN_COUNT,
+    angle0: index0 * INK_BIN_STEP,
+    angle1: (index0 + 1) * INK_BIN_STEP,
+    weight: smoothstep(0.5 - half, 0.5 + half, pos - index0),
+  };
+}
+
+/**
+ * Antialias width of a line family in cycles per device px, for a unit line direction (the GLSL does not use `fwidth`:
+ * the bin can differ inside a 2x2 quad). `u = dot(q, dir) / spacing`, `q` in CSS px, so `du/dpx` per axis is
+ * `dir / (spacing * pixelRatio)` and `fwidth(u)` is the sum of the two absolute values.
+ */
+export function lineFwidth(dirX: number, dirY: number, spacing: number, pixelRatio: number): number {
+  return (Math.abs(dirX) + Math.abs(dirY)) / (spacing * pixelRatio);
 }
 
 /** Light luma `L` mapped through the window [lo, hi] to 0..1. */

@@ -5,7 +5,7 @@ import { canInject, injectInkShader } from './ink-shader';
 import type { InkUniformName } from './ink-shader';
 
 /** Bump the suffix whenever the GLSL in ink-shader.ts changes. */
-export const INK_PROGRAM_KEY = 'paw-ink-v1';
+export const INK_PROGRAM_KEY = 'paw-ink-v2';
 
 type PlaceholderFactory = (scene: Object3D) => Material | null;
 
@@ -39,6 +39,7 @@ export function createInkUniforms(): InkUniforms {
     uLightWeight: { value: d.lightWeight },
     uAlbedoWhite: { value: d.albedoWhite },
     uToneStrength: { value: d.toneStrength },
+    uBaseLight: { value: d.baseLight },
     uContourPx: { value: d.contourPx },
     uCordHue: { value: new Vector2(d.cordHue[0], d.cordHue[1]) },
     uCordSat: { value: new Vector2(d.cordSat[0], d.cordSat[1]) },

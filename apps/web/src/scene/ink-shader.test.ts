@@ -1,6 +1,7 @@
 import { ShaderChunk, ShaderLib, Uniform } from 'three';
 import { describe, expect, it } from 'vitest';
 import { canInject, injectInkShader, INK_ANCHORS, INK_UNIFORM_TYPES } from './ink-shader';
+import { INK_BIN_COUNT, INK_BIN_STEP } from './ink-math';
 import type { InkShaderSource } from './ink-shader';
 
 /**
@@ -120,7 +121,18 @@ describe('injectInkShader', () => {
     injectInkShader(shader, sharedUniforms());
     expect(shader.fragmentShader).not.toMatch(/\bsign\s*\(/);
     const fwidthLines = shader.fragmentShader.split('\n').filter((line) => line.includes('fwidth('));
-    expect(fwidthLines).toHaveLength(2);
+    expect(fwidthLines).toHaveLength(1); // the contour only; the lines use an analytic width
     for (const line of fwidthLines) expect(line).not.toMatch(/\bif\b|\?/);
+  });
+
+  it('evaluates three families at two bin angles each, with the bin constants of ink-math', () => {
+    const shader = freshSource();
+    injectInkShader(shader, sharedUniforms());
+    const source = shader.fragmentShader;
+    expect(occurrences(source, 'inkCoverage( inkQ,')).toBe(3);
+    expect(occurrences(source, 'return mix( inkLine( q, dir0, widthPx ), inkLine( q, dir1, widthPx ), weight );')).toBe(1);
+    expect(source).toContain(`theta / ${INK_BIN_STEP}`);
+    expect(source).toContain(`min( floor( pos ), ${INK_BIN_COUNT - 1}.0 )`);
+    expect(source).toContain('( abs( dir.x ) + abs( dir.y ) ) / ( uSpacing * uPixelRatio )');
   });
 });

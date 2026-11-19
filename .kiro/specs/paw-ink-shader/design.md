@@ -30,6 +30,7 @@ Everything below is procedural. There is no new texture, pass, dependency or tim
 | D4 | The ink material turns tone mapping off. | The canvas applies tone mapping to standard materials. It would shift the ink and parchment colours. |
 | D5 | If any anchor is missing at creation time, the hook falls back to the placeholder. | A three upgrade can never produce a half-patched shader. |
 | D6 | All numeric defaults below are starting values, tuned by the reviewer in the browser (task 5), as paw-web did for the lights in task 31. The agent records the returned values in `INK_DEFAULTS` and in this file. | The lighting term depends on `PawLights.tsx` intensities, which are not designed here. |
+| D7 | Family A's angle is quantised into 8 bins of 22.5°. Each family is drawn at the two nearest bin angles (B and C at the same two angles ± the cross angle) and the two are crossfaded over a narrow smoothstep. The antialias width is analytic, not `fwidth`. | With a per-pixel direction, the phase `u = dot(q, dir) / spacing` gains a term `|q| · dθ/dpx / spacing` (q is up to 150 to 250 CSS px from the wrist). At 150 px, 0.02 rad/px and 3.5 spacing that is 0.86 cycles per pixel, so `fwidth(u)` passed 0.7, coverage fell back to the flat mean density (grey), and nearby values broke lines into dashes. A constant direction per bin keeps `u` linear in `q`. The bin index can differ inside a 2x2 quad, so `fwidth` of the blended phase is unusable; for a constant unit `d`, `du/dpx` is known exactly. |
 
 ---
 
@@ -68,7 +69,7 @@ material plus `onBeforeCompile`, six injections into three's physical shader) or
 5. Otherwise `source.clone()`. Then on the copy:
    - `color.set(0xffffff)` and `userData.pawInk = true`. The maps (base colour, normal, metallic-roughness) are kept.
    - `toneMapped = false` (D4). `metalness` and `roughness` are left alone; the patch overrides metalness in the shader.
-   - `customProgramCacheKey = () => 'paw-ink-v1'`. Bump the suffix whenever the GLSL changes.
+   - `customProgramCacheKey = () => 'paw-ink-v2'`. Bump the suffix whenever the GLSL changes.
    - `onBeforeCompile = (shader) => injectInkShader(shader, uniforms)`. The `uniforms` object is created by
      `createInkUniforms()` and shared with the material, so later updates reach the program.
    - `onBeforeRender = (renderer) => { uniforms.uPixelRatio.value = renderer.getPixelRatio();
@@ -134,10 +135,13 @@ Dark nails get more lines than fur under the same light. `darkness(lightness, a0
 
 ```
 paper = mix( uParchment, uSepia, ( 1 - a01 ) * uToneStrength )
+paper = mix( paper, uParchment, uBaseLight * lightness )          // small fixed share of light, never lighter than parchment
 base  = mix( paper, uBlood, mask )
 ```
 
-**5. Hatch families.** With thresholds `T = (0.15, 0.42, 0.70)` and `FADE = 0.12`:
+The lines carry the form; `uBaseLight` (0.15) only keeps the form readable where the lines are thin.
+
+**5. Hatch families.** With thresholds `T = (0.10, 0.38, 0.62)` and `FADE = 0.2`:
 
 ```
 weight_k = smoothstep( T_k, T_k + FADE, D )          // k = A, B, C   (familyWeights)
@@ -145,7 +149,7 @@ widthPx  = mix( uWidthMin, uWidthMax, D )            // CSS px        (lineWidth
 width_k  = widthPx * weight_k
 ```
 
-So D below 0.15 gives bare paper; each family grows in at its threshold, and lines thicken with D.
+So D below 0.10 gives bare paper; each family grows in at its threshold, and lines thicken with D.
 
 **6. Direction** (view space, x right, y up, same as screen):
 
@@ -165,22 +169,34 @@ Where the surface faces the viewer, `len` is small, `wFollow` falls to 0 and the
 with no pop. `sign(0)` is 0 in GLSL; use `m.y < 0.0 ? -1.0 : 1.0`. The line sign flip at `m.y = 0` does not matter: a
 line pattern is symmetric under a sign change of its direction.
 
-**7. Lines.** `uSpacing` is in CSS px (default 3.5).
+**7. Lines.** `uSpacing` is in CSS px (default 3.5). Family A's angle is quantised (D7):
 
 ```
-q  = ( gl_FragCoord.xy - vInkOrigin ) / uPixelRatio            // CSS px from the projected wrist (D3)
-u_k = dot( q, dir_k ) / uSpacing
-hw  = 0.5 * width_k / uSpacing                                 // half width, in cycles
-fw  = fwidth( u_k )                                            // cycles per device px
-d   = abs( fract( u_k ) - 0.5 )                                // distance to the line centre, in cycles
-aa  = max( 0.5 * fw, 1e-4 )
-cov = 1 - smoothstep( hw - aa, hw + aa, d )
-cov_k = mix( cov, 2 * hw, smoothstep( 0.4, 0.7, fw ) )         // too fine to resolve: mean ink density
-ink = 1 - ( 1 - cov_A ) * ( 1 - cov_B ) * ( 1 - cov_C )
+theta   = atan( dirA.y, dirA.x ), folded into [0, π)                 // lines have no sign
+pos     = theta / (π/8);  i = min( floor( pos ), 7 );  f = pos - i
+w       = smoothstep( 0.3, 0.7, f )                                  // INK_BIN_BLEND = 0.4 of a bin, centred
+bins    = ( i, i + 1 )   →   directions d0, d1 = ( cos, sin ) of i·π/8 and (i+1)·π/8      // bin 8 is bin 0 again (wraps at 180°)
+q       = ( gl_FragCoord.xy - vInkOrigin ) / uPixelRatio             // CSS px from the projected wrist (D3)
+line(d) :
+  u   = dot( q, d ) / uSpacing                                       // linear in q: d is constant
+  hw  = 0.5 * width_k / uSpacing                                     // half width, in cycles
+  fw  = ( |d.x| + |d.y| ) / ( uSpacing * uPixelRatio )               // analytic du/dpx, cycles per device px (lineFwidth)
+  dist = abs( fract( u ) - 0.5 )                                     // distance to the line centre, in cycles
+  aa  = max( 0.5 * fw, 1e-4 )
+  cov = 1 - smoothstep( hw - aa, hw + aa, dist )
+  cov *= clamp( hw / aa, 0, 1 )
+  line = mix( cov, 2 * hw, smoothstep( 0.4, 0.7, fw ) )              // too fine to resolve: mean ink density
+cov_A = mix( line( d0 ),             line( d1 ),             w )
+cov_B = mix( line( rot(d0, +cross) ), line( rot(d1, +cross) ), w )
+cov_C = mix( line( rot(d0, -cross) ), line( rot(d1, -cross) ), w )
+ink   = 1 - ( 1 - cov_A ) * ( 1 - cov_B ) * ( 1 - cov_C )
 ```
 
-`fwidth` is taken on `u_k` before `fract`, and all three families are always evaluated (no branch), so derivatives are
-defined everywhere. At most three families per fragment (Req 7.3).
+Three families, each sampled at two bin angles: six line evaluations per fragment (Req 7.3). All six are always
+evaluated (no branch). The lines use no derivative; `fwidth` is left only in the contour (8), which has no branch around it.
+A line can sit up to 0.3 of a bin (6.75°) off the true direction before the crossfade starts; that is the price of a
+constant direction per bin. `binBlend(angle)` and `lineFwidth(dx, dy, spacing, pixelRatio)` in `ink-math.ts` are the
+reference.
 
 **8. Contour.** `nv = abs( dot( nonPerturbedNormal, normalize( vViewPosition ) ) )`, `g = fwidth( nv )`,
 `px = nv / max( g, 1e-4 ) / uPixelRatio` (about CSS px from the silhouette):
@@ -245,22 +261,54 @@ Tone mapping is off for this material (D4), so `rgb` is what the colour-space ch
 | `uPixelRatio` | float | 1 | set in `onBeforeRender` from `renderer.getPixelRatio()` |
 | `uViewport` | Vector2 | (1, 1) | drawing-buffer size in device px, set in `onBeforeRender` |
 | `uSpacing` | float | 3.5 | CSS px between lines |
-| `uWidthMin`, `uWidthMax` | float | 0.4, 1.7 | CSS px, at D = 0 and D = 1 |
-| `uThresholds` | vec3 | 0.15, 0.42, 0.70 | family on-thresholds on D |
+| `uWidthMin`, `uWidthMax` | float | 0.6, 1.7 | CSS px, at D = 0 and D = 1 |
+| `uThresholds` | vec3 | 0.10, 0.38, 0.62 | family on-thresholds on D |
 | `uCross` | vec2 | (cos 55°, sin 55°) | angle of B and C to A |
 | `uBaseAngle` | float | 0.44 (25°) | fallback line angle in radians |
 | `uFollow` | float | 0.85 | 0 gives straight lines; must stay ≤ 0.9 |
 | `uNormalBend` | float | 0.25 | share of the normal map in the direction |
-| `uLightLo`, `uLightHi` | float | 0.40, 1.45 | light window; ambient alone maps near 0 |
-| `uLightWeight` | float | 0.75 | light against albedo in D |
-| `uAlbedoWhite` | float | 0.75 | albedo luma that counts as bare paper |
-| `uToneStrength` | float | 0.85 | how far the base tone goes toward sepia |
+| `uLightLo`, `uLightHi` | float | 0.45, 1.8 | light window; ambient alone maps to 0, full key (N·L = 1) to 1 |
+| `uLightWeight` | float | 0.8 | light against albedo in D |
+| `uAlbedoWhite` | float | 0.9 | albedo luma that counts as bare paper |
+| `uToneStrength` | float | 1.0 | how far the base tone goes toward sepia |
+| `uBaseLight` | float | 0.15 | share of the light that lifts the base tone toward parchment |
 | `uContourPx` | float | 1.4 | CSS px |
 | `uCordHue` | vec2 | 0.0278, 0.0375 | hue distance to red as fractions of a turn: full at 10°, zero at 13.5° |
 | `uCordSat` | vec2 | 0.50, 0.65 | saturation ramp |
 
 No uniform changes with time. `uPixelRatio` and `uViewport` change only with the renderer, and only matter when a frame
 is drawn anyway, so the idle budget of 0 rendered frames is kept.
+
+Also: the spacing stays 3.5 CSS px (fine at 2x; at 1x it is close to the resolve limit, so the mean-density fade stays), and
+`INK_FADE` is 0.2, a wider ramp, so the noisy normal-map light changes the line width more and switches lines on and off less.
+
+### Tuned in the browser check (first pass)
+
+The reviewer saw (Vite, Chromium with WebGL, 1440x900 at 1x and 2x, 3 fingers curled): the shader compiled, the shadow
+was gone, the contour and the red cord read well, but the paw looked like grey plaster with an outline. Palm pixels were
+flat sRGB (171,153,125), (157,138,110), (198,179,146); the art direction is a mid-sepia paw, about (150,115,80) on
+average, with dense dark line work, and bare paper only on the brightest highlights.
+
+1. **Almost no lines.** Cause: the per-pixel direction in the phase (D7). Fixed with 8 direction bins and an analytic
+   antialias width.
+2. **Too light.** The key light (4.8, direction about (-0.48, 0.57, 0.67)) gives the front-facing palm N·L ≈ 0.67, so
+   `L` ≈ 0.43 + 1.37 · 0.67 ≈ 1.35. In the old window (0.40 to 1.45) that is lightness 0.9, and with the light palm
+   albedo `D` landed at about 0.16, on the first threshold (0.15): a bare palm. The new window is 0.45 to 1.8 (the top is
+   the full key, `L` = 0.43 + 1.37), `uLightWeight` is 0.8, and the thresholds are (0.10, 0.38, 0.62). The estimate, with
+   albedo luma 0.35 to 0.5 and `uAlbedoWhite` 0.9:
+
+   | N·L | 1 | 0.8 | 0.67 | 0.5 | 0.3 | 0 |
+   |-----|---|-----|------|-----|-----|---|
+   | `D` | 0.09 to 0.12 | 0.25 to 0.28 | 0.36 to 0.39 | 0.49 to 0.53 | 0.66 to 0.69 | 0.89 to 0.92 |
+   | families on (sum of weights) | 0 | 0.9 to 1.0 | 1.0 | 1.6 to 1.8 | 2.1 to 2.3 | 3.0 |
+
+   The brightest highlights (N·L above about 0.9) stay bare, the lit palm gets one family, mid-tones two, and the turned
+   sides and finger gaps three. The suggested starting point (`uLightHi` 1.9, thresholds 0.06, 0.40, 0.64, `uLightWeight`
+   0.75) left about half a family on the brightest spots, so the top of the window was set to the real maximum and
+   `uLightWeight` raised. These are estimates; the reviewer checks again.
+3. **Grey, pale base.** `uToneStrength` 0.85 to 1.0, `uAlbedoWhite` 0.75 to 0.9 (the fur's sRGB luma is 0.3 to 0.4, so
+   it sits at 0.55 to 0.65 of the way to sepia, nails near sepia), plus the 15% `uBaseLight` share.
+4. **Line weight.** `uWidthMin` 0.4 to 0.6 CSS px so the lightest family shows at 1x.
 
 Light window estimate, for tuning: ambient `#f0dcb8` at 1.8 gives about 0.42 through Lambert/π; the key at 4.8 adds up
 to about 1.2 times the cosine. So `L` runs from about 0.4 (ambient and shadow) to about 1.6 (full key).
@@ -304,7 +352,7 @@ shared constants), and a visual check in the browser.
 
 | Layer | Covers |
 |-------|--------|
-| `ink-math.test.ts` | `hexToLinear` on `#000000`, `#ffffff`, `#8f1d14`; `familyWeights` at D = 0, below, between and above each threshold (monotone, 0..1); `lineWidthPx` at 0 and 1; `darkness` and `lightness` bounds; `cordMask` on the sample colours above. A small fast-check property: `familyWeights` and `cordMask` stay in 0..1 and are monotone in D and in saturation |
+| `ink-math.test.ts` | `hexToLinear` on `#000000`, `#ffffff`, `#8f1d14`; `familyWeights` at D = 0, below, between and above each threshold (monotone, 0..1); `lineWidthPx` at 0 and 1; `binBlend` (bin pair, weight, continuity at bin edges, wrap at 180°) and `lineFwidth` (axis, 45°, pixel ratio, finite difference); `darkness` and `lightness` bounds; `cordMask` on the sample colours above. A small fast-check property: `familyWeights` and `cordMask` stay in 0..1 and are monotone in D and in saturation |
 | `ink-shader.test.ts` | Each anchor occurs exactly once in `ShaderLib.physical.vertexShader` or `.fragmentShader`; `ShaderChunk.normal_fragment_begin` still declares `nonPerturbedNormal`; `ShaderChunk.metalnessmap_fragment` still declares `float metalnessFactor`; `injectInkShader` on a copy of the source leaves no anchor unreplaced and adds the uniforms; a second run on a fresh copy gives the same text |
 | `ink-material.test.ts` | Uniform names and default colours (linear values of the four palette hex); `onBeforeRender` with a fake renderer sets pixel ratio 2 and the viewport; the copy has `toneMapped === false`, white `color`, the same maps as the source, a distinct `customProgramCacheKey`; the source material is unchanged (colour, `userData`, `onBeforeCompile`); the same scene returns the same instance, also when the mesh already holds the copy; a scene with no standard material gives `null` |
 | `ink-material.test.ts` (switch) | `selectPawMaterial('placeholder', scene, createPawMaterial)` returns exactly `createPawMaterial(scene)`'s instance; `'ink'` returns `createInkMaterial(scene)`'s and never calls the placeholder (fake factory). |
@@ -313,7 +361,7 @@ shared constants), and a visual check in the browser.
 
 ## Bundle and performance notes
 
-- New code is about 4 KB (roughly 1.5 KB gz). The 3D chunk is 275.2 KB gz against a 330 KB budget; the reviewer's check
+- New code is about 4 KB (roughly 1.5 KB gz). The 3D chunk is 278.95 KB gz after the bin pass (275.2 KB before) against a 330 KB budget; the reviewer's check
   (task 5) confirms it.
-- Per fragment, on top of three's standard shader: one HSV conversion, one normal blend, three `fract`/`fwidth` line
+- Per fragment, on top of three's standard shader: one HSV conversion, one normal blend, one `atan`, six `fract` line
   evaluations and a few `smoothstep` calls. No texture fetch, extra pass or time uniform. Idle budget stays 0 frames.

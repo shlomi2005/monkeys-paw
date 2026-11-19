@@ -1,6 +1,6 @@
 import { ShaderLib } from 'three';
 import type { IUniform } from 'three';
-import { INK_CORD_VALUE, INK_FADE, INK_GAMMA, INK_LUMA } from './ink-math';
+import { INK_BIN_BLEND, INK_BIN_COUNT, INK_BIN_STEP, INK_CORD_VALUE, INK_FADE, INK_GAMMA, INK_LUMA } from './ink-math';
 
 /**
  * The ink shader's patch of three's physical shader (paw-ink-shader design.md, "Injection").
@@ -29,6 +29,7 @@ export const INK_UNIFORM_TYPES = {
   uLightWeight: 'float',
   uAlbedoWhite: 'float',
   uToneStrength: 'float',
+  uBaseLight: 'float',
   uContourPx: 'float',
   uCordHue: 'vec2',
   uCordSat: 'vec2',
@@ -124,16 +125,37 @@ vec2 inkRotate( vec2 v, vec2 cs ) {
   return vec2( v.x * cs.x - v.y * cs.y, v.x * cs.y + v.y * cs.x );
 }
 
-// Coverage 0..1 of one hatch family. fwidth is taken on the unwrapped coordinate, and never inside a branch.
-float inkCoverage( vec2 q, vec2 dir, float widthPx ) {
+// Position of a unit line direction among the bins, as ( index of the lower bin, crossfade weight of the upper bin ).
+vec2 inkBin( vec2 dir ) {
+  float theta = atan( dir.y, dir.x );
+  theta = theta < 0.0 ? theta + ${glf(Math.PI)} : theta;
+  float pos = theta / ${glf(INK_BIN_STEP)};
+  float index = min( floor( pos ), ${glf(INK_BIN_COUNT - 1)} );
+  float weight = smoothstep( ${glf(0.5 - 0.5 * INK_BIN_BLEND)}, ${glf(0.5 + 0.5 * INK_BIN_BLEND)}, pos - index );
+  return vec2( index, weight );
+}
+
+vec2 inkBinDir( float index ) {
+  float a = index * ${glf(INK_BIN_STEP)};
+  return vec2( cos( a ), sin( a ) );
+}
+
+// Coverage 0..1 of one line pattern with a constant unit direction. The antialias width is analytic (no fwidth):
+// the bin can differ inside a 2x2 quad, and a constant direction makes u linear in q.
+float inkLine( vec2 q, vec2 dir, float widthPx ) {
   float u = dot( q, dir ) / uSpacing;
   float hw = 0.5 * widthPx / uSpacing;
-  float fw = fwidth( u );
+  float fw = ( abs( dir.x ) + abs( dir.y ) ) / ( uSpacing * uPixelRatio );
   float d = abs( fract( u ) - 0.5 );
   float aa = max( 0.5 * fw, 0.0001 );
   float cov = 1.0 - smoothstep( hw - aa, hw + aa, d );
   cov *= clamp( hw / aa, 0.0, 1.0 );
   return mix( cov, 2.0 * hw, smoothstep( 0.4, 0.7, fw ) );
+}
+
+// One hatch family: the line pattern at the two bin directions, crossfaded.
+float inkCoverage( vec2 q, vec2 dir0, vec2 dir1, float weight, float widthPx ) {
+  return mix( inkLine( q, dir0, widthPx ), inkLine( q, dir1, widthPx ), weight );
 }
 `;
 
@@ -149,7 +171,7 @@ float metalnessFactor = 0.0;
 // Runs just before three's opaque_fragment, which writes gl_FragColor from outgoingLight.
 const FRAGMENT_INK = `
 {
-  // 1. Light: white albedo, so the diffuse terms are pure light (key with its shadow, rim, ambient, normal map).
+  // 1. Light: white albedo, so the diffuse terms are pure light (key, rim, ambient, normal map).
   float inkL = inkLuma( reflectedLight.directDiffuse + reflectedLight.indirectDiffuse );
   float inkLightness = clamp( ( inkL - uLightLo ) / ( uLightHi - uLightLo ), 0.0, 1.0 );
 
@@ -164,6 +186,7 @@ const FRAGMENT_INK = `
 
   // 4. Base tone, flat.
   vec3 inkPaper = mix( uParchment, uSepia, ( 1.0 - inkA01 ) * uToneStrength );
+  inkPaper = mix( inkPaper, uParchment, uBaseLight * inkLightness );
   vec3 inkBase = mix( inkPaper, uBlood, inkMask );
 
   // 5. Hatch families: each grows in at its threshold, lines thicken with D.
@@ -172,16 +195,18 @@ const FRAGMENT_INK = `
   float inkWB = inkWidthPx * smoothstep( uThresholds.y, uThresholds.y + ${glf(INK_FADE)}, inkD );
   float inkWC = inkWidthPx * smoothstep( uThresholds.z, uThresholds.z + ${glf(INK_FADE)}, inkD );
 
-  // 6. Directions.
+  // 6. Directions: family A's angle is quantised to bins; each family is evaluated at the two nearest bin angles.
   vec2 inkDirA = inkDirection( nonPerturbedNormal, normal );
-  vec2 inkDirB = inkRotate( inkDirA, uCross );
-  vec2 inkDirC = inkRotate( inkDirA, vec2( uCross.x, -uCross.y ) );
+  vec2 inkBinPos = inkBin( inkDirA );
+  vec2 inkA0 = inkBinDir( inkBinPos.x );
+  vec2 inkA1 = inkBinDir( inkBinPos.x + 1.0 );
+  vec2 inkCrossC = vec2( uCross.x, -uCross.y );
 
-  // 7. Lines, in CSS px from the projected origin.
+  // 7. Lines, in CSS px from the projected origin: six line evaluations, three families at two bin angles.
   vec2 inkQ = ( gl_FragCoord.xy - vInkOrigin ) / uPixelRatio;
-  float inkCovA = inkCoverage( inkQ, inkDirA, inkWA );
-  float inkCovB = inkCoverage( inkQ, inkDirB, inkWB );
-  float inkCovC = inkCoverage( inkQ, inkDirC, inkWC );
+  float inkCovA = inkCoverage( inkQ, inkA0, inkA1, inkBinPos.y, inkWA );
+  float inkCovB = inkCoverage( inkQ, inkRotate( inkA0, uCross ), inkRotate( inkA1, uCross ), inkBinPos.y, inkWB );
+  float inkCovC = inkCoverage( inkQ, inkRotate( inkA0, inkCrossC ), inkRotate( inkA1, inkCrossC ), inkBinPos.y, inkWC );
   float inkAmount = 1.0 - ( 1.0 - inkCovA ) * ( 1.0 - inkCovB ) * ( 1.0 - inkCovC );
 
   // 8. Contour.

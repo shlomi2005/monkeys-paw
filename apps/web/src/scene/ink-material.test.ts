@@ -56,7 +56,7 @@ describe('createInkUniforms', () => {
     expect(u.uSpacing.value).toBe(3.5);
     expect(u.uPixelRatio.value).toBe(1);
     expect((u.uViewport.value as Vector2).toArray()).toEqual([1, 1]);
-    expect((u.uThresholds.value as Vector3).toArray()).toEqual([0.15, 0.42, 0.7]);
+    expect((u.uThresholds.value as Vector3).toArray()).toEqual([...INK_DEFAULTS.thresholds]);
     const cross = u.uCross.value as Vector2;
     expect(Math.atan2(cross.y, cross.x)).toBeCloseTo(INK_DEFAULTS.crossAngle, 9);
     expect(u.uFollow.value).toBeLessThanOrEqual(0.9);

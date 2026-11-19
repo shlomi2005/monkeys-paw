@@ -37,6 +37,8 @@ is possible in Vitest; the visual check is task 5 (the reviewer's). Only task 4 
   specks on the fur (the cord-mask calibration is this visual check only), the contour, no swimming while the paw sinks,
   60 fps during a curl, unchanged reduced-motion and no-WebGL behaviour, and the 3D chunk (gz) under 330 KB. The agent then
   writes the returned values into `INK_DEFAULTS` and the design.md defaults table, and records the chunk size. (Req 4, 5.5, 7, 8)
+  First pass applied (direction bins, analytic antialias width, new light window and tone; design.md "Tuned in the
+  browser check"). Not ticked: the reviewer checks again.
 - [ ] 6. Tick paw-web task 41 in `.kiro/specs/paw-web/tasks.md` with a one-line note: "Shipped by
   `.kiro/specs/paw-ink-shader/`; `PAW_MATERIAL_STYLE` in `use-paw-material.ts` switches back to the placeholder." Do this
   only after tasks 1–5 pass. (Req 12.3, paw-web task 41)
