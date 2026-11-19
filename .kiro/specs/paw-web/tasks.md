@@ -7,7 +7,7 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## Scaffold and assets
 
-- [ ] 1. Scaffold `apps/web`: `package.json` (name `@monkeyspaw/web`, type `module`, scripts `dev`, `build`, `preview`,
+- [x] 1. Scaffold `apps/web`: `package.json` (name `@monkeyspaw/web`, type `module`, scripts `dev`, `build`, `preview`,
   `test`, `lint`, `e2e`), Vite + React 19 + TypeScript (strict, `noImplicitAny`), Vitest, `tsconfig.json`, workspace
   dependency on `paw-core`, `.env.example` listing only `VITE_API_BASE_URL`, and `.gitignore` entries for
   `apps/web/public/paw/`, `dist/` and `.env`. Use CSS Modules for all styling. Render an empty `App`. (Req 10.4, 11.1;
