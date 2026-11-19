@@ -1,3 +1,177 @@
-.shell {
-  min-height: 100vh;
+/*
+ * App layout (design.md sections 1 and 7).
+ *
+ * The DOM order is the tab order: wish line, examples, circles, binding card, Stop, export slot, sound slot. This file
+ * only decides where each piece is drawn, with grid areas. There is no `order` and no positive tabindex.
+ *
+ * Mobile first (under 768 px): one column. The paw is small at the top, the circles are a vertical list under it.
+ * From 768 px: the paw, the decoration and the circle ring share one grid area ("stage"), so the ring (a zero-size
+ * anchor at the centre of its box) and the paw box have the same centre.
+ */
+.page {
+  /* Nothing may add a horizontal scrollbar at 360 px or at 640 px (200% zoom). */
+  overflow-x: clip;
+}
+
+.layout {
+  /* The plate content padding (PlateFrame.module.css), so the decoration layer can reach the plate edge. */
+  --content-pad: calc(var(--rule-inner) + 1rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'paw'
+    'stamp'
+    'ring'
+    'medal'
+    'actions'
+    'wish'
+    'examples';
+  row-gap: 0.75rem;
+  align-items: start;
+}
+
+.layout > * {
+  min-width: 0;
+}
+
+/* Curtains, braziers: pinned to the plate edge, behind everything else. */
+.decorLayer {
+  grid-column: 1 / -1;
+  grid-row: paw-start / stamp-end;
+  position: relative;
+  align-self: stretch;
+  margin: calc(-1 * var(--content-pad)) calc(-1 * var(--content-pad)) 0;
+  pointer-events: none;
+}
+
+/* The paw box: ray disc, paw stage and the text under it. Its centre is the centre of the ring. */
+.pawBox {
+  grid-area: paw;
+  position: relative;
+  z-index: 1;
+  justify-self: center;
+  width: var(--paw-size);
+  height: var(--paw-size);
+  /* Room above for the ray disc (0.35 of the box beyond each edge), and under for the paw state text. */
+  margin-top: calc(var(--paw-size) * 0.35 - 1rem);
+  margin-bottom: 3.5rem;
+}
+
+.stateText {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 4rem));
+  transform: translateX(-50%);
+}
+
+.stampSlot {
+  grid-area: stamp;
+  position: relative;
+  z-index: 1;
+  /* One reserved height, so the Grant arriving moves nothing. */
+  min-height: 7.5rem;
+}
+
+.ringSlot {
+  grid-area: ring;
+  position: relative;
+  z-index: 2;
+}
+
+.medalSlot {
+  grid-area: medal;
+  position: relative;
+  z-index: 1;
+  justify-self: center;
+}
+
+.actions {
+  grid-area: actions;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3rem;
+}
+
+.exportSlot {
+  display: contents;
+}
+
+.wishSlot {
+  grid-area: wish;
+  position: relative;
+  z-index: 1;
+}
+
+.examplesSlot {
+  grid-area: examples;
+  position: relative;
+  z-index: 1;
+}
+
+/* The sound toggle: last in the DOM, drawn in a corner of the plate. Bottom right on a phone. */
+.soundSlot {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1rem;
+  z-index: 3;
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .layout {
+    --stage-top: calc(var(--ring-ry) - var(--paw-size) / 2 + 40px + 0.75rem);
+    /* Below the paw centre: the lower circles, their label and a four line caption. */
+    --stage-bottom: calc(var(--ring-ry) * 0.81 - var(--paw-size) / 2 + 40px + 8.5rem);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      'stage stage'
+      'stamp stamp'
+      'medal actions'
+      'wish wish'
+      'examples examples';
+  }
+
+  .decorLayer {
+    grid-area: stage;
+  }
+
+  .pawBox,
+  .ringSlot {
+    grid-area: stage;
+    justify-self: center;
+    align-self: start;
+    width: var(--paw-size);
+    height: var(--paw-size);
+    margin-top: var(--stage-top);
+    margin-bottom: var(--stage-bottom);
+  }
+
+  /* The ring is a zero-size anchor at the centre of its positioned parent: this box is the paw box again. */
+  .ringSlot {
+    pointer-events: none;
+  }
+
+  .stateText {
+    max-width: calc(var(--paw-size) * 0.8);
+  }
+
+  .medalSlot {
+    justify-self: start;
+  }
+
+  .actions {
+    justify-content: flex-end;
+  }
+
+  .soundSlot {
+    top: 1rem;
+    bottom: auto;
+  }
 }

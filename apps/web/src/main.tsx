@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { SessionProvider } from './state/SessionProvider';
 import './styles/tokens.css';
 import './styles/fonts.css';
 
@@ -11,6 +12,8 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    <SessionProvider>
+      <App />
+    </SessionProvider>
   </StrictMode>,
 );

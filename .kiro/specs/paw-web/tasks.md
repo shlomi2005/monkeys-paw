@@ -132,7 +132,7 @@ and are expected to fail until the matching implementation task lands. Property 
   `GrantedStamp` (red "Granted." plus narration caption) and `LiveRegion` fed by the announcer. Component tests for
   visibility rules: Stop only with a Grant and an open curse, medal only when ended and quiescent. (Req 3.3, 6.1, 6.6,
   6.8, 8.4)
-- [ ] 27. Wire `App` and `SessionProvider` in the required DOM order (wish input, context, Make, examples, circles,
+- [x] 27. Wire `App` and `SessionProvider` in the required DOM order (wish input, context, Make, examples, circles,
   card, Stop, export buttons, sound toggle) with CSS grid for the visual layout. The whole app must work end to end in
   poster mode with no 3D. Add an integration test with a fake API: wish, grant, bind closed, bind not closed, stop.
   (Req 1.6, 3.3, 4.3, 5.2, 5.3, 6.1, 6.7, 8.1)

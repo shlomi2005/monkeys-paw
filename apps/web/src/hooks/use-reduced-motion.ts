@@ -24,6 +24,11 @@ function subscribe(onChange: () => void): () => void {
 }
 
 const getSnapshot = (): boolean => mediaList()?.matches ?? false;
+
+/** The preference right now, read once. A missing or throwing `matchMedia` means false. */
+export function prefersReducedMotion(): boolean {
+  return getSnapshot();
+}
 const getServerSnapshot = (): boolean => false;
 
 /** True while the user asks for reduced motion. Updates when the preference changes. */
