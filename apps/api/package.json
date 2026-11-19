@@ -6,7 +6,7 @@
   "description": "The Monkey's Paw API server.",
   "license": "MIT",
   "scripts": {
-    "dev": "tsx --env-file=.env --watch src/index.ts",
+    "dev": "tsx --env-file-if-exists=.env --watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "test": "vitest run",
@@ -16,8 +16,7 @@
     "paw-core": "workspace:*",
     "hono": "^4.5.3",
     "@hono/node-server": "^1.13.6",
-    "zod": "^3.23.8",
-    "@google/generative-ai": "^0.12.0"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

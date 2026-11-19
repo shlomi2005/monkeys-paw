@@ -1,4 +1,5 @@
 import type { GlobalState } from './budget/state';
+import { isDayElapsed } from './budget/state';
 import type { BudgetConfig } from './budget/config';
 
 /**
@@ -17,20 +18,24 @@ export type Mode = 'normal' | 'examples-only';
 
 /**
  * Determine the current mode based on API key availability and budget state.
+ * A day that has elapsed counts as a reset, so the mode returns to normal at
+ * the day boundary (Req 8.5). Does not mutate the state.
  * (Task 47)
  */
 export function getCurrentMode(
   hasApiKey: boolean,
   globalState: GlobalState,
   config: BudgetConfig,
+  now: number = Date.now(),
 ): Mode {
   // Missing API key → examples-only (Req 8.1)
   if (!hasApiKey) {
     return 'examples-only';
   }
 
-  // Budget exhausted → examples-only (Req 8.1)
-  if (globalState.spentCents >= config.dailyBudgetCents) {
+  // Budget exhausted → examples-only (Req 8.1), unless the day has rolled over (Req 8.5)
+  const spentCents = isDayElapsed(globalState, now) ? 0 : globalState.spentCents;
+  if (spentCents >= config.dailyBudgetCents) {
     return 'examples-only';
   }
 

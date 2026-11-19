@@ -1,0 +1,14 @@
+[
+  {
+    "wish": { "id": "example-1", "text": "Only the owner can delete a project", "createdAt": 1 },
+    "grant": {
+      "wishId": "example-1",
+      "narration": "Granted. Exactly.",
+      "curses": [
+        { "id": "curse-0", "type": "permissions", "story": "The owner quits. Nobody may delete the project, ever.", "loophole": "\"Only the owner\" has no successor.", "status": "open" },
+        { "id": "curse-1", "type": "time", "story": "The project is deleted at midnight. Midnight where, the paw does not say.", "loophole": "No time zone is named.", "status": "open" },
+        { "id": "curse-2", "type": "scale", "story": "The owner owns ten thousand projects. Each needs its own confirmation.", "loophole": "No bulk path is allowed.", "status": "open" }
+      ]
+    }
+  }
+]

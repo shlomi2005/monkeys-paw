@@ -67,3 +67,20 @@ export function recordCall(state: BudgetState, costCents: number, now: number): 
     dayStart: newDay ? now : state.dayStart,
   };
 }
+
+/**
+ * Daily-budget-only check for one model call that will cost `costCents`.
+ * True only when the spend after the call still fits inside the daily budget.
+ * A day that has elapsed counts as a fresh day with nothing spent. Ignores the
+ * per-IP limit, which the API applies once per HTTP request, not per model call.
+ */
+export function canSpend(
+  state: Pick<BudgetState, 'spentCents' | 'dayStart'>,
+  config: Pick<BudgetConfig, 'dailyBudgetCents'>,
+  costCents: number,
+  now: number,
+): boolean {
+  if (!Number.isFinite(costCents) || costCents < 0) return false;
+  const spent = now - state.dayStart >= DAY_MS ? 0 : state.spentCents;
+  return spent + costCents <= config.dailyBudgetCents;
+}

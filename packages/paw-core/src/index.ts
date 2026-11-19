@@ -40,7 +40,7 @@ export type {
 } from './schemas';
 
 export type { BudgetConfig, BudgetState } from './budget';
-export { DAY_MS, canCall, recordCall } from './budget';
+export { DAY_MS, canCall, canSpend, recordCall } from './budget';
 
 export {
   buildBatchQualityPrompt,

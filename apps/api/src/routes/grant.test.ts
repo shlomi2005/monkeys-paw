@@ -3,6 +3,16 @@ import { Hono } from 'hono';
 import type { ModelClient, Grant } from 'paw-core';
 import { GrantSchema } from 'paw-core';
 import { createGrantRoute } from './grant';
+import { BudgetedModelClient } from '../budget/guarded-client';
+import { createGlobalState } from '../budget/state';
+
+/** A per-request guard factory over `model` with a budget large enough not to matter. */
+function guarded(model: ModelClient, dailyBudgetCents = 500) {
+  const state = createGlobalState();
+  const inner = { available: true, generate: (prompt: string) => model.generate(prompt) };
+  return () =>
+    new BudgetedModelClient(inner, state, { perIpLimit: 10, windowMs: 60_000, dailyBudgetCents });
+}
 
 // Mock ModelClient that returns a valid grant with 3+ curses
 class MockModelClient implements ModelClient {
@@ -53,7 +63,7 @@ describe('POST /api/grant', () => {
   it('returns 200 with valid grant (Task 21, Req 1.5)', async () => {
     const app = new Hono();
     const modelClient = new MockModelClient();
-    createGrantRoute(app, modelClient, null);
+    createGrantRoute(app, guarded(modelClient));
 
     const res = await app.request(
       new Request('http://localhost/api/grant', {
@@ -66,7 +76,7 @@ describe('POST /api/grant', () => {
     );
 
     expect(res.status).toBe(200);
-    const data = await res.json();
+    const data = (await res.json()) as any;
     expect(data.wish.text).toBe('Only the owner can delete a project');
     expect(data.wish.id).toBeDefined();
     expect(data.wish.createdAt).toBeDefined();
@@ -76,7 +86,7 @@ describe('POST /api/grant', () => {
 
   it('returns 400 for empty wish (Task 22, Req 1.2)', async () => {
     const app = new Hono();
-    createGrantRoute(app, new MockModelClient(), null);
+    createGrantRoute(app, guarded(new MockModelClient()));
 
     const res = await app.request(
       new Request('http://localhost/api/grant', {
@@ -93,7 +103,7 @@ describe('POST /api/grant', () => {
 
   it('returns 400 for harmful wish (Task 23, Req 1.3)', async () => {
     const app = new Hono();
-    createGrantRoute(app, new HarmfulWishModelClient(), null);
+    createGrantRoute(app, guarded(new HarmfulWishModelClient()));
 
     const res = await app.request(
       new Request('http://localhost/api/grant', {
@@ -106,13 +116,13 @@ describe('POST /api/grant', () => {
     );
 
     expect(res.status).toBe(400);
-    const data = await res.json();
+    const data = (await res.json()) as any;
     expect(data.message.toLowerCase()).toContain('paw');
   });
 
   it('lets a wish that prevents abuse reach the model', async () => {
     const app = new Hono();
-    createGrantRoute(app, new MockModelClient(), null);
+    createGrantRoute(app, guarded(new MockModelClient()));
 
     const res = await app.request(
       new Request('http://localhost/api/grant', {
@@ -125,27 +135,25 @@ describe('POST /api/grant', () => {
     );
 
     expect(res.status).toBe(200);
-    const data = await res.json();
+    const data = (await res.json()) as any;
     expect(data.grant.curses.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('returns 503 when over budget (Task 24, Req 1.4)', async () => {
+  it('returns 503 when the guard refuses a model call (Task 24, Req 1.4)', async () => {
     const app = new Hono();
-    createGrantRoute(app, new MockModelClient(), null);
+    // A budget of zero cannot pay for any call: the guard denies the first one.
+    createGrantRoute(app, guarded(new MockModelClient(), 0));
 
-    // For now, this test just ensures the route can handle a valid request
-    // Budget checking is done by middleware, tested separately
     const res = await app.request(
       new Request('http://localhost/api/grant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wish: { text: 'Some wish' },
-        }),
+        body: JSON.stringify({ wish: { text: 'Some wish' } }),
       }),
     );
 
-    // Should succeed (not over budget in this context)
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(503);
+    const data = (await res.json()) as { message: string };
+    expect(data.message).toBe('The paw is resting. Browse the examples until it wakes.');
   });
 });

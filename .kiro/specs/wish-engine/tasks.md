@@ -47,9 +47,10 @@ component has a pure interface. All work happens in `packages/paw-core` unless n
   `computeIntegrity`, `exportSpec`, budget types, and all schemas/types. One export per file. (structure.md)
 - [x] **20. Full property suite run** — `pnpm test` in `paw-core`: all unit + property tests pass (P1–P8).
   (Req 1–7)
-- [ ] **21. API integration stub** — `apps/api` implements `ModelClient` with Gemini, wires budget guard before
+- [x] **21. API integration stub** — `apps/api` implements `ModelClient` with Gemini, wires budget guard before
   every call, serves cached examples when over budget. (Req 7, iron-rules §5) — *separate spec; stub here for
   interface check only.*
+  Files: `apps/api/src/client/gemini.ts`, `apps/api/src/budget/guarded-client.ts`, `apps/api/src/app.ts`, `apps/api/src/server.ts`, `apps/api/src/eval/script.ts`, `packages/paw-core/src/budget.ts` (`canSpend`).
 
 ## Review findings (owner review, 18.11)
 

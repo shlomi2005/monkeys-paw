@@ -1,20 +1,18 @@
 import type { Context } from 'hono';
 import type { Hono } from 'hono';
 import { judgeBinding, proposeBinding } from 'paw-core';
-import type { ModelClient, Curse } from 'paw-core';
+import type { Curse } from 'paw-core';
 import { BindRequestSchema, BindResponseSchema } from '../schemas';
-import type { GlobalState, IpState } from '../budget/state';
-import { recordCallInGlobalState } from '../budget/record';
+import type { BudgetedModelClient } from '../budget/guarded-client';
+import { RESTING_MESSAGE } from '../budget/messages';
 
 /**
  * Create the bind route handler.
+ * `createClient` returns a fresh budget-guarded model client for each request;
+ * the guard charges every model call to the daily budget (iron-rules §5).
  * (Task 30, Req 2)
  */
-export function createBindRoute(
-  app: Hono,
-  modelClient: ModelClient,
-  globalState: GlobalState | null,
-): void {
+export function createBindRoute(app: Hono, createClient: () => BudgetedModelClient): void {
   app.post('/api/bind', async (c: Context) => {
     try {
       // Validate request
@@ -34,31 +32,16 @@ export function createBindRoute(
         );
       }
 
-      // Check budget (Req 2)
-      const budgetExceeded = c.get('budgetExceeded');
-      if (budgetExceeded === true) {
-        return c.json(
-          {
-            message:
-              'The paw is resting. Browse the examples until it wakes.',
-          },
-          503,
-        );
-      }
-
       // Propose binding (Req 2)
       const binding = proposeBinding(curse, clause, kind);
 
-      // Judge the binding (Req 2)
+      // Judge the binding (Req 2). Every model call goes through the budget guard.
+      const modelClient = createClient();
       const verdict = await judgeBinding(curse, binding, modelClient);
 
-      // Record cost (Req 2.6)
-      if (globalState) {
-        const ipState = c.get('ipState') as IpState | undefined;
-        if (ipState) {
-          const estimatedCostCents = 0.135;
-          recordCallInGlobalState(globalState, ipState, estimatedCostCents);
-        }
+      // The guard refused a call: paw-core would hand back its fallback verdict, so say so instead.
+      if (modelClient.denied) {
+        return c.json({ message: RESTING_MESSAGE }, 503);
       }
 
       // Update curse status if closed (Req 2)

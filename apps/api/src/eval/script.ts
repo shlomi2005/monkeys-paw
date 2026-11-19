@@ -3,7 +3,30 @@ import path from 'path';
 import type { CurseType, Wish, Grant } from 'paw-core';
 import { grantWish } from 'paw-core';
 import { GeminiModelClient } from '../client/gemini';
+import { loadBudgetConfig, loadModelCallCost } from '../budget/config';
+import { BudgetedModelClient } from '../budget/guarded-client';
+import type { AvailableModelClient } from '../budget/guarded-client';
+import { createGlobalState } from '../budget/state';
 import type { GoldenWish, WishEvalResult, EvalResult } from './types';
+
+/** The eval cannot run: no API key, or the budget guard refused a model call. */
+export class EvalAbortError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EvalAbortError';
+  }
+}
+
+export interface EvalOptions {
+  /** Defaults to a real GeminiModelClient. Tests inject a fake. */
+  model?: AvailableModelClient;
+  /** Daily budget in cents. Defaults to DAILY_BUDGET_CENTS. */
+  dailyBudgetCents?: number;
+  /** Cents charged per model call. Defaults to MODEL_CALL_COST_CENTS. */
+  costPerCallCents?: number;
+  /** Pause between wishes. Defaults to 2000 ms. */
+  delayMs?: number;
+}
 
 /**
  * Load golden wishes from docs/golden-wishes.json
@@ -86,21 +109,35 @@ function evaluateWish(golden: GoldenWish, grant: Grant): { pass: boolean; reason
  * Task 97: Run PASSES only if >= 80% of wishes pass.
  * Task 100: Wait 2s between wishes, track model call count
  */
-export async function runEval(limit?: number): Promise<EvalResult & { modelCalls: number }> {
-  // Check for API key (Req 12.7)
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY env var is required for eval');
+export async function runEval(
+  limit?: number,
+  options: EvalOptions = {},
+): Promise<EvalResult & { modelCalls: number; examplesList: Array<{ wish: Wish; grant: Grant }> }> {
+  const model = options.model ?? new GeminiModelClient();
+
+  // Check for API key before any call or any other work (Req 12.7)
+  if (!model.available) {
+    throw new EvalAbortError('GEMINI_API_KEY env var is required for eval');
   }
 
   const threshold = parseFloat(process.env.EVAL_SPECIFICITY_THRESHOLD || '0.80');
   const goldenWishes = await loadGoldenWishes();
   const wishesToEval = limit ? goldenWishes.slice(0, limit) : goldenWishes;
-  const modelClient = new GeminiModelClient();
+
+  // Every model call goes through the budget guard, with its own fresh state (iron-rules §5).
+  const dailyBudgetCents = options.dailyBudgetCents ?? loadBudgetConfig().dailyBudgetCents;
+  const modelClient = new BudgetedModelClient(
+    model,
+    createGlobalState(),
+    { perIpLimit: Number.MAX_SAFE_INTEGER, windowMs: 60_000, dailyBudgetCents },
+    Date.now,
+    options.costPerCallCents ?? loadModelCallCost(),
+  );
+  const delayMs = options.delayMs ?? 2000;
 
   const wishes: WishEvalResult[] = [];
   const examplesList: Array<{ wish: Wish; grant: Grant }> = [];
   let passedWishes = 0;
-  let modelCalls = 0;
 
   // Process each golden wish (Req 12.2)
   for (let wishIndex = 0; wishIndex < wishesToEval.length; wishIndex++) {
@@ -115,12 +152,18 @@ export async function runEval(limit?: number): Promise<EvalResult & { modelCalls
 
     // Task 100: Wait 2s between wishes (but not before first wish)
     if (wishIndex > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
-    // Grant the wish (model call)
-    modelCalls++;
+    // Grant the wish (one or more model calls, each checked by the guard)
     const grant = await grantWish(wish, modelClient);
+
+    // The guard refused a call: the grant is paw-core's fallback, so stop here.
+    if (modelClient.denied) {
+      throw new EvalAbortError(
+        `Eval stopped: the budget guard refused a model call after ${modelClient.calls} model calls (${wishes.length} of ${wishesToEval.length} wishes done); nothing was written.`,
+      );
+    }
 
     // Task 97: Evaluate this wish
     const wishEval = evaluateWish(golden, grant);
@@ -191,7 +234,7 @@ export async function runEval(limit?: number): Promise<EvalResult & { modelCalls
     ),
     overallTypeCoverage: wishes.reduce((sum, w) => sum + w.typeCoverage, 0) / wishes.length,
     pass,
-    modelCalls,
+    modelCalls: modelClient.calls,
   };
 
   return { ...result, examplesList };
@@ -285,9 +328,7 @@ async function main() {
     await writeEvalReport(result);
 
     // Write examples cache if available
-    if ((result as any).examplesList) {
-      await writeExamplesCache((result as any).examplesList);
-    }
+    await writeExamplesCache(result.examplesList);
 
     // Print final test summary line (Task 100: include model call count)
     const passRate = (
@@ -304,7 +345,12 @@ async function main() {
 
     process.exit(0);
   } catch (err) {
-    console.error('Eval script error:', err);
+    // One line, no stack: it must not echo prompts or secrets.
+    console.error(
+      err instanceof EvalAbortError
+        ? err.message
+        : `Eval script error: ${err instanceof Error ? err.message : 'unknown'}`,
+    );
     process.exit(1);
   }
 }
