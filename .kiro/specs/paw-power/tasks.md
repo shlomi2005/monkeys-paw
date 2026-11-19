@@ -48,6 +48,21 @@ install a power, so tasks 7 and 8 are the reviewer's. Do not change `apps/api` o
   "Agents", assumption). (c) Install the power from the `powers/monkeys-paw` folder in the Powers panel, set
   `PAW_API_URL`, confirm that the two tools and the three skills appear. Record each result here with the date.
   (Req 18.1, 18.2)
+  - 20.11.2026 (a) Done: the committed bundle was started over real stdio by a small JSON-RPC client against a stub API
+    on 127.0.0.1. `initialize` (protocol 2025-06-18, server `paw` 0.1.0), `tools/list` returned exactly `paw_curse` and
+    `paw_bind` with their limits, `paw_curse` returned 3 curses with handles, `paw_bind` on one returned CLOSED with the
+    property and the 2 open handles, an unknown curse returned `isError`. The stub saw `POST /api/grant` and
+    `POST /api/bind` with no auth header and no cookie. stdout carried JSON-RPC only; stderr had the start line and
+    `tool status ms` lines, never the requirement. With `PAW_API_URL` unset or a literal `${PAW_API_URL}`, `paw_curse`
+    answered "Cannot reach the Paw API at https://paw-api.invalid; set PAW_API_URL." and a 501-character requirement was
+    refused before any call.
+  - 20.11.2026 (b) Done in part: `kiro-cli agent validate --path` exits 0 for all five agents, and `kiro-cli agent list`
+    shows them as workspace agents in v3 format. Not yet tried: `qa` with a command off its allow-list (needs an
+    interactive session).
+  - 20.11.2026 Extra: `plugin.json` and `mcp.json` validate against the published Agent Plugins 1.0.0 JSON schemas
+    (`https://agent-plugins.org/schemas/1.0.0/plugin.schema.json` and `.../mcp.schema.json`).
+  - 20.11.2026 (c) Not done: installing the power needs the Kiro IDE Powers panel (owner). Kiro's docs do not say whether
+    Kiro expands `${PLUGIN_ROOT}` in `mcp.json`; the Agent Plugins spec requires it. Check this first when installing.
 - [ ] 8. Reviewer task, not an agent task, in the Kiro IDE: make the agent save a `requirements.md` and confirm that
   `paw-reviews-requirements` fires, finds the file that triggered it, and calls `paw_curse` at most 3 times; save
   `prompts.ts` and confirm `golden-wish-eval` prints `skipped` without a key; save a `.tsx` file in `apps/web/src` and
