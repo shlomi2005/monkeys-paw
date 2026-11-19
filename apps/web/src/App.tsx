@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import type { ExampleEntry } from './api/api-schemas';
 import styles from './App.module.css';
@@ -7,17 +7,20 @@ import { Brazier } from './components/Brazier';
 import { CircleRing } from './components/CircleRing';
 import { Curtain } from './components/Curtain';
 import { ExampleCards } from './components/ExampleCards';
+import { ExportButtons } from './components/ExportButtons';
 import { GrantedStamp } from './components/GrantedStamp';
 import { IntegrityMedal } from './components/IntegrityMedal';
 import { LiveRegion } from './components/LiveRegion';
 import { PawStateText } from './components/PawStateText';
 import { PlateFrame } from './components/PlateFrame';
 import { RayDisc } from './components/RayDisc';
+import { RewriteButton } from './components/RewriteButton';
 import { SoundToggle } from './components/SoundToggle';
 import { StopButton } from './components/StopButton';
 import { WishLine } from './components/WishLine';
 import { useReducedMotion } from './hooks/use-reduced-motion';
 import { PawStage } from './scene/PawStage';
+import { projectGrant } from './state/paw-selectors';
 import { useSession } from './state/SessionProvider';
 import { removeStaticShell } from './static-shell';
 
@@ -42,6 +45,7 @@ export function App() {
     submitWish,
     bridge,
     sound,
+    api,
   } = useSession();
   const reducedMotion = useReducedMotion();
 
@@ -80,7 +84,18 @@ export function App() {
     setDimmed(false);
   }
 
+  // After a rewrite the wish input takes focus. It waits for the commit: from the binding card the dialog is still
+  // modal until it closes, and the button that was clicked on the end screen is gone by then.
+  const wishSlotRef = useRef<HTMLDivElement>(null);
+  const focusWishNext = useRef(false);
+  useEffect(() => {
+    if (!focusWishNext.current) return;
+    focusWishNext.current = false;
+    wishSlotRef.current?.querySelector('input')?.focus();
+  });
+
   function rewrite(): void {
+    focusWishNext.current = true;
     dispatch({ type: 'rewrite' });
     setText('');
     setContext('');
@@ -129,7 +144,7 @@ export function App() {
           <LiveRegion text={liveText} seq={liveSeq} />
 
           {/* From here on, DOM order is the tab order. */}
-          <div className={styles.wishSlot}>
+          <div className={styles.wishSlot} ref={wishSlotRef}>
             <WishLine
               text={text}
               context={context}
@@ -171,8 +186,11 @@ export function App() {
 
           <div className={styles.actions}>
             <StopButton show={view.showStop} onStop={() => dispatch({ type: 'stop' })} />
-            {/* Task 37 puts "Take the scroll" and "Open in Kiro" here. */}
-            <div className={styles.exportSlot} data-slot="export" />
+            <div className={styles.exportSlot} data-slot="export">
+              <ExportButtons show={view.showExport} wish={ctx.wish} grant={projectGrant(ctx)} api={api} />
+            </div>
+            {/* Tab order on the end screen: Take the scroll, Open in Kiro, Rewrite, then the sound toggle. */}
+            <RewriteButton show={ctx.phase === 'ended'} onRewrite={rewrite} />
           </div>
 
           {/* Last in the DOM, shown in a corner. */}

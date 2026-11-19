@@ -171,7 +171,8 @@ and are expected to fail until the matching implementation task lands. Property 
 - [x] 32. `hooks/use-dialog-focus.ts` (store opener, restore focus on close), Escape handling through `cancel`, ignore
   Escape while judging, and the same behaviour in `OpenInKiroDialog` (task 38). Document that the focus trap is
   verified in Playwright. (Req 4.6, 8.1, 8.4)
-  The `OpenInKiroDialog` half of this task is done in task 38, which reuses `useDialogFocus` as it stands. Done here:
+  The `OpenInKiroDialog` half of this task is done in task 38, which reuses `useDialogFocus` unchanged: Escape (through
+  `cancel`) and Close both restore focus to "Open in Kiro" (`ExportButtons.test.tsx`). Done in task 32:
   the hook, `BindingCard` on it, and the Chrome close-watcher guard (a `close` event while the card is still open
   calls `onCancel`, or reopens the dialog while judging).
 - [x] 33. `hooks/use-reduced-motion.ts` (media query listener dispatching `motion_preference_changed`), the CSS
@@ -209,19 +210,35 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## End screen and export
 
-- [ ] 37. `ExportButtons`: "Take the scroll" (call `postExport`, build the zip with `requirements.md` and
+- [x] 37. `ExportButtons`: "Take the scroll" (call `postExport`, build the zip with `requirements.md` and
   `properties.md`, download `monkeys-paw-<safeId(wishId)>.zip`, "Scroll saved!" or an error line), stacked with 48 px
   targets on mobile, shown only when the medal shows. Test the download with a mocked `postExport` and check the zip
   contents. (Req 6.2, 6.4, 6.8)
-- [ ] 38. `OpenInKiroDialog`: call `postExport`, show copy buttons for the folder name and `kiro open monkeys-paw-<slug>`,
+  Done: the session now exposes its `api`, and `ExportButtons` sits in App's `data-slot="export"` with `view.showExport`.
+  Both buttons share one request guard (a ref) and are `aria-disabled` while it runs, so a second click does nothing.
+  The status line is the component's own polite `role="status"` region, like the medal's and the binding card's, not
+  the session's live region: that one only announces machine transitions, and the dialog (task 38) is modal, so its
+  status has to live inside it anyway. Unmounting or hiding the buttons aborts the request. The file name uses the
+  server's `wishId` from the `SpecExport`.
+- [x] 38. `OpenInKiroDialog`: call `postExport`, show copy buttons for the folder name and `kiro open monkeys-paw-<slug>`,
   Clipboard API with select-and-copy fallback, and a download of the zip containing the `monkeys-paw-<slug>/` folder.
   (Req 6.2, 8.4)
-- [ ] 39. Round-end polish and rewrite: show the final circles with cracked seals and "The paw remembers." after Stop,
+  Done: the folder name and the command are in labelled read-only fields, each with a Copy button. When the clipboard
+  is missing or rejects, the field is focused and selected and the status says "Press Ctrl+C (Cmd+C) to copy". The
+  zip holds `monkeys-paw-<slug>/requirements.md` and `monkeys-paw-<slug>/properties.md`. Addition: the status says
+  "Folder saved!" after that download, so the click is not silent. The slug is cut at 32 characters, as `slugify` does.
+- [x] 39. Round-end polish and rewrite: show the final circles with cracked seals and "The paw remembers." after Stop,
   laurels on closed circles, medal and export after either ending, "Rewrite" returns the paw upright and clears the
   Grant, input and circles. Integration test for both endings and rewrite. (Req 4.4, 6.1, 6.5, 6.7, 6.8, 6.9)
+  Done: the cracked seal, "The paw remembers." and the laurels were already in `CurseCircle`; the integration tests now
+  check them after Stop. `RewriteButton` shows in phase `ended`, after the export buttons, and calls App's `rewrite()`.
+  That sets a flag, and an effect after the commit focuses the wish input (after the commit, so a rewrite from the
+  binding card does not try to focus outside a modal dialog). Circles stay focusable after the end and open no card.
+  The axe test has the end screen and the export dialog open.
 - [ ] 40. Optional: `ShareCard` (parchment plate image with all circles and one highlighted curse, "Copy image", "Tweet",
   "Copy link"). Draw to an offscreen canvas, no remote assets, no wish text in the shared link. Skip if time is short.
   (Req 6.3, 11.6)
+  Skipped in this build: optional; no share card ships.
 
 ## Ink shader (separate spec)
 

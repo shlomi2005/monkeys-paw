@@ -206,6 +206,7 @@ App
 │  ├─ ExampleCards → ExampleCard ×n
 │  ├─ StopButton                        (only while a Grant is active and a curse is open)
 │  ├─ ExportButtons                     (only in phase "ended")
+│  ├─ RewriteButton                     (only in phase "ended", after the export buttons)
 │  ├─ BindingCard                       (role="dialog", only in phase "binding" or "judging")
 │  ├─ OpenInKiroDialog                  (after "Open in Kiro")
 │  └─ LiveRegion                        (aria-live="polite", fed by paw-announcer)
@@ -800,10 +801,11 @@ The DOM order is the required tab order, and CSS grid places the pieces visually
 
 1. wish input → 2. "for…" context field (or its disclosure button when collapsed) → 3. "Make the wish" →
 4. example cards → 5. filled circles (index order 0 to 4) → 6. binding card (while open) →
-7. "Stop and take the scroll" → 8. "Take the scroll" → "Open in Kiro" → 9. sound toggle (last in the DOM, shown top-right).
+7. "Stop and take the scroll" → 8. "Take the scroll" → "Open in Kiro" → "Rewrite" (end screen only) →
+9. sound toggle (last in the DOM, shown top-right).
 
 So `SessionProvider` renders `WishLine`, `ExampleCards`, `CircleRing`, `BindingCard`, `StopButton`, `ExportButtons`,
-`SoundToggle` in that DOM order inside the layout grid. The plate decoration, canvas and poster are not focusable.
+`RewriteButton`, `SoundToggle` in that DOM order inside the layout grid. The plate decoration, canvas and poster are not focusable.
 Empty circles have no tab stop. Cards are `<button>`s, so Enter and Space both work; Enter in the wish input submits
 the form; Escape closes the card (`card_closed`) and deselects the example card.
 

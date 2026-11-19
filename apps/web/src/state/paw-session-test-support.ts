@@ -53,6 +53,7 @@ export interface FakeApi extends ApiClient {
   readonly getExamples: ReturnType<typeof vi.fn<ApiClient['getExamples']>>;
   readonly postGrant: ReturnType<typeof vi.fn<ApiClient['postGrant']>>;
   readonly postBind: ReturnType<typeof vi.fn<ApiClient['postBind']>>;
+  readonly postExport: ReturnType<typeof vi.fn<ApiClient['postExport']>>;
 }
 
 export function fakeApi(grant: Grant = sampleGrant()): FakeApi {

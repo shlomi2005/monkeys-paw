@@ -100,6 +100,8 @@ export interface PawSession {
   readonly bridge: SceneBridgeHost;
   /** The sound toggle's state and the lazy player. The session feeds it the cues. */
   readonly sound: SoundController;
+  /** The client the session calls. The export buttons use it for `postExport` (design.md section 6, "Export"). */
+  readonly api: ApiClient;
 }
 
 export interface PawSessionOptions {
@@ -456,6 +458,7 @@ interface Held {
   readonly runner: PawSessionRunner;
   readonly bridge: SceneBridgeHost;
   readonly sound: SoundController;
+  readonly api: ApiClient;
 }
 
 export function usePawSession(options: UsePawSessionOptions = {}): PawSession {
@@ -463,16 +466,17 @@ export function usePawSession(options: UsePawSessionOptions = {}): PawSession {
   if (held.current === null) {
     const bridge = createSceneBridge();
     const sound = options.sound ?? createSoundController();
+    const api = options.api ?? defaultApiClient();
     const runner = createPawSession({
       initial: initialState(options.initialReducedMotion ?? false),
-      api: options.api ?? defaultApiClient(),
+      api,
       bridge,
       onCue: (cue) => sound.cue(cue),
       ...(options.scheduler === undefined ? {} : { scheduler: options.scheduler }),
     });
-    held.current = { runner, bridge, sound };
+    held.current = { runner, bridge, sound, api };
   }
-  const { runner, bridge, sound } = held.current;
+  const { runner, bridge, sound, api } = held.current;
 
   const snapshot = useSyncExternalStore(runner.subscribe, runner.getSnapshot, runner.getSnapshot);
 
@@ -488,7 +492,7 @@ export function usePawSession(options: UsePawSessionOptions = {}): PawSession {
   }, [runner, sound]);
 
   return useMemo(
-    () => ({ ...snapshot, dispatch: runner.dispatch, submitWish: runner.submitWish, bridge, sound }),
-    [snapshot, runner, bridge, sound],
+    () => ({ ...snapshot, dispatch: runner.dispatch, submitWish: runner.submitWish, bridge, sound, api }),
+    [snapshot, runner, bridge, sound, api],
   );
 }

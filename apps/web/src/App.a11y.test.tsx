@@ -9,7 +9,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { axe } from 'vitest-axe';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SAMPLE_WISH_TEXT, sampleGrant, sampleWish } from './api/api-test-support';
+import { SAMPLE_WISH_TEXT, sampleGrant, sampleSpecExport, sampleWish } from './api/api-test-support';
 import { App } from './App';
 import { SessionProvider } from './state/SessionProvider';
 import { fakeApi, ok } from './state/paw-session-test-support';
@@ -201,6 +201,22 @@ describe('App: axe', () => {
     await makeWish();
     fireEvent.click(screen.getByRole('button', { name: 'Stop and take the scroll' }));
     await waitFor(() => expect(screen.getByText(/^Integrity 0\/5/)).toBeTruthy());
+    // The end screen: the export buttons and Rewrite are on the page.
+    expect(screen.getByRole('button', { name: 'Take the scroll' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Rewrite' })).toBeTruthy();
+    await expectNoViolations();
+  });
+
+  it('has no violations at the end with the Open in Kiro dialog open', async () => {
+    const api = newApi();
+    api.postExport.mockImplementation(() => Promise.resolve(ok(sampleSpecExport())));
+    renderApp(api);
+    await makeWish();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop and take the scroll' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open in Kiro' })).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Open in Kiro' }));
+    // The binding card's closed <dialog> comes first in the DOM, so the open one is found by its name.
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Open in Kiro' })).toBeTruthy());
     await expectNoViolations();
   });
 });

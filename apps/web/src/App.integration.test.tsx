@@ -4,7 +4,14 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SAMPLE_WISH_TEXT, sampleGrant, sampleVerdict, sampleWish, withCurseStatus } from './api/api-test-support';
+import {
+  SAMPLE_WISH_TEXT,
+  sampleGrant,
+  sampleSpecExport,
+  sampleVerdict,
+  sampleWish,
+  withCurseStatus,
+} from './api/api-test-support';
 import { RESTING_MESSAGE } from './api/api-messages';
 import { App } from './App';
 import { SessionProvider } from './state/SessionProvider';
@@ -286,7 +293,7 @@ describe('App: DOM order (Req 8.1)', () => {
     const positive = [...document.querySelectorAll('[tabindex]')].filter((el) => Number(el.getAttribute('tabindex')) > 0);
     expect(positive).toHaveLength(0);
 
-    // The export slot (empty until task 37) and the sound slot come after the Stop button. The sound toggle is last.
+    // The export slot (empty until the round ends) and the sound slot come after the Stop button. The sound toggle is last.
     const stop = screen.getByRole('button', { name: 'Stop and take the scroll' });
     const exportSlot = document.querySelector('[data-slot="export"]') as HTMLElement;
     const soundSlot = document.querySelector('[data-slot="sound"]') as HTMLElement;
@@ -297,5 +304,135 @@ describe('App: DOM order (Req 8.1)', () => {
     expect(exportSlot.compareDocumentPosition(soundSlot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const layout = soundSlot.parentElement as HTMLElement;
     expect(layout.lastElementChild).toBe(soundSlot);
+  });
+});
+
+describe('App: the end screen (tasks 37 to 39)', () => {
+  const closedLabel = (type: string): string => `${type} curse, closed, sealed`;
+
+  /** The fake Judge closes whatever curse it is asked about, and the Grant it returns keeps the earlier closures. */
+  function judgeClosesAll(api: FakeApi): void {
+    const closed = new Set<string>();
+    api.postBind.mockImplementation((req) => {
+      closed.add(req.curseId);
+      const grant = [...closed].reduce((g, id) => withCurseStatus(g, id, 'closed'), sampleGrant());
+      return Promise.resolve(ok({ grant, verdict: sampleVerdict(req.curseId, true) }));
+    });
+  }
+
+  async function bind(type: string): Promise<void> {
+    fireEvent.click(circle(`${type} curse, open, click to bind`));
+    await waitFor(() => expect(dialogOpen()).toBe(true));
+    fireEvent.click(within(dialog()).getByRole('button', { name: 'Accept this clause' }));
+    await waitFor(() => expect(circle(closedLabel(type))).toBeTruthy());
+  }
+
+  const takeScroll = (): HTMLElement => screen.getByRole('button', { name: 'Take the scroll' });
+  const rewriteButton = (): HTMLElement => screen.getByRole('button', { name: 'Rewrite' });
+  const medalText = (): string => document.querySelector('[data-medal] [role="status"]')?.textContent ?? '';
+
+  function expectReset(): void {
+    expect(wishInput().value).toBe('');
+    expect(document.activeElement).toBe(wishInput());
+    expect(screen.queryAllByRole('button', { name: /curse/ })).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'Rewrite' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Take the scroll' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open in Kiro' })).toBeNull();
+    expect(document.querySelector('[data-medal]')).toBeNull();
+    expect(document.querySelector('[data-granted-stamp]')).toBeNull();
+    expect(fingerText()).toBe('The paw rests, all fingers open.');
+  }
+
+  it('all closed: the medal reads 5/5 and export shows; Rewrite resets everything and focuses the wish input', async () => {
+    const api = newApi();
+    judgeClosesAll(api);
+    api.postExport.mockImplementation(() => Promise.resolve(ok(sampleSpecExport())));
+    renderApp(api);
+    await makeWish();
+    expect(screen.queryByRole('button', { name: 'Rewrite' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Take the scroll' })).toBeNull();
+
+    await bind('Permissions');
+    await bind('Abuse');
+    await bind('Data loss');
+
+    await waitFor(() => expect(medalText()).toBe('Integrity 5/5: 3 closed, 0 open'));
+    expect(document.querySelectorAll('[data-laurel="filled"]')).toHaveLength(5);
+    expect(takeScroll()).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open in Kiro' })).toBeTruthy();
+
+    // Tab order of the end screen: the export buttons, Rewrite, then the sound toggle (design.md, focus order).
+    const names = [...document.querySelectorAll<HTMLElement>('button')]
+      .map((el) => el.getAttribute('aria-label') ?? el.textContent?.trim())
+      .filter((name) => !/curse/.test(name ?? ''));
+    expect(names.slice(-4)).toEqual(['Take the scroll', 'Open in Kiro', 'Rewrite', 'Sound']);
+
+    // Circles stay focusable and open no card.
+    circle(closedLabel('Abuse')).focus();
+    expect(document.activeElement).toBe(circle(closedLabel('Abuse')));
+    fireEvent.click(circle(closedLabel('Abuse')));
+    expect(dialogOpen()).toBe(false);
+
+    fireEvent.click(rewriteButton());
+    await waitFor(() => expectReset());
+  });
+
+  it('Stop with 2 open: cracked seals, "The paw remembers.", laurel, medal and export; Rewrite resets', async () => {
+    const api = newApi();
+    judgeClosesAll(api);
+    renderApp(api);
+    await makeWish();
+    await bind('Permissions');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop and take the scroll' }));
+    await waitFor(() => expect(medalText()).toBe('Integrity 1/5: 1 closed, 2 open'));
+    expect(takeScroll()).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open in Kiro' })).toBeTruthy();
+
+    const open = document.querySelectorAll('[data-status="open-final"]');
+    expect(open).toHaveLength(2);
+    for (const slot of open) {
+      expect(slot.querySelector('[data-seal="cracked"]')).toBeTruthy();
+      expect(slot.textContent).toContain('The paw remembers.');
+    }
+    const closed = document.querySelector('[data-status="closed"]') as HTMLElement;
+    expect(closed.querySelector('[data-seal="sealed"]')).toBeTruthy();
+    expect(closed.querySelector('[data-laurel]')).toBeTruthy();
+    expect(document.querySelectorAll('[data-status="open-final"] [data-laurel]')).toHaveLength(0);
+
+    // Circles stay focusable after the end and open no card.
+    for (const name of ['Abuse curse, open, the paw remembers', 'Data loss curse, open, the paw remembers']) {
+      circle(name).focus();
+      expect(document.activeElement).toBe(circle(name));
+      fireEvent.click(circle(name));
+    }
+    expect(dialogOpen()).toBe(false);
+    expect(api.postBind).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(rewriteButton());
+    await waitFor(() => expectReset());
+  });
+
+  it('the Stop ending exports: Take the scroll sends the projected grant, with the closed curse marked closed', async () => {
+    const api = newApi();
+    judgeClosesAll(api);
+    api.postExport.mockImplementation(() => Promise.resolve(ok(sampleSpecExport())));
+    // jsdom has no object URLs and cannot follow a download link.
+    Object.assign(URL, { createObjectURL: () => 'blob:x', revokeObjectURL: () => undefined });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockReturnValue(undefined);
+    renderApp(api);
+    await makeWish();
+    await bind('Permissions');
+    fireEvent.click(screen.getByRole('button', { name: 'Stop and take the scroll' }));
+    await waitFor(() => expect(takeScroll()).toBeTruthy());
+
+    fireEvent.click(takeScroll());
+    await waitFor(() => expect(document.querySelector('[data-slot="export"] [role="status"]')?.textContent).toBe('Scroll saved!'));
+    const request = api.postExport.mock.calls[0]?.[0];
+    expect(request?.wish.text).toBe(SAMPLE_WISH_TEXT);
+    expect(request?.grant.curses.map((c) => `${c.id}:${c.status}`)).toEqual(['c1:closed', 'c2:open', 'c3:open']);
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(URL, 'createObjectURL');
+    Reflect.deleteProperty(URL, 'revokeObjectURL');
   });
 });

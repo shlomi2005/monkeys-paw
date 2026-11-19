@@ -63,3 +63,9 @@ export const PAW_REMEMBERS_MESSAGE = 'The paw remembers.';
 
 /** "Accept this clause" with a blank clause. No request is made. */
 export const EMPTY_CLAUSE_MESSAGE = 'The Judge cannot weigh a blank clause. Write one first.';
+
+/** The scroll was built but the browser would not save it (the download itself threw). */
+export const SCROLL_LOST_MESSAGE = 'The scroll slipped away. Try again.';
+
+/** Status after "Take the scroll" saved the zip. */
+export const SCROLL_SAVED_MESSAGE = 'Scroll saved!';
