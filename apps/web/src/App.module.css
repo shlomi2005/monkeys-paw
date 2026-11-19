@@ -30,8 +30,9 @@
 .layout {
   /* The plate content padding (PlateFrame.module.css), so the decoration layer can reach the plate edge. */
   --content-pad: calc(var(--rule-inner) + 1rem);
-  /* Room under the paw box for its state text ("3 fingers curled."). */
-  --state-zone: 2.5rem;
+  /* Room under the paw box for its state text ("3 fingers curled."), plus the second line of reduced motion. */
+  --cue-h: 0rem;
+  --state-zone: calc(2.5rem + var(--cue-h));
   /* Lines of the narration that the layout reserves room for. The narration is clipped (with an ellipsis) after that. */
   --narration-lines: 5;
   display: grid;
@@ -50,6 +51,13 @@
 
 .layout > * {
   min-width: 0;
+}
+
+/* Reduced motion adds an engraved line ("Finger curled.") under the state text: reserve its room for good. */
+@media (prefers-reduced-motion: reduce) {
+  .layout {
+    --cue-h: 1.5rem;
+  }
 }
 
 /* Curtains, braziers: pinned to the plate edge, behind everything else. */
@@ -271,9 +279,9 @@
 @media (min-width: 1024px) {
   .layout {
     --narration-lines: 6;
-    --narration-top: 2.5rem;
+    --narration-top: calc(2.5rem + var(--cue-h));
     --narration-w: calc(var(--ring-rx) * 1.1756 - 7.6rem);
-    --stage-bottom: calc(var(--labels-bottom) + 0.5rem + var(--row-h) + 0.75rem - var(--paw-size) / 2);
+    --stage-bottom: calc(var(--labels-bottom) + 0.5rem + var(--row-h) + 0.75rem + var(--cue-h) - var(--paw-size) / 2);
   }
 
   .stampSlot [data-stamp] {

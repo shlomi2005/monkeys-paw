@@ -8,6 +8,7 @@ import { EXAMPLES_SLEEPING_MESSAGE } from '../api/api-messages';
 import type { ExampleEntry, ExamplesState } from '../api/api-schemas';
 import { declarationsFor, parseCss, readText } from '../styles/css-test-support';
 import { ExampleCards } from './ExampleCards';
+import { snippet } from './snippet';
 import type { ExampleCardsProps } from './ExampleCards';
 
 afterEach(cleanup);
@@ -84,15 +85,27 @@ describe('unavailable', () => {
 });
 
 describe('ready', () => {
-  it('renders one button per entry in a labelled list, with the full wish in the aria-label', () => {
+  it('renders one button per entry in a labelled list, named by the visible text in the visible order', () => {
     setup(ready());
     const list = screen.getByRole('list', { name: 'Example wishes' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    // Label in Name (WCAG 2.5.3): "Example", the wish snippet, the context snippet. No word is added or dropped.
     expect(cards().map((card) => card.getAttribute('aria-label'))).toEqual([
-      'Example wish: Only the owner can delete a project',
-      `Example wish: ${LONG_WISH}`,
-      'Example wish: Refunds are issued within 30 days',
+      'Example. Only the owner can delete a project. a team workspace',
+      `Example. ${snippet(LONG_WISH)}. ${snippet(LONG_CONTEXT)}`,
+      'Example. Refunds are issued within 30 days',
     ]);
+  });
+
+  it('keeps the whole wish and context for a screen reader when the card shows a cut snippet', () => {
+    setup(ready());
+    const [whole, cut, noContext] = cards() as unknown as [HTMLElement, HTMLElement, HTMLElement];
+    expect(whole.hasAttribute('aria-describedby')).toBe(false);
+    expect(noContext.hasAttribute('aria-describedby')).toBe(false);
+    const description = document.getElementById(cut.getAttribute('aria-describedby') ?? '');
+    expect(description?.textContent).toBe(`Whole wish: ${LONG_WISH}. Context: ${LONG_CONTEXT}.`);
+    // Only the cut card has a description node.
+    expect(document.querySelectorAll('[class*="fullText"]')).toHaveLength(1);
   });
 
   it('shows the Example label on every card', () => {

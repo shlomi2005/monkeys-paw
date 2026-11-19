@@ -76,3 +76,17 @@
     box-shadow: 0 0 8px 1px color-mix(in srgb, var(--blood) 45%, transparent);
   }
 }
+
+/* The whole wish and context when the card shows a cut snippet: for screen readers only (aria-describedby). */
+.fullText {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

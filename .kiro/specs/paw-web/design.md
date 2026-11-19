@@ -799,7 +799,14 @@ traps Tab and Shift+Tab inside the card, and `cancel` (Escape) is routed to `car
 - While `judging`, Escape and Cancel are ignored, the buttons are `aria-disabled`, and "The Judge stirs…" is shown
   in the card's status line.
 - The OpenInKiroDialog uses the same hook and the same `<dialog>` approach.
-- jsdom has no `showModal`, so dialog focus behaviour is covered by Playwright, not by component tests.
+- **Chrome close watcher:** Chrome may close a modal dialog on a second Escape with no user activation between the two,
+  even though `cancel` was prevented. The hook listens for the dialog's `close` event. If the dialog closed while the
+  parent still has the card open, it calls `onCancel` (`card_closed`) when not judging, so the state and the DOM agree,
+  and reopens the dialog with `showModal()` and puts focus back in the card when judging. Our own close (the `card`
+  prop becomes null) removes the listener first and dispatches nothing.
+- The real focus trap (inert page, Tab staying inside the card) is verified in Playwright (tasks 42-43), not in jsdom.
+  Component tests stub `showModal` and `close` and cover the logic only: opener restore, a disconnected opener, the
+  browser-initiated close and our own close.
 
 #### Live region (`LiveRegion`, `paw-announcer.ts`)
 
@@ -830,7 +837,10 @@ O open" (Req 6.8, 8.4), so the live region does not repeat it. Messages are set 
   arriving". Type labels come from a lookup from the ten taxonomy tags (`data-loss` reads "Data loss",
   `edge-input` reads "Edge input"). Story and loophole go in `aria-describedby`.
 - `aria-label` also exists on the input ("I wish that"), the context field, the seal button ("Make the wish"), each
-  example card ("Example wish: …"), and the Stop and export buttons.
+  example card, and the Stop and export buttons. An example card's name is its visible text in the visible order, for
+  example "Example. Only the owner can delete a project. a team workspace" (WCAG 2.5.3, Label in Name: a name that
+  adds words such as "Example wish:" fails axe's `label-content-name-mismatch`). When the snippet cut the wish or the
+  context, a visually hidden description with the whole text is linked by `aria-describedby`.
 - The canvas, poster, ray disc, braziers, curtains, seals and laurels are `aria-hidden="true"` (decorative).
 - **Paw text equivalent:** `PawStateText` is a visible engraved caption under the paw: "The paw rests, all fingers
   open." / "3 fingers curled." / "1 finger curled." / "The paw rests." / "2 fingers stay curled." It is built from
@@ -850,8 +860,13 @@ O open" (Req 6.8, 8.4), so the live region does not repeat it. Messages are set 
 - **DOM:** a `@media (prefers-reduced-motion: reduce)` block in `tokens.css` sets the duration tokens to near zero
   (`--dur-fill`, `--dur-seal`, `--dur-fade` ≤ 1 ms, under the 100 ms limit of Req 8.2) and removes the brazier
   smoke, curtain breathing, ray pulse and example-card glow animations.
-- **3D scene:** `use-reduced-motion.ts` reads the same media query and dispatches `motion_preference_changed` when it
-  changes. The reducer then emits `snap` instead of `play` (section 5), and the scene's twitch is
+- **Text cues:** under reduced motion `PawStateText` adds a second engraved line after each change of the curled count:
+  "Finger curled." after a curl, "Finger open." after an open. It stays until the next change and is cleared by a
+  rewrite. Without reduced motion nothing extra is shown. `App.module.css` reserves the line's height (`--cue-h`).
+- **Tests:** `styles/reduced-motion-css.test.ts` reads every `*.module.css` and `tokens.css` as text and fails on any
+  `animation` or `transition` that neither uses the `--dur-*` tokens nor has a reduced-motion rule for its selector.
+- **3D scene:** `use-reduced-motion.ts` reads the same media query, and `SessionProvider` dispatches
+  `motion_preference_changed` when it changes (once per real change, never on mount). The reducer then emits `snap` instead of `play` (section 5), and the scene's twitch is
   off. Turning the preference on mid-animation snaps the paw to its logical pose at once.
 
 #### Contrast and size tokens (`styles/tokens.css`)

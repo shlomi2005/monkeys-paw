@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // BindingCard: dialog wiring, the editable clause, the three buttons, the judging, remembers and resting states, and
-// the stylesheet. jsdom has no showModal, so focus trap and focus restore are left to Playwright (task 32).
+// the stylesheet. Opener restore and the browser-initiated close are tested in hooks/use-dialog-focus.test.tsx. jsdom
+// has no inert page, so the real focus trap is left to Playwright (tasks 42-43).
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Curse } from 'paw-core';
@@ -115,6 +116,60 @@ describe('opening and closing', () => {
   it('puts initial focus on the clause', () => {
     setup();
     expect(document.activeElement).toBe(clauseBox());
+  });
+});
+
+describe('a browser-initiated close (Chrome close watcher)', () => {
+  function stubDialog(): void {
+    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
+      configurable: true,
+      value: function (this: HTMLDialogElement) {
+        this.setAttribute('open', '');
+      },
+    });
+    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+      configurable: true,
+      value: function (this: HTMLDialogElement) {
+        if (!this.hasAttribute('open')) return;
+        this.removeAttribute('open');
+        this.dispatchEvent(new Event('close'));
+      },
+    });
+  }
+  afterEach(() => {
+    Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
+    Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
+  });
+
+  it('tells the parent once when the card is not judging', () => {
+    stubDialog();
+    const { container, props } = setup();
+    dialog(container).close();
+    expect(props.onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('reopens the card and keeps focus in it while judging, without telling the parent', () => {
+    stubDialog();
+    const { container, props } = setup({ card: cardOf({ judging: true }) });
+    dialog(container).close();
+    expect(props.onCancel).not.toHaveBeenCalled();
+    expect(dialog(container).hasAttribute('open')).toBe(true);
+    expect(document.activeElement).toBe(clauseBox());
+  });
+
+  it('gives focus back to the circle that opened it', () => {
+    stubDialog();
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
+    const props = propsOf({ card: null });
+    const { rerender } = render(<BindingCard {...props} />);
+    rerender(<BindingCard {...props} card={cardOf()} />);
+    expect(document.activeElement).toBe(clauseBox());
+    rerender(<BindingCard {...props} card={null} />);
+    expect(document.activeElement).toBe(opener);
+    expect(props.onCancel).not.toHaveBeenCalled();
+    opener.remove();
   });
 });
 

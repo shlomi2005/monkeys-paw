@@ -32,8 +32,8 @@ function send(ctx: PawContext, ...events: PawEvent[]): PawContext {
 }
 
 /** A Grant of `k` curses with every curl finished. */
-function curled(k: number): PawContext {
-  let ctx = send(initialState(false), { type: 'grant_requested', text: 'a wish' }, grantReceivedEvent(grant(k)));
+function curled(k: number, reduced = false): PawContext {
+  let ctx = send(initialState(reduced), { type: 'grant_requested', text: 'a wish' }, grantReceivedEvent(grant(k)));
   for (let i = 0; i < 50 && ctx.anim.active !== null; i += 1) ctx = send(ctx, doneEventFor(ctx.anim.active));
   return ctx;
 }
@@ -76,5 +76,122 @@ describe('PawStateText', () => {
     expect(node?.hasAttribute('aria-live')).toBe(false);
     expect(node?.hasAttribute('role')).toBe(false);
     expect(node?.hasAttribute('hidden')).toBe(false);
+  });
+});
+
+// The cue lines (Req 8.2: state labels persist). The preference is `ctx.reducedMotion`; SessionProvider keeps it in
+// step with the media query (SessionProvider.motion.test.tsx), and App.reduced-motion.test.tsx runs the whole page.
+const cue = (container: HTMLElement): string | null =>
+  container.querySelector('[data-paw-finger-cue]')?.textContent ?? null;
+
+/** The Verdict that closes `curseId`: the top finger opens. */
+function close(ctx: PawContext, curseId: string): PawContext {
+  const grantNow = ctx.grant as Grant;
+  const closed: Grant = {
+    ...grantNow,
+    curses: grantNow.curses.map((c) => (c.id === curseId ? { ...c, status: 'closed' as const } : c)),
+  };
+  return send(
+    ctx,
+    { type: 'circle_activated', index: grantNow.curses.findIndex((c) => c.id === curseId) },
+    { type: 'bind_submitted', kind: 'ears-clause', clause: 'IF x THEN THE SYSTEM SHALL y.' },
+    { type: 'verdict_received', curseId, closed: true, reason: 'Sealed.', grant: closed },
+  );
+}
+
+describe('PawStateText: the second line under reduced motion', () => {
+  it('shows nothing extra without reduced motion, through a curl, a stop and an open', () => {
+    const { container, rerender } = render(<PawStateText ctx={initialState(false)} />);
+    expect(cue(container)).toBeNull();
+    const ctx = curled(3);
+    rerender(<PawStateText ctx={ctx} />);
+    expect(cue(container)).toBeNull();
+    rerender(<PawStateText ctx={close(ctx, 'c1')} />);
+    expect(cue(container)).toBeNull();
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+  });
+
+  it('shows nothing before the first change, with reduced motion on', () => {
+    const { container } = render(<PawStateText ctx={initialState(true)} />);
+    expect(cue(container)).toBeNull();
+    expect(container.textContent).toBe('The paw rests, all fingers open.');
+  });
+
+  it('says "Finger curled." after the grant lands, and keeps the existing caption as it is', () => {
+    const { container, rerender } = render(<PawStateText ctx={initialState(true)} />);
+    rerender(<PawStateText ctx={curled(3, true)} />);
+    expect(cue(container)).toBe('Finger curled.');
+    expect(container.querySelector('[data-paw-state-text]')?.textContent).toBe('3 fingers curled.');
+  });
+
+  it('says "Finger open." after an open, and the line stays until the next change', () => {
+    const start = curled(3, true);
+    const { container, rerender } = render(<PawStateText ctx={start} />);
+    const afterOne = close(start, 'c2');
+    rerender(<PawStateText ctx={afterOne} />);
+    expect(cue(container)).toBe('Finger open.');
+    expect(container.querySelector('[data-paw-state-text]')?.textContent).toBe('2 fingers curled.');
+
+    // Re-rendering with other changes of the context (a card opening) is not a change of the fingers.
+    rerender(<PawStateText ctx={send(afterOne, { type: 'circle_activated', index: 0 })} />);
+    expect(cue(container)).toBe('Finger open.');
+
+    // The next change replaces it.
+    rerender(<PawStateText ctx={close(afterOne, 'c1')} />);
+    expect(cue(container)).toBe('Finger open.');
+    expect(container.querySelector('[data-paw-state-text]')?.textContent).toBe('1 finger curled.');
+  });
+
+  it('keeps the line after a stop, because no finger changed', () => {
+    const start = curled(3, true);
+    const { container, rerender } = render(<PawStateText ctx={start} />);
+    rerender(<PawStateText ctx={close(start, 'c0')} />);
+    rerender(<PawStateText ctx={send(close(start, 'c0'), { type: 'stop' })} />);
+    expect(cue(container)).toBe('Finger open.');
+  });
+
+  it('says "Finger open." when the last finger opens and the paw rests', () => {
+    let ctx = curled(3, true);
+    const { container, rerender } = render(<PawStateText ctx={ctx} />);
+    for (const id of ['c2', 'c1', 'c0']) {
+      ctx = close(ctx, id);
+      rerender(<PawStateText ctx={ctx} />);
+    }
+    expect(container.querySelector('[data-paw-state-text]')?.textContent).toBe('The paw rests.');
+    expect(cue(container)).toBe('Finger open.');
+  });
+
+  it('clears the line on a rewrite', () => {
+    const start = curled(3, true);
+    const { container, rerender } = render(<PawStateText ctx={initialState(true)} />);
+    rerender(<PawStateText ctx={start} />);
+    expect(cue(container)).toBe('Finger curled.');
+    rerender(<PawStateText ctx={send(start, { type: 'rewrite' })} />);
+    expect(cue(container)).toBeNull();
+    expect(container.textContent).toBe('The paw rests, all fingers open.');
+  });
+
+  it('shows no stale line when the preference turns on later, and none when it turns off', () => {
+    const start = curled(3);
+    const { container, rerender } = render(<PawStateText ctx={start} />);
+    rerender(<PawStateText ctx={close(start, 'c2')} />);
+    rerender(<PawStateText ctx={send(close(start, 'c2'), { type: 'motion_preference_changed', reduced: true })} />);
+    expect(cue(container)).toBeNull();
+
+    const reducedCtx = send(close(start, 'c2'), { type: 'motion_preference_changed', reduced: true });
+    rerender(<PawStateText ctx={close(reducedCtx, 'c1')} />);
+    expect(cue(container)).toBe('Finger open.');
+    rerender(<PawStateText ctx={send(close(reducedCtx, 'c1'), { type: 'motion_preference_changed', reduced: false })} />);
+    expect(cue(container)).toBeNull();
+  });
+
+  it('is plain visible text: not a live region, not hidden', () => {
+    const { container, rerender } = render(<PawStateText ctx={initialState(true)} />);
+    rerender(<PawStateText ctx={curled(3, true)} />);
+    const node = container.querySelector('[data-paw-finger-cue]');
+    expect(node).not.toBeNull();
+    expect(node?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(node?.hasAttribute('aria-live')).toBe(false);
+    expect(node?.hasAttribute('role')).toBe(false);
   });
 });

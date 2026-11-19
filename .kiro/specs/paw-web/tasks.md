@@ -168,15 +168,26 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## Accessibility
 
-- [ ] 32. `hooks/use-dialog-focus.ts` (store opener, restore focus on close), Escape handling through `cancel`, ignore
+- [x] 32. `hooks/use-dialog-focus.ts` (store opener, restore focus on close), Escape handling through `cancel`, ignore
   Escape while judging, and the same behaviour in `OpenInKiroDialog` (task 38). Document that the focus trap is
   verified in Playwright. (Req 4.6, 8.1, 8.4)
-- [ ] 33. `hooks/use-reduced-motion.ts` (media query listener dispatching `motion_preference_changed`), the CSS
+  The `OpenInKiroDialog` half of this task is done in task 38, which reuses `useDialogFocus` as it stands. Done here:
+  the hook, `BindingCard` on it, and the Chrome close-watcher guard (a `close` event while the card is still open
+  calls `onCancel`, or reopens the dialog while judging).
+- [x] 33. `hooks/use-reduced-motion.ts` (media query listener dispatching `motion_preference_changed`), the CSS
   reduced-motion block applied to every animated component, and text cues "Finger curled" and "Finger open" in
   `PawStateText`. Component tests with a mocked `matchMedia`. (Req 2.9, 8.2, 6.1)
-- [ ] 34. Add `vitest-axe` or equivalent for component checks and fix findings: labels on all inputs and buttons,
+  Done: `SessionProvider` sends `motion_preference_changed` once per real change after mount (never on mount, never for
+  an unchanged value); `reduced-motion-css.test.ts` reads every `*.module.css` and `tokens.css` and fails on an
+  animation or transition that survives reduced motion; `PawStateText` adds "Finger curled." and "Finger open." (the
+  preference is `ctx.reducedMotion`), and `App.module.css` reserves the line's room (`--cue-h`).
+- [x] 34. Add `vitest-axe` or equivalent for component checks and fix findings: labels on all inputs and buttons,
   dialog names, `aria-hidden` on decoration, live region content, 48 px minimum hit areas, focus ring token on every
   focusable control. (Req 8.1, 8.3, 8.4, 9.3)
+  Done: `App.a11y.test.tsx` runs axe on the whole page in four states (only `color-contrast` is off, because jsdom
+  cannot compute it; `contrast.test.ts` covers it) plus a structure sweep; `hit-areas.test.ts` and `focus-ring.test.ts`
+  read the source and the stylesheets as text. Finding fixed: the example card name did not contain its visible text
+  (`label-content-name-mismatch`).
 
 ## Sound
 

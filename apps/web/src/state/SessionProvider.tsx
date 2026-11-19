@@ -1,10 +1,10 @@
 // SessionProvider: owns the one `usePawSession` and shares it through context (design.md section 2).
 // Tests pass a fake `api` (and a `scheduler`) here, so nothing touches the network.
 
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ApiClient } from '../api/api-client';
-import { prefersReducedMotion } from '../hooks/use-reduced-motion';
+import { prefersReducedMotion, useReducedMotion } from '../hooks/use-reduced-motion';
 import { usePawSession } from './use-paw-session';
 import type { PawSession, Scheduler, UsePawSessionOptions } from './use-paw-session';
 
@@ -20,7 +20,7 @@ export interface SessionProviderProps {
 }
 
 export function SessionProvider({ children, api, scheduler, initialReducedMotion }: SessionProviderProps) {
-  // Read once, on the first render. Later changes of the preference are the reducer's business (task 33).
+  // Read once, on the first render: it is the machine's initial value. Later changes are sent below.
   const [reduced] = useState(() => initialReducedMotion ?? prefersReducedMotion());
   const options: UsePawSessionOptions = {
     initialReducedMotion: reduced,
@@ -28,6 +28,19 @@ export function SessionProvider({ children, api, scheduler, initialReducedMotion
     ...(scheduler === undefined ? {} : { scheduler }),
   };
   const session = usePawSession(options);
+
+  // The preference after mount. Each real change reaches the machine once as `motion_preference_changed`, which snaps
+  // a running animation and switches the scene to `snap` (design.md section 7, Req 2.9, 8.2). Nothing is sent on
+  // mount, and nothing when the media query fires with the value we already have.
+  const preferred = useReducedMotion();
+  const sent = useRef(preferred);
+  const { dispatch } = session;
+  useEffect(() => {
+    if (sent.current === preferred) return;
+    sent.current = preferred;
+    dispatch({ type: 'motion_preference_changed', reduced: preferred });
+  }, [preferred, dispatch]);
+
   return <SessionContext.Provider value={session}>{children}</SessionContext.Provider>;
 }
 

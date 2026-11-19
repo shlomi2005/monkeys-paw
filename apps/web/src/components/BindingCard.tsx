@@ -1,16 +1,17 @@
 // BindingCard: the parchment dialog where the user binds one curse (paw-web design.md sections 2 and 7, Req 4.2 to
 // 4.6, 8.4). A controlled component: the parent passes the open card (or null) and wires the three callbacks to the
-// session (task 27). The `card` prop alone decides when the dialog opens and closes. Focus trap and focus restore
-// come from the native modal and are covered by Playwright and task 32.
+// session (task 27). The `card` prop alone decides when the dialog opens and closes. Open, Escape, focus restore and
+// the Chrome close-watcher guard are in `use-dialog-focus.ts`; the real focus trap is verified in Playwright.
 
-import { useEffect, useId, useRef, useState } from 'react';
-import type { KeyboardEvent, SyntheticEvent } from 'react';
+import { useId, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import {
   EMPTY_CLAUSE_MESSAGE,
   JUDGE_RESTING_MESSAGE,
   JUDGE_STIRS_MESSAGE,
   PAW_REMEMBERS_MESSAGE,
 } from '../api/api-messages';
+import { useDialogFocus } from '../hooks/use-dialog-focus';
 import { curseTypeLabel } from '../state/paw-selectors';
 import type { CardView } from '../state/paw-selectors';
 import type { Notice } from '../state/use-paw-session';
@@ -33,42 +34,24 @@ export interface BindingCardProps {
   readonly onCancel: () => void;
 }
 
-/** jsdom has no `showModal`: fall back to the `open` attribute so the content is reachable. */
-function openDialog(dialog: HTMLDialogElement): void {
-  if (dialog.open) return;
-  if (typeof dialog.showModal === 'function') dialog.showModal();
-  else dialog.setAttribute('open', '');
-}
-
-function closeDialog(dialog: HTMLDialogElement): void {
-  if (typeof dialog.close === 'function') dialog.close();
-  else dialog.removeAttribute('open');
-}
-
 export function BindingCard({ card, judgeResting, notice, onAccept, onRewrite, onCancel }: BindingCardProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const isOpen = card !== null;
   const judging = card?.judging ?? false;
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (dialog === null || !isOpen) return;
-    openDialog(dialog);
-    // Initial focus goes to the clause (design.md section 7), also where `showModal` is missing.
-    dialog.querySelector('textarea')?.focus();
-    return () => closeDialog(dialog);
-  }, [isOpen]);
+  // Open, initial focus on the clause, Escape through `cancel`, the Chrome close-watcher guard and focus restore all
+  // live in the hook. While the Judge works, Escape and a browser-initiated close are ignored (Req 4.6).
+  useDialogFocus(dialogRef, {
+    open: isOpen,
+    locked: judging,
+    onCancel,
+    initialFocus: (dialog) => dialog.querySelector('textarea'),
+  });
 
   // The dialog is always in the DOM and closed while `card` is null. Its content exists only while a card is open,
   // and is keyed by curse id so a different curse re-seeds the clause.
   const labelId = useId();
   const describedId = useId();
-
-  function handleCancelEvent(event: SyntheticEvent<HTMLDialogElement>): void {
-    // The browser must never close the dialog itself: the parent's `card` prop decides.
-    event.preventDefault();
-    if (!judging) onCancel();
-  }
 
   return (
     <dialog
@@ -76,7 +59,6 @@ export function BindingCard({ card, judgeResting, notice, onAccept, onRewrite, o
       className={styles.card}
       aria-labelledby={isOpen ? labelId : undefined}
       aria-describedby={isOpen ? describedId : undefined}
-      onCancel={handleCancelEvent}
     >
       {card !== null && (
         <CardBody

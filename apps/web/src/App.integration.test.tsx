@@ -15,6 +15,8 @@ import type { FakeApi } from './state/paw-session-test-support';
 vi.mock('./scene/webgl-support', () => ({ hasWebGL: () => false }));
 
 const EXAMPLE_TEXT = 'Users can reset their password by email';
+// The card's accessible name is its visible text: "Example", the wish, the context (WCAG 2.5.3).
+const EXAMPLE_NAME = `Example. ${EXAMPLE_TEXT}. A small web shop`;
 const exampleEntry = { wish: { ...sampleWish(EXAMPLE_TEXT), id: 'ex-1', context: 'A small web shop' }, grant: sampleGrant() };
 
 function renderApp(api: FakeApi) {
@@ -61,7 +63,7 @@ describe('App: a round from wish to stop', () => {
   it('loads and shows the examples, also after the StrictMode double effect run', async () => {
     const api = newApi();
     renderApp(api);
-    expect(await screen.findByRole('button', { name: `Example wish: ${EXAMPLE_TEXT}` })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: EXAMPLE_NAME })).toBeTruthy();
     expect(api.getExamples.mock.calls.length).toBeGreaterThanOrEqual(1);
     // Still a working page: a wish goes through after the double effect run.
     await makeWish();
@@ -191,7 +193,7 @@ describe('App: a round from wish to stop', () => {
 describe('App: wish line and examples', () => {
   it('fills the wish line from an example and highlights it; typing clears the highlight and dims the row', async () => {
     renderApp(newApi());
-    const card = await screen.findByRole('button', { name: `Example wish: ${EXAMPLE_TEXT}` });
+    const card = await screen.findByRole('button', { name: EXAMPLE_NAME });
     fireEvent.click(card);
     expect(wishInput().value).toBe(EXAMPLE_TEXT);
     expect(screen.getByRole('textbox', { name: 'for…' })).toHaveProperty('value', 'A small web shop');
@@ -204,7 +206,7 @@ describe('App: wish line and examples', () => {
 
   it('Escape in the example row deselects the card', async () => {
     renderApp(newApi());
-    const card = await screen.findByRole('button', { name: `Example wish: ${EXAMPLE_TEXT}` });
+    const card = await screen.findByRole('button', { name: EXAMPLE_NAME });
     fireEvent.click(card);
     fireEvent.keyDown(card, { key: 'Escape' });
     expect(card.getAttribute('aria-pressed')).toBe('false');
@@ -214,7 +216,7 @@ describe('App: wish line and examples', () => {
     const api = newApi();
     api.postGrant.mockImplementationOnce(() => Promise.resolve(RESTING));
     renderApp(api);
-    await screen.findByRole('button', { name: `Example wish: ${EXAMPLE_TEXT}` });
+    await screen.findByRole('button', { name: EXAMPLE_NAME });
 
     await typeWish('A wish of my own');
     fireEvent.click(makeButton());
@@ -222,14 +224,14 @@ describe('App: wish line and examples', () => {
     expect(api.postGrant).toHaveBeenCalledTimes(1);
 
     // An edited example is not an example any more.
-    fireEvent.click(screen.getByRole('button', { name: `Example wish: ${EXAMPLE_TEXT}` }));
+    fireEvent.click(screen.getByRole('button', { name: EXAMPLE_NAME }));
     await typeWish(`${EXAMPLE_TEXT} today`);
     fireEvent.click(makeButton());
     expect(api.postGrant).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: /curse, open/ })).toBeNull();
 
     // The untouched example plays, with no API call.
-    fireEvent.click(screen.getByRole('button', { name: `Example wish: ${EXAMPLE_TEXT}` }));
+    fireEvent.click(screen.getByRole('button', { name: EXAMPLE_NAME }));
     fireEvent.click(makeButton());
     await waitFor(() => expect(circle('Permissions curse, open, click to bind')).toBeTruthy());
     expect(api.postGrant).toHaveBeenCalledTimes(1);
@@ -259,7 +261,7 @@ describe('App: DOM order (Req 8.1)', () => {
 
   it('lists the controls in the required tab order, with empty export and sound slots last', async () => {
     renderApp(newApi());
-    await screen.findByRole('button', { name: `Example wish: ${EXAMPLE_TEXT}` });
+    await screen.findByRole('button', { name: EXAMPLE_NAME });
     await makeWish();
     fireEvent.click(circle('Permissions curse, open, click to bind'));
     await waitFor(() => expect(dialogOpen()).toBe(true));
@@ -268,7 +270,7 @@ describe('App: DOM order (Req 8.1)', () => {
       'I wish that',
       'for… (optional context)',
       'Make the wish',
-      `Example wish: ${EXAMPLE_TEXT}`,
+      EXAMPLE_NAME,
       'Permissions curse, open, click to bind',
       'Abuse curse, open, click to bind',
       'Data loss curse, open, click to bind',
