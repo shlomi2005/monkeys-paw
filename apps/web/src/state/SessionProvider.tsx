@@ -4,6 +4,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ApiClient } from '../api/api-client';
+import type { SoundController } from '../audio/sound-controller';
 import { prefersReducedMotion, useReducedMotion } from '../hooks/use-reduced-motion';
 import { usePawSession } from './use-paw-session';
 import type { PawSession, Scheduler, UsePawSessionOptions } from './use-paw-session';
@@ -15,17 +16,20 @@ export interface SessionProviderProps {
   /** Defaults to the app's client. Tests inject a fake. */
   readonly api?: ApiClient;
   readonly scheduler?: Scheduler;
+  /** Defaults to the app's sound controller. Tests inject a fake. */
+  readonly sound?: SoundController;
   /** Overrides the `matchMedia` reading at mount. Tests only. */
   readonly initialReducedMotion?: boolean;
 }
 
-export function SessionProvider({ children, api, scheduler, initialReducedMotion }: SessionProviderProps) {
+export function SessionProvider({ children, api, scheduler, sound, initialReducedMotion }: SessionProviderProps) {
   // Read once, on the first render: it is the machine's initial value. Later changes are sent below.
   const [reduced] = useState(() => initialReducedMotion ?? prefersReducedMotion());
   const options: UsePawSessionOptions = {
     initialReducedMotion: reduced,
     ...(api === undefined ? {} : { api }),
     ...(scheduler === undefined ? {} : { scheduler }),
+    ...(sound === undefined ? {} : { sound }),
   };
   const session = usePawSession(options);
 

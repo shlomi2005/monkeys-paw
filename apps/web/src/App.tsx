@@ -13,6 +13,7 @@ import { LiveRegion } from './components/LiveRegion';
 import { PawStateText } from './components/PawStateText';
 import { PlateFrame } from './components/PlateFrame';
 import { RayDisc } from './components/RayDisc';
+import { SoundToggle } from './components/SoundToggle';
 import { StopButton } from './components/StopButton';
 import { WishLine } from './components/WishLine';
 import { useReducedMotion } from './hooks/use-reduced-motion';
@@ -40,6 +41,7 @@ export function App() {
     dispatch,
     submitWish,
     bridge,
+    sound,
   } = useSession();
   const reducedMotion = useReducedMotion();
 
@@ -173,8 +175,10 @@ export function App() {
             <div className={styles.exportSlot} data-slot="export" />
           </div>
 
-          {/* Task 35 puts the sound toggle here. Last in the DOM, shown in a corner. */}
-          <div className={styles.soundSlot} data-slot="sound" />
+          {/* Last in the DOM, shown in a corner. */}
+          <div className={styles.soundSlot} data-slot="sound">
+            <SoundToggle sound={sound} />
+          </div>
         </div>
       </PlateFrame>
     </main>

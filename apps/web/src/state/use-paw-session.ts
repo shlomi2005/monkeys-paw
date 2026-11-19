@@ -12,6 +12,10 @@ import type { ApiError, ApiResult } from '../api/api-errors';
 import { JUDGE_RESTING_MESSAGE, RESTING_MESSAGE, SERVER_STUMBLE_MESSAGE } from '../api/api-messages';
 import { normalizeGrant } from '../api/api-schemas';
 import type { ExampleEntry, ExamplesState } from '../api/api-schemas';
+import { cuesFor } from '../audio/cue-triggers';
+import { createSoundController } from '../audio/sound-controller';
+import type { SoundController } from '../audio/sound-controller';
+import type { SoundCue } from '../audio/sound-types';
 import { describe } from './paw-announcer';
 import { initialState, reduce as defaultReduce } from './paw-machine';
 import type { PawContext, PawEffect, PawEvent, Transition } from './paw-machine-types';
@@ -94,6 +98,8 @@ export interface PawSession {
   readonly submitWish: (input: SubmitWishInput) => void;
   /** The scene attaches to this: `subscribe`, `setReady` and `done`. */
   readonly bridge: SceneBridgeHost;
+  /** The sound toggle's state and the lazy player. The session feeds it the cues. */
+  readonly sound: SoundController;
 }
 
 export interface PawSessionOptions {
@@ -102,6 +108,11 @@ export interface PawSessionOptions {
   readonly api: ApiClient;
   readonly bridge: SceneBridgeHost;
   readonly scheduler?: Scheduler;
+  /**
+   * Called for each sound cue, in order, on the transitions that drive the scene (design.md "Sound (Req 7)"). The
+   * session does not know whether sound is on; the receiver decides.
+   */
+  readonly onCue?: (cue: SoundCue) => void;
 }
 
 /** The framework-free session. */
@@ -160,6 +171,7 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
   const api = options.api;
   const bridge = options.bridge;
   const scheduler = options.scheduler ?? defaultScheduler;
+  const onCue = options.onCue;
 
   let ctx = options.initial;
   let examples: ExamplesState = { kind: 'loading' };
@@ -168,6 +180,8 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
   let liveText = '';
   let grantedSeq = 0;
   let liveSeq = 0;
+  /** Set when the transition being handled accepted a Grant, so "Granted." gets its stamp cue. */
+  let grantedNow = false;
 
   let viewCtx = ctx;
   let view = selectView(ctx);
@@ -314,7 +328,10 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
     if (NOTICE_CLEARING.has(event.type)) notice = null;
     if (event.type === 'rewrite') liveQueue.length = 0; // stale lines must not follow "The wish is unmade."
     if (event.type === 'stop' || event.type === 'rewrite') abortInFlight();
-    if (event.type === 'grant_received' && prev.phase === 'granting' && next.grant === event.grant) grantedSeq += 1;
+    if (event.type === 'grant_received' && prev.phase === 'granting' && next.grant === event.grant) {
+      grantedSeq += 1;
+      grantedNow = true;
+    }
     const text = describe(prev, next, event);
     if (text !== null) announce(text);
   }
@@ -329,10 +346,12 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
     }
     const prev = ctx;
     const { ctx: next, effects } = reduceFn(prev, event);
+    grantedNow = false;
     if (next !== prev) {
       ctx = next;
       afterTransition(prev, next, event);
       emit();
+      if (onCue !== undefined) for (const cue of cuesFor(prev, next, event, effects, grantedNow)) onCue(cue);
     }
     for (const effect of effects) runEffect(effect, offline);
   }
@@ -429,37 +448,47 @@ export interface UsePawSessionOptions {
   /** The preference at mount time. Later changes arrive as `motion_preference_changed`. */
   readonly initialReducedMotion?: boolean;
   readonly scheduler?: Scheduler;
+  /** Defaults to the app's controller (`localStorage['pawSoundEnabled']`, lazy player). Tests pass a fake. */
+  readonly sound?: SoundController;
 }
 
 interface Held {
   readonly runner: PawSessionRunner;
   readonly bridge: SceneBridgeHost;
+  readonly sound: SoundController;
 }
 
 export function usePawSession(options: UsePawSessionOptions = {}): PawSession {
   const held = useRef<Held | null>(null);
   if (held.current === null) {
     const bridge = createSceneBridge();
+    const sound = options.sound ?? createSoundController();
     const runner = createPawSession({
       initial: initialState(options.initialReducedMotion ?? false),
       api: options.api ?? defaultApiClient(),
       bridge,
+      onCue: (cue) => sound.cue(cue),
       ...(options.scheduler === undefined ? {} : { scheduler: options.scheduler }),
     });
-    held.current = { runner, bridge };
+    held.current = { runner, bridge, sound };
   }
-  const { runner, bridge } = held.current;
+  const { runner, bridge, sound } = held.current;
 
   const snapshot = useSyncExternalStore(runner.subscribe, runner.getSnapshot, runner.getSnapshot);
 
-  // GET /api/examples runs once on mount. Unmount aborts every request in flight.
+  // GET /api/examples runs once on mount. Unmount aborts every request in flight. Sound restored as on waits for the
+  // first gesture (Req 7.4); sound that is off does nothing here.
   useEffect(() => {
     runner.start();
-    return () => runner.dispose();
-  }, [runner]);
+    sound.start();
+    return () => {
+      runner.dispose();
+      sound.dispose();
+    };
+  }, [runner, sound]);
 
   return useMemo(
-    () => ({ ...snapshot, dispatch: runner.dispatch, submitWish: runner.submitWish, bridge }),
-    [snapshot, runner, bridge],
+    () => ({ ...snapshot, dispatch: runner.dispatch, submitWish: runner.submitWish, bridge, sound }),
+    [snapshot, runner, bridge, sound],
   );
 }

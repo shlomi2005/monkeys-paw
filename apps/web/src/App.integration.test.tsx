@@ -259,7 +259,7 @@ describe('App: DOM order (Req 8.1)', () => {
   const nameOf = (el: HTMLElement): string =>
     el.getAttribute('aria-label') ?? el.textContent?.trim() ?? el.tagName.toLowerCase();
 
-  it('lists the controls in the required tab order, with empty export and sound slots last', async () => {
+  it('lists the controls in the required tab order, with the sound toggle last', async () => {
     renderApp(newApi());
     await screen.findByRole('button', { name: EXAMPLE_NAME });
     await makeWish();
@@ -279,18 +279,20 @@ describe('App: DOM order (Req 8.1)', () => {
       'Rewrite the whole wish',
       'Cancel',
       'Stop and take the scroll',
+      'Sound',
     ]);
 
     // No positive tabindex anywhere.
     const positive = [...document.querySelectorAll('[tabindex]')].filter((el) => Number(el.getAttribute('tabindex')) > 0);
     expect(positive).toHaveLength(0);
 
-    // The two slots come after the Stop button, last in the DOM, and hold no controls yet.
+    // The export slot (empty until task 37) and the sound slot come after the Stop button. The sound toggle is last.
     const stop = screen.getByRole('button', { name: 'Stop and take the scroll' });
     const exportSlot = document.querySelector('[data-slot="export"]') as HTMLElement;
     const soundSlot = document.querySelector('[data-slot="sound"]') as HTMLElement;
     expect(exportSlot.querySelector(FOCUSABLE)).toBeNull();
-    expect(soundSlot.querySelector(FOCUSABLE)).toBeNull();
+    expect(soundSlot.querySelectorAll(FOCUSABLE)).toHaveLength(1);
+    expect(soundSlot.querySelector(FOCUSABLE)).toBe(screen.getByRole('button', { name: 'Sound' }));
     expect(stop.compareDocumentPosition(exportSlot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(exportSlot.compareDocumentPosition(soundSlot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const layout = soundSlot.parentElement as HTMLElement;

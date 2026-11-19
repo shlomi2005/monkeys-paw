@@ -32,6 +32,7 @@ Three design choices shape everything else:
 | A8 | The API sends 503 both when over budget and when in examples-only mode, and 429 is not used by the server. | The client treats 429 and 503 on grant/bind as "the paw is resting" and switches to examples-only play. It also maps 429 in case a proxy emits it. |
 | A9 | Req 3.3 says a 503 on grant shows an error and no Grant. iron-rules §5 says over budget serves cached examples. | After a 503 the client shows the error (Req 3.3), flags `examplesOnly`, and from then on an unmodified example card replays its cached Grant locally. Bind in this mode is not possible; the card shows a resting message. |
 | A10 | Req 6.2 names `monkeys-paw-<wishId>.zip` but `POST /api/export` returns JSON (`SpecExport`), not a zip. | The client builds the zip from `requirementsMd` and `propertiesMd` with its own store-only zip writer (`export/zip.ts`, no dependency). |
+| A11 | Req 7.3 and task 36 expect four CC0 or original MP3/WAV files (about 128 kbps, under 500 KB) under `public/audio/`, with an `ASSETS.md` licence note. | **The four cues are original and synthesized in code at runtime with the Web Audio API** (oscillators, noise buffers filled by our own seeded generator, filters and gain envelopes). There is no audio file, no base64 audio, no audio library and no download. Why: (1) originality and licence safety in a public repo and a contest video that forbids third-party copyrighted material, with nothing to attribute or audit; (2) zero download, so the Audio budget is 0 bytes and the player chunk is about 1.3 KB gz; (3) it still satisfies Req 7.3 "CC0/original" (code we wrote is original). Only the "~128kbps MP3 or WAV, total <500KB" format clause of Req 7.3 does not apply. `public/audio/` and `ASSETS.md` are not created. |
 
 ## Architecture
 
@@ -83,7 +84,6 @@ apps/web/
 │   ├── copy-paw-assets.mjs     # docs/art/paw/*.glb, *.jpg -> public/paw/ (predev, prebuild)
 │   └── check-bundle-budget.mjs # reads dist/.vite/manifest.json, gzips, enforces budgets
 ├── public/paw/                 # generated copy, gitignored
-├── public/audio/               # CC0 / original cues, total < 500 KB
 ├── e2e/                        # Playwright specs and screenshot receipts
 └── src/
     ├── main.tsx   App.tsx
@@ -102,7 +102,8 @@ apps/web/
     │                 OpenInKiroDialog.tsx  SoundToggle.tsx  LiveRegion.tsx  GrantedStamp.tsx
     │                 PawStateText.tsx  ShareCard.tsx (optional, Req 6.3)
     ├── hooks/        use-media-query.ts  use-reduced-motion.ts  use-dialog-focus.ts
-    ├── audio/        sound-player.ts  sound-preference.ts
+    ├── audio/        sound-player.ts (lazy chunk)  sound-controller.ts  sound-preference.ts
+    │                 cue-triggers.ts  sound-types.ts  fake-audio-context.ts (test support)
     └── styles/       tokens.css  fonts.css  *.module.css (CSS Modules, one approach for the whole app)
 ```
 
@@ -124,7 +125,7 @@ One full-viewport parchment plate (`PlateFrame`). Back to front:
    `clamp()` from the viewport width (desktop: also from its height). The poster fills the box and the canvas sits on top of it (see section 2).
 6. Five `CurseCircle` buttons in `CircleRing`.
 7. The wish line band under the plate, then the example calling cards.
-8. `SoundToggle` top-right (desktop) or bottom-right (mobile, 40 px tap target). `LiveRegion` is visually hidden.
+8. `SoundToggle` top-right (desktop) or bottom-right (mobile, 48 px tap target). `LiveRegion` is visually hidden.
 
 #### Circle positions (desktop, ≥768 px)
 
@@ -756,19 +757,40 @@ toggle works for the session and is simply not remembered.
 
 Everything else lives in memory and disappears on refresh or close (Req 11.1, 11.2). The app sets no cookies, uses
 no `sessionStorage`, `IndexedDB`, Cache API or service worker, adds no analytics or telemetry, and loads no
-third-party scripts, fonts or decoders (Req 11.3, 11.5). Fonts and audio are self-hosted. A Playwright test runs a
+third-party scripts, fonts or decoders (Req 11.3, 11.5). Fonts are self-hosted and the sounds are made in code (A11). A Playwright test runs a
 full round and asserts: `localStorage` keys ⊆ `{ pawSoundEnabled }`, `sessionStorage` empty, `document.cookie`
 empty, `location.href` unchanged, no request URL contains the wish text, and every request goes to the app origin
 or `VITE_API_BASE_URL`.
 
 #### Sound (Req 7)
 
-`SoundToggle` is a `<button aria-pressed>` with an engraved speaker icon (about 20 px visual, 40 px target),
-default off. `sound-player.ts` is imported lazily the first time sound is enabled (the click is the user gesture
-that creates the `AudioContext`). It fetches and decodes four cues on demand: creak 500 ms (curl), stamp 300 ms
-("Granted."), sigh 800 ms (open), crack 200 ms (seal cracks). All four are CC0 or original and total under 500 KB.
-Peak gain is −12 dB (about 0.25). Starting a new cue ramps the previous gain to 0 over 100 ms. Cues are triggered
-from the runner on the same events that drive the scene, and are skipped entirely when sound is off.
+`SoundToggle` is a `<button aria-pressed aria-label="Sound">` with an inline engraved speaker icon (SVG, `aria-hidden`,
+about 20 px visual, sepia, struck through when off) in a 48 px hit area with the focus ring. It is off by default.
+`sound-preference.ts` reads and writes `localStorage['pawSoundEnabled']` only, inside try/catch.
+
+All four cues are original and synthesized at runtime (A11). Each is a small pure recipe that schedules nodes on a
+given context: creak 500 ms (a low sawtooth with jittered pitch through a bandpass, plus a little filtered noise),
+stamp 300 ms (a low sine thump with a fast pitch drop, plus a short noise click), sigh 800 ms (bandpass noise with a
+slow attack and release and a falling centre frequency), crack 200 ms (five very short high-passed noise bursts).
+Noise buffers are filled by our own seeded generator. No audio file is loaded, nothing is decoded, and the player
+makes no network request.
+
+`sound-controller.ts` stays in the entry chunk and is tiny. While sound is off it does nothing: no import, no
+`AudioContext`, no nodes. `sound-player.ts` is its own lazy chunk, reached only by `import('./sound-player')`
+(`entry-graph.test.ts` asserts it). The `AudioContext` is created inside a user gesture and handed to the player:
+inside the toggle's click when the user turns sound on, or, when sound was restored as on after a reload, inside the
+first `pointerdown` or `keydown` anywhere on the page (a one-shot listener, never earlier). A suspended context is
+resumed. If `AudioContext` is missing or throws, or the chunk fails to load, sound stays silent and the toggle returns
+to off, with no error shown.
+
+Mix: the master gain is 0.25 (about -12 dB) and every envelope before it stays at or below 1, with the layers of one
+cue never summing above 1, so nothing clips. Starting a cue ramps the previous cue's gain to 0 over 100 ms.
+
+Triggers come from the session (`cue-triggers.ts`, called from the effect runner's step on each accepted transition,
+so they match the scene): creak when a `play` curl starts (under reduced motion there is no `play`, so one creak per
+`snap` that adds curls); stamp when "Granted." appears (`grantedSeq` increments; it is sent last, so when it lands
+with the first curl it is the cue that stays); sigh when a `play` open starts; crack once when Stop ends the round
+with at least one curse still open (Req 6.7). Under reduced motion an open is a `snap` and has no sigh.
 
 ### 7. Accessibility (Req 8, 2.9, 2.10, 6.9)
 
@@ -904,7 +926,7 @@ report for humans.
 | Fonts | ≤ 140 KB total, WOFF2 Latin subsets, OFL, `font-display: swap`, fallback faces with `size-adjust` | file sizes in `dist`, CLS check below |
 | Poster | 57,458 B (as shipped), `<link rel="preload" as="image" fetchpriority="high">` | file size, request waterfall |
 | GLB | web 2,867,740 B, mobile 1,952,212 B. Exactly one is requested | Playwright request log at 1280 px and at 390 px wide |
-| Audio | ≤ 500 KB total, requested only after sound is enabled | file sizes, Playwright request log |
+| Audio | 0 bytes of audio: the cues are synthesized in code (A11). The lazy player chunk has its own small size (about 1.3 KB gz, 3.2 KB raw) and is requested only after sound is enabled | build output, Playwright request log |
 | FCP | ≤ 1.5 s on fast 3G | Lighthouse CI, mobile preset, throttling 1.6 Mbps down, 150 ms RTT, 4× CPU slowdown |
 | LCP | ≤ 3.0 s on fast 3G (the poster is the LCP element) | same Lighthouse run |
 | CLS | < 0.1 across load, grant, curls, card open, export | Lighthouse, plus a Playwright `PerformanceObserver('layout-shift')` over a full round |
@@ -1018,7 +1040,7 @@ Model output is untrusted (iron-rules §6). The client validates every response 
 | Scene render error | An error boundary around `PawScene` only, same fallback as above |
 | App render error | App-level boundary shows "The paw has fainted. Refresh the page." (all state is in memory and is lost, by design) |
 | `localStorage` blocked | Sound toggle works for the session and is not remembered |
-| Audio file missing or decode error | Sound stays silent, the toggle returns to off, no error shown |
+| `AudioContext` missing or throws, or the player chunk fails to load | Sound stays silent, the toggle returns to off, no error shown |
 | Reducer sees an impossible state (for example a pop on an empty stack) | Dev builds throw an assertion, production builds treat it as the all-closed case and continue |
 
 ## Testing Strategy

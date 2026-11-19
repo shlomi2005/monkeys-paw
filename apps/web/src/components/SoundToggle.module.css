@@ -1,0 +1,37 @@
+/*
+ * SoundToggle: an engraved speaker, about 20 px, in sepia. The button around it is a 48 px hit area (Req 9.3) with the
+ * shared focus ring. It has no fill of its own: the icon sits on the plate.
+ */
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 48px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sepia);
+  cursor: pointer;
+  transition: background-color var(--dur-seal) ease-out;
+}
+
+.toggle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+@media (hover: hover) {
+  .toggle:hover {
+    background: color-mix(in srgb, var(--sepia) 16%, transparent);
+  }
+}

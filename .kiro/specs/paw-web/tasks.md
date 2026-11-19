@@ -191,14 +191,21 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## Sound
 
-- [ ] 35. `audio/sound-preference.ts` (only `localStorage['pawSoundEnabled']`, try/catch, value `"1"` or `"0"`) and
+- [x] 35. `audio/sound-preference.ts` (only `localStorage['pawSoundEnabled']`, try/catch, value `"1"` or `"0"`) and
   `SoundToggle` (`aria-pressed`, off by default, restored on reload). Unit test that no other key is ever written and
   that blocked storage does not throw. (Req 7.1, 7.4, 11.1)
-- [ ] 36. `audio/sound-player.ts`, loaded lazily on first enable: creak 500 ms, stamp 300 ms, sigh 800 ms, crack 200 ms,
+  Done: the toggle is a 48 px `<button aria-pressed aria-label="Sound">` in App's `data-slot="sound"`. The state lives in
+  `audio/sound-controller.ts` (entry chunk, tiny), which the session owns, so the toggle and the cue triggers share it.
+- [x] 36. `audio/sound-player.ts`, loaded lazily on first enable: creak 500 ms, stamp 300 ms, sigh 800 ms, crack 200 ms,
   peak gain about −12 dB, previous cue fades out over 100 ms, cues triggered from the session on curl, "Granted.",
   open and crack. Add the four CC0 or original audio files under `public/audio/` (total under 500 KB) with a short
   `ASSETS.md` note recording source and licence for each file. Test the player with a fake `AudioContext`.
   (Req 7.2, 7.3, 7.5, 12.4)
+  Deviation (design.md A11): the cues are original and synthesized in code with Web Audio, so there are no audio files,
+  no `public/audio/` and no `ASSETS.md`. Only the "~128kbps MP3 or WAV" format clause of Req 7.3 does not apply.
+  Done: `sound-player.ts` is its own lazy chunk (`entry-graph.test.ts` asserts it). The `AudioContext` is created inside
+  the toggle click, or inside the first `pointerdown` or `keydown` after a restored-on reload. `cue-triggers.ts` maps the
+  session's transitions to cues. Tests use `audio/fake-audio-context.ts`.
 
 ## End screen and export
 
