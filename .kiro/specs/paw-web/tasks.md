@@ -54,7 +54,7 @@ and are expected to fail until the matching implementation task lands. Property 
   `fingerText`, `medal`, `showStop`, `showExport`, `card`, and `isQuiescent`. Write **[PBT]** P15 (medal equals
   `computeIntegrity(projectGrant(ctx))` and the `Integrity N/5: M closed, O open` text) and P16 (digit and circle
   mapping) first, then implement. Add example tests for the labels in design section 7. (Req 6.8, 5.8, 8.4, 6.6)
-- [ ] 9. `state/paw-announcer.ts`: pure `describe(prev, next, event)` returning the live-region text from the design's
+- [x] 9. `state/paw-announcer.ts`: pure `describe(prev, next, event)` returning the live-region text from the design's
   table. Unit-test each row, including the reduced-motion single message. (Req 8.4, 2.9, 6.8)
 
 ## Joint pose

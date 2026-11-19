@@ -728,9 +728,11 @@ One visually hidden `<div aria-live="polite" aria-atomic="true">`. The announcer
 | Each curl ends (`curl_done`) | "Curse i, <type label>: <story>" (one message per curse, so a screen reader is not flooded) |
 | Reduced motion, Grant arrives | One message: "Granted. N curses." followed by each curse as above |
 | Verdict closed | "Closed. The seal holds. <reason>. Finger opens." |
+| Verdict closed, the card's curse was already closed (nothing pops) | "Closed. The seal holds. <reason>." |
+| Verdict closed that ends the round, reduced motion | The close text above, then " The paw rests." (there is no `rest_done`) |
 | Verdict not closed | "Not closed. The paw remembers. <reason>" |
-| Error | the in-character message from `api-messages.ts` |
-| Round ends, all closed | "The paw rests." |
+| Error | the in-character message from `api-messages.ts`, added by the session (tasks 14 and 18); `describe` returns null for `grant_failed` and `bind_failed` |
+| Round ends, all closed | "The paw rests." on the accepted `rest_done`, after the last finger has opened (motion on only) |
 | Round ends, stopped | "You stopped. N curses are still open." |
 | Rewrite | "The wish is unmade." |
 
