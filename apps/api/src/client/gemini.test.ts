@@ -345,15 +345,13 @@ describe('Task 101: Gemini structured output schemas', () => {
     const schema = getSchema(client, 'grantWishSchema');
 
     // Top-level required fields
-    expect(schema.required).toContain('narration');
-    expect(schema.required).toContain('curses');
+    expect([...schema.required].sort()).toEqual(['curses', 'narration', 'userStory']);
+    expect(Object.keys(schema.properties).sort()).toEqual(['curses', 'narration', 'userStory']);
 
     // Curse array items
     const curseItems = schema.properties.curses.items;
-    expect(curseItems.required).toContain('id');
-    expect(curseItems.required).toContain('type');
-    expect(curseItems.required).toContain('story');
-    expect(curseItems.required).toContain('loophole');
+    expect([...curseItems.required].sort()).toEqual(['loophole', 'story', 'type']);
+    expect(curseItems.properties.id).toBeUndefined();
 
     // Curse type enum includes all 10 taxonomy tags
     const typeEnum = curseItems.properties.type.enum;
@@ -379,11 +377,8 @@ describe('Task 101: Gemini structured output schemas', () => {
     const client = new GeminiModelClient({ apiKey: FAKE_KEY });
     const schema = getSchema(client, 'verdictSchema');
 
-    expect(schema.required).toContain('curseId');
-    expect(schema.required).toContain('closed');
-    expect(schema.required).toContain('reason');
-    expect(schema.required).toContain('judgedAt');
-    // property is optional, so not in required
+    expect([...schema.required].sort()).toEqual(['closed', 'property', 'reason']);
+    expect(Object.keys(schema.properties).sort()).toEqual(['closed', 'property', 'reason']);
   });
 
   it('quality gate schema has required properties', () => {
@@ -409,10 +404,8 @@ describe('Task 101: Gemini structured output schemas', () => {
     const client = new GeminiModelClient({ apiKey: FAKE_KEY });
     const schema = getSchema(client, 'replaceCurseSchema');
 
-    expect(schema.required).toContain('id');
-    expect(schema.required).toContain('type');
-    expect(schema.required).toContain('story');
-    expect(schema.required).toContain('loophole');
+    expect([...schema.required].sort()).toEqual(['loophole', 'story', 'type']);
+    expect(schema.properties.id).toBeUndefined();
 
     // Type enum includes all 10 taxonomy tags
     const typeEnum = schema.properties.type.enum;

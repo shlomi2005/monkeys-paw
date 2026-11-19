@@ -40,23 +40,23 @@ Guardrails (iron rules): PG-13 only. No gore. No real people. No hate. Refuse wi
 Return STRICT JSON ONLY — no prose, no markdown fences — matching this shape:
 {
   "narration": "<1–2 sentence dry comedy-horror, max 25 words>",
+  "userStory": "As a <role>, I want <capability>, so that <benefit>.",
   "curses": [
     {
-      "id": "<ignored, will be assigned by the system>",
       "type": "<one of the tags above>",
       "story": "<max 2 sentences, max 30 words>",
       "loophole": "<the exact words in the wish that create the loophole>"
     }
   ]
 }
-The "curses" array MUST contain between 3 and 5 items, each with a distinct "type".`;
+The "curses" array MUST contain between 3 and 5 items, each with a distinct "type". Do not include ids; the system assigns them.`;
 }
 
 /** Genie (narrator) — tells the literal grant in 1–2 sentences, dry comedy-horror. */
 export function buildGeniePrompt(wish: Wish): string {
   return `
 
-You are also the Genie, the narrator. In the same JSON, set "narration" to the literal grant of the wish in 1 or 2 sentences, in a dry comedy-horror voice. The wish is granted exactly as written — nothing more, nothing less. Wish: ${wish.text}${contextLine(wish)}`;
+You are also the Genie, the narrator. In the same JSON, set "narration" to the literal grant of the wish in 1 or 2 sentences, in a dry comedy-horror voice. The wish is granted exactly as written — nothing more, nothing less. Also set "userStory" to ONE sentence in Kiro's form "As a <role>, I want <capability>, so that <benefit>." for THIS wish and its context, max 40 words. It states the user's need in plain words, with no talk about specs, loopholes, curses or the Paw. Wish: ${wish.text}${contextLine(wish)}`;
 }
 
 /**
@@ -130,17 +130,16 @@ Binding:
 - kind: ${binding ? binding.kind : 'none'}
 - clause: ${binding ? binding.clause : 'none'}
 
-Return STRICT JSON ONLY matching this Verdict shape:
+Return STRICT JSON ONLY matching this shape:
 {
-  "curseId": "${curse.id}",
   "closed": boolean,
   "reason": string,
-  "judgedAt": number,
-  "property": "if closed is true, a one-line correctness property for fast-check; else omit"
+  "property": string
 }
 
 Set "closed" to true only if the binding closes the loophole; otherwise false. The "reason" must explain the ruling.
-If closed is true, emit a "property" field: a concise, testable property (e.g. "Only admins may delete projects").
+If closed is true, "property" is ONE universally quantified, testable sentence about the system's behaviour that the binding guarantees. It starts with "For any" and is at most 40 words (e.g. "For any project whose owner has left, at least one member can still delete it.").
+If closed is false, "property" is the empty string.
 Emit JSON only — no prose outside the object.`;
 }
 
@@ -160,5 +159,6 @@ Rejected curse:
 Curse taxonomy tags (use one EXACTLY): permissions, time, money, scale, abuse, privacy, accessibility, data-loss, concurrency, edge-input. PG-13 only. No real people. No gore. No hate.
 
 Return STRICT JSON ONLY for a single curse object:
-{ "id": "<stable unique id>", "type": "<one tag>", "story": "<max 2 sentences>", "loophole": "<exact words in the wish>" }`;
+{ "type": "<one tag>", "story": "<max 2 sentences>", "loophole": "<exact words in the wish>" }
+Do not include an id; the system keeps the original one.`;
 }

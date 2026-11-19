@@ -113,4 +113,77 @@ describe('judgeBinding (task 12)', () => {
 
     expect(verdict.curseId).toBe('curse-xyz');
   });
+
+  it('keeps the property of a closed verdict', async () => {
+    const curse = makeCurse();
+    const binding = proposeBinding(curse, 'Admins can also delete', 'ears-clause');
+    const property = 'For any project whose owner has left, at least one member can still delete it.';
+
+    const verdict = await judgeBinding(
+      curse,
+      binding,
+      fakeModel({ closed: true, reason: 'Closed.', property: `  ${property}  ` }),
+    );
+
+    expect(verdict.closed).toBe(true);
+    expect(verdict.property).toBe(property);
+  });
+
+  it('drops the property of a not-closed verdict', async () => {
+    const curse = makeCurse();
+    const binding = proposeBinding(curse, 'Only the owner', 'rewrite');
+
+    const verdict = await judgeBinding(
+      curse,
+      binding,
+      fakeModel({ closed: false, reason: 'Still open.', property: 'For any project, anything.' }),
+    );
+
+    expect(verdict.closed).toBe(false);
+    expect('property' in verdict).toBe(false);
+  });
+
+  it('drops a blank property of a closed verdict', async () => {
+    const curse = makeCurse();
+    const binding = proposeBinding(curse, 'a binding', 'rewrite');
+
+    const verdict = await judgeBinding(
+      curse,
+      binding,
+      fakeModel({ closed: true, reason: 'Closed.', property: '   ' }),
+    );
+
+    expect(verdict.closed).toBe(true);
+    expect('property' in verdict).toBe(false);
+  });
+
+  it('parses a model answer without curseId and judgedAt, using the curse id', async () => {
+    const curse = makeCurse('curse-3');
+    const binding = proposeBinding(curse, 'a binding', 'rewrite');
+
+    const verdict = await judgeBinding(
+      curse,
+      binding,
+      fakeModel({ closed: false, reason: 'Not yet.', property: '' }),
+    );
+
+    expect(verdict.curseId).toBe('curse-3');
+    expect(verdict.closed).toBe(false);
+    expect(verdict.reason).toBe('Not yet.');
+    expect(verdict.judgedAt).toBeGreaterThan(0);
+  });
+
+  it('ignores a curseId the model invents', async () => {
+    const curse = makeCurse('curse-1');
+    const binding = proposeBinding(curse, 'a binding', 'rewrite');
+
+    const verdict = await judgeBinding(
+      curse,
+      binding,
+      fakeModel({ curseId: 'made-up', closed: false, reason: 'No.', judgedAt: 5 }),
+    );
+
+    expect(verdict.curseId).toBe('curse-1');
+    expect(verdict.judgedAt).toBeGreaterThan(5);
+  });
 });

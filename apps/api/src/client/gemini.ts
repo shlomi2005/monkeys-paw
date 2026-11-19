@@ -223,7 +223,7 @@ export class GeminiModelClient implements ModelClient {
 
   /**
    * Task 101: Grant output schema for buildPawPrompt + buildGeniePrompt.
-   * Matches GrantSchema: {narration, userStory?, curses[{id, type, story, loophole}]}
+   * Model-facing shape: {narration, userStory, curses[{type, story, loophole}]}; the system assigns ids.
    */
   private grantWishSchema(): any {
     return {
@@ -236,7 +236,6 @@ export class GeminiModelClient implements ModelClient {
           items: {
             type: 'object',
             properties: {
-              id: { type: 'string' },
               type: {
                 type: 'string',
                 enum: [
@@ -255,29 +254,27 @@ export class GeminiModelClient implements ModelClient {
               story: { type: 'string' },
               loophole: { type: 'string' },
             },
-            required: ['id', 'type', 'story', 'loophole'],
+            required: ['type', 'story', 'loophole'],
           },
         },
       },
-      required: ['narration', 'curses'],
+      required: ['narration', 'userStory', 'curses'],
     };
   }
 
   /**
    * Task 101: Verdict schema for buildJudgePrompt (verdict mode).
-   * Matches VerdictSchema: {curseId, closed, reason, judgedAt, property?}
+   * Model-facing shape: {closed, reason, property}; the system adds curseId and judgedAt.
    */
   private verdictSchema(): any {
     return {
       type: 'object',
       properties: {
-        curseId: { type: 'string' },
         closed: { type: 'boolean' },
         reason: { type: 'string' },
-        judgedAt: { type: 'number' },
         property: { type: 'string' },
       },
-      required: ['curseId', 'closed', 'reason', 'judgedAt'],
+      required: ['closed', 'reason', 'property'],
     };
   }
 
@@ -317,13 +314,12 @@ export class GeminiModelClient implements ModelClient {
 
   /**
    * Task 101: Curse replacement schema for buildReplacementPrompt.
-   * Matches a single curse: {id, type, story, loophole}
+   * Matches a single curse: {type, story, loophole}; the original id is kept.
    */
   private replaceCurseSchema(): any {
     return {
       type: 'object',
       properties: {
-        id: { type: 'string' },
         type: {
           type: 'string',
           enum: [
@@ -342,7 +338,7 @@ export class GeminiModelClient implements ModelClient {
         story: { type: 'string' },
         loophole: { type: 'string' },
       },
-      required: ['id', 'type', 'story', 'loophole'],
+      required: ['type', 'story', 'loophole'],
     };
   }
 }

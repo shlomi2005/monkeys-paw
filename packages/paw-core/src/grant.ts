@@ -99,7 +99,8 @@ async function regenerateCurse(wish: Wish, curse: Curse, model: ModelClient): Pr
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const raw = await model.generate(prompt);
-      const parsed = CurseSchema.parse(toJson(raw));
+      // Task 93: the model never supplies ids; the replacement keeps the original's id.
+      const parsed = CurseSchema.parse({ ...asObject(toJson(raw)), id: curse.id });
       return { ...parsed, status: 'open' as const };
     } catch {
       // retry once, then keep the original
@@ -164,11 +165,13 @@ export async function grantWish(wish: Wish, model: ModelClient): Promise<Grant> 
         curses.push(await ensureSpecific(wish, curse, model, verdictMap));
       }
 
+      const userStory = parsed.userStory?.trim();
+
       return {
         wishId: parsed.wishId,
         narration: parsed.narration,
         curses,
-        userStory: parsed.userStory,
+        ...(userStory ? { userStory } : {}),
       };
     } catch {
       // retry once, then fall back below

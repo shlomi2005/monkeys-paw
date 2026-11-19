@@ -31,8 +31,18 @@ export async function judgeBinding(
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const raw = await model.generate(prompt);
-      const parsed = VerdictSchema.parse(toJson(raw)) as Verdict;
-      return { ...parsed, judgedAt: Date.now() };
+      // Task 93: the model never supplies ids or timestamps; we inject them.
+      const data = toJson(raw);
+      if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error('expected a JSON object');
+      }
+      const { property, ...rest } = VerdictSchema.parse({
+        ...(data as Record<string, unknown>),
+        curseId: curse.id,
+        judgedAt: Date.now(),
+      }) as Verdict;
+      const trimmed = property?.trim();
+      return rest.closed && trimmed ? { ...rest, property: trimmed } : rest;
     } catch {
       // retry once, then fall back below
     }

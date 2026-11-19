@@ -58,7 +58,6 @@ function fakeModel(grantResponse: (callNum: number) => unknown): ModelClient {
       }
       if (prompt.includes('REPLACE_CURSE')) {
         return JSON.stringify({
-          id: 'replaced',
           type: 'edge-input',
           story: 'A replacement curse, specific to the wish.',
           loophole: 'replacement loophole words',
@@ -113,5 +112,90 @@ describe('grantWish (task 9)', () => {
     expect(grant.curses).toHaveLength(1);
     expect(grant.narration.length).toBeGreaterThan(0);
     expect(grant.curses[0].status).toBe('open');
+  });
+
+  it('keeps a non-blank userStory, trimmed', async () => {
+    const story = 'As a clinic owner, I want only owners to delete projects, so that nothing vanishes.';
+    const model = fakeModel(() => ({ ...JSON.parse(VALID_GRANT_JSON), userStory: `  ${story}\n` }));
+    const grant = await grantWish(makeWish(), model);
+
+    expect(grant.userStory).toBe(story);
+  });
+
+  it('drops a blank userStory', async () => {
+    const model = fakeModel(() => ({ ...JSON.parse(VALID_GRANT_JSON), userStory: '  \n ' }));
+    const grant = await grantWish(makeWish(), model);
+
+    expect('userStory' in grant).toBe(false);
+  });
+
+  it('grants without a userStory when the model gives none', async () => {
+    const model = fakeModel(() => VALID_GRANT_JSON);
+    const grant = await grantWish(makeWish(), model);
+
+    expect(grant.curses.length).toBeGreaterThanOrEqual(3);
+    expect(grant.userStory).toBeUndefined();
+  });
+
+  it('assigns curse-N ids and keeps them when a generic curse is replaced', async () => {
+    const replaceReplies: unknown[] = [];
+    const model: ModelClient = {
+      async generate(prompt: string): Promise<unknown> {
+        if (prompt.includes('GRANT_WISH')) return VALID_GRANT_JSON;
+        if (prompt.includes('JUDGE_BATCH_QUALITY')) {
+          return JSON.stringify(
+            ['curse-0', 'curse-1', 'curse-2'].map((curseId) => ({
+              curseId,
+              specific: curseId !== 'curse-1',
+              reason: 'test',
+            })),
+          );
+        }
+        if (prompt.includes('REPLACE_CURSE')) {
+          const reply = {
+            type: 'edge-input',
+            story: 'A replacement curse, specific to the wish.',
+            loophole: 'replacement loophole words',
+          };
+          replaceReplies.push(reply);
+          return JSON.stringify(reply);
+        }
+        throw new Error('unexpected prompt');
+      },
+    };
+
+    const grant = await grantWish(makeWish(), model);
+
+    expect(replaceReplies.length).toBeGreaterThan(0);
+    expect(grant.curses.map((c) => c.id)).toEqual(['curse-0', 'curse-1', 'curse-2']);
+    expect(grant.curses[1].type).toBe('edge-input');
+    expect(grant.curses[1].loophole).toBe('replacement loophole words');
+  });
+
+  it('keeps the original id even if the model writes one for the replacement', async () => {
+    const model: ModelClient = {
+      async generate(prompt: string): Promise<unknown> {
+        if (prompt.includes('GRANT_WISH')) return VALID_GRANT_JSON;
+        if (prompt.includes('JUDGE_BATCH_QUALITY')) {
+          return JSON.stringify(
+            ['curse-0', 'curse-1', 'curse-2'].map((curseId) => ({
+              curseId,
+              specific: curseId !== 'curse-2',
+              reason: 'test',
+            })),
+          );
+        }
+        return JSON.stringify({
+          id: 'replaced',
+          type: 'edge-input',
+          story: 'A replacement curse, specific to the wish.',
+          loophole: 'replacement loophole words',
+        });
+      },
+    };
+
+    const grant = await grantWish(makeWish(), model);
+
+    expect(grant.curses.map((c) => c.id)).toEqual(['curse-0', 'curse-1', 'curse-2']);
   });
 });
