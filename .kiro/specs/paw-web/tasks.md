@@ -242,10 +242,11 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## Ink shader (separate spec)
 
-- [ ] 41. Placeholder, no work in this spec: the cross-hatching ink shader (Req 2.4) and the rope-textured cord detail
+- [x] 41. Placeholder, no work in this spec: the cross-hatching ink shader (Req 2.4) and the rope-textured cord detail
   (Req 2.5) belong to a separate spec, `.kiro/specs/paw-ink-shader/`, to be written later. The only integration point is
   `usePawMaterial` in `scene/use-paw-material.ts` (task 29). The shader spec must replace that hook's body and touch no
   other file listed here. Leave this task unchecked until that spec ships. (Req 2.4, 2.5)
+  Shipped by `.kiro/specs/paw-ink-shader/`; `PAW_MATERIAL_STYLE` in `use-paw-material.ts` switches back to the placeholder.
 
 ## End-to-end, receipts and budgets
 

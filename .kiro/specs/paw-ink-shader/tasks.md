@@ -30,7 +30,7 @@ is possible in Vitest; the visual check is task 5 (the reviewer's). Only task 4 
   `createPawMaterial` and `PAW_SEPIA_TINT`. Extend `use-paw-material.test.ts` (the hook returns what `selectPawMaterial(PAW_MATERIAL_STYLE, scene, createPawMaterial)` returns for a GLB-like scene;
   do not assert the value of `PAW_MATERIAL_STYLE`, so a revert needs no test change; the placeholder tests are unchanged and pass). Run the whole `apps/web` suite, the type
   check and lint. No other existing file changes. (Req 1, 8, 9, 10)
-- [ ] 5. Browser check and tuning. **Reviewer task, not an agent task:** agents here cannot run a browser or a dev server.
+- [x] 5. Browser check and tuning. **Reviewer task, not an agent task:** agents here cannot run a browser or a dev server.
   The reviewer runs the app on a dev server with a stubbed API, compares `'ink'` and `'placeholder'` through the
   `PAW_MATERIAL_STYLE` switch at 1x, 2x and a 390 px phone width, tunes the light window, spacing and widths against
   `docs/art/concept-victorian.png`, and sends the tuned values back. Checklist: continuous lines on the fingers, no red
@@ -38,7 +38,7 @@ is possible in Vitest; the visual check is task 5 (the reviewer's). Only task 4 
   60 fps during a curl, unchanged reduced-motion and no-WebGL behaviour, and the 3D chunk (gz) under 330 KB. The agent then
   writes the returned values into `INK_DEFAULTS` and the design.md defaults table, and records the chunk size. (Req 4, 5.5, 7, 8)
   First pass applied (direction bins, analytic antialias width, new light window and tone; design.md "Tuned in the
-  browser check"). Not ticked: the reviewer checks again.
-- [ ] 6. Tick paw-web task 41 in `.kiro/specs/paw-web/tasks.md` with a one-line note: "Shipped by
+  browser check"). Reviewer check passed after the first pass: hatching visible, cord red without specks, no console error, reduced motion and no-WebGL unchanged, 3D chunk 278.95 KB gz; 60 fps not measured on real hardware.
+- [x] 6. Tick paw-web task 41 in `.kiro/specs/paw-web/tasks.md` with a one-line note: "Shipped by
   `.kiro/specs/paw-ink-shader/`; `PAW_MATERIAL_STYLE` in `use-paw-material.ts` switches back to the placeholder." Do this
   only after tasks 1–5 pass. (Req 12.3, paw-web task 41)
