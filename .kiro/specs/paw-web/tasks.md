@@ -67,7 +67,7 @@ and are expected to fail until the matching implementation task lands. Property 
   `scene/paw-controls.ts` (zod schema for `runtime-controls.json`, imported through a Vite alias to `docs/art/paw/`
   with `server.fs.allow`). Contract test: 16 joints present, the 15 driven joints map to digits exactly as in
   Req 2.7, `wrist` has no operations, bind quaternions are unit length. (Req 2.7)
-- [ ] 12. **[PBT]** `scene/easing.ts`, `scene/anim-sampler.ts`, `scene/rest-pose.ts`: write P14 first, then implement
+- [x] 12. **[PBT]** `scene/easing.ts`, `scene/anim-sampler.ts`, `scene/rest-pose.ts`: write P14 first, then implement
   `cubicOut`, `smoothstep`, curl 500 ms, open 1208 ms, rest 2000 ms sink and tilt (constants `REST_SINK`,
   `REST_TILT_DEG`). (Req 2.7, 2.8, 6.1)
 - [ ] 13. `scene/camera-fit.ts` (`fitDistance`, test that a 1-unit paw at fov 30° and 1:1 aspect fits with margin, camera
