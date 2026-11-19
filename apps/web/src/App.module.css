@@ -2,11 +2,25 @@
  * App layout (design.md sections 1 and 7).
  *
  * The DOM order is the tab order: wish line, examples, circles, binding card, Stop, export slot, sound slot. This file
- * only decides where each piece is drawn, with grid areas. There is no `order` and no positive tabindex.
+ * only decides where each piece is drawn, with grid areas and positioning. There is no `order` and no positive tabindex.
  *
- * Mobile first (under 768 px): one column. The paw is small at the top, the circles are a vertical list under it.
- * From 768 px: the paw, the decoration and the circle ring share one grid area ("stage"), so the ring (a zero-size
- * anchor at the centre of its box) and the paw box have the same centre.
+ * Mobile (under 768 px): one column. The visual order is the tab order: the paw with its state text, the stamp and the
+ * narration, the wish line, the examples, then the circle list, then the medal and the actions. The "Granted." stamp
+ * is drawn over the lower part of the paw box. The stamp area has one reserved height (the narration, 5 lines), so the
+ * Grant arriving does not move the wish line.
+ *
+ * From 768 px: ONE grid area ("stage") holds the paw, the decoration, the circle ring, the stamp, the narration, the
+ * medal and the actions, stacked in the same cell. The wish line and the examples follow. There is no stamp row and no
+ * medal row. The ring (a zero-size anchor at the centre of its box) and the paw box have the same centre. The stage
+ * height is fixed by --stage-top and --stage-bottom, so a Grant arriving moves nothing:
+ *   - the stamp is drawn over the lower part of the paw box, the state text sits just under the box;
+ *   - 1024 px and up: the narration sits in the free column under the paw between the two lower circles, whose
+ *     captions go beside their discs on the outer side; the medal (left) and the actions (right) sit in the lower
+ *     corners, under the lower circles' labels;
+ *   - 768 to 1023 px (the plate is too narrow for that column): the lower captions stay under their discs, the
+ *     narration is a band under them, and the medal and actions are in a row under the narration.
+ * The paw box is sized from the viewport height as well as the width (tokens.css), so the stage and the first row of
+ * the wish line fit a 1440x900 or a 1280x800 screen.
  */
 .page {
   /* Nothing may add a horizontal scrollbar at 360 px or at 640 px (200% zoom). */
@@ -16,16 +30,20 @@
 .layout {
   /* The plate content padding (PlateFrame.module.css), so the decoration layer can reach the plate edge. */
   --content-pad: calc(var(--rule-inner) + 1rem);
+  /* Room under the paw box for its state text ("3 fingers curled."). */
+  --state-zone: 2.5rem;
+  /* Lines of the narration that the layout reserves room for. The narration is clipped (with an ellipsis) after that. */
+  --narration-lines: 5;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     'paw'
     'stamp'
+    'wish'
+    'examples'
     'ring'
     'medal'
-    'actions'
-    'wish'
-    'examples';
+    'actions';
   row-gap: 0.75rem;
   align-items: start;
 }
@@ -54,7 +72,7 @@
   height: var(--paw-size);
   /* Room above for the ray disc (0.35 of the box beyond each edge), and under for the paw state text. */
   margin-top: calc(var(--paw-size) * 0.35 - 1rem);
-  margin-bottom: 3.5rem;
+  margin-bottom: var(--state-zone);
 }
 
 .stateText {
@@ -66,12 +84,43 @@
   transform: translateX(-50%);
 }
 
+/*
+ * The stamp slot holds GrantedStamp. Its frame is `display: contents`, so the stamp and the narration are placed on
+ * their own (selected by their data attributes, which GrantedStamp sets). Mobile: a row with a reserved height for
+ * the narration; the stamp is lifted out of it, over the lower part of the paw box above.
+ */
 .stampSlot {
   grid-area: stamp;
   position: relative;
   z-index: 1;
-  /* One reserved height, so the Grant arriving moves nothing. */
-  min-height: 7.5rem;
+  /* One reserved height (--narration-lines of the narration), so the Grant arriving moves nothing. */
+  min-height: calc(var(--narration-lines) * 1.125rem * var(--line-height));
+}
+
+.stampSlot [data-granted-stamp] {
+  display: contents;
+}
+
+.stampSlot [data-stamp] {
+  position: absolute;
+  right: 0;
+  left: 0;
+  /* Over the lower part of the paw box: its bottom edge 0.4 rem above the box bottom. */
+  bottom: calc(100% + var(--state-zone) + 0.75rem + 0.4rem);
+  width: fit-content;
+  margin-inline: auto;
+  padding-inline: 0.75rem;
+  font-size: 1.5rem;
+}
+
+.stampSlot [data-narration] {
+  max-width: 28rem;
+  margin-inline: auto;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--narration-lines);
+  line-clamp: var(--narration-lines);
 }
 
 .ringSlot {
@@ -126,29 +175,37 @@
 
 @media (min-width: 768px) {
   .layout {
+    /* Distances below the paw centre (the lower circles are at cos 36 degrees = 0.809 of --ring-ry). */
+    --labels-bottom: calc(var(--ring-ry) * 0.809 + 40px + 1.75rem);
+    /* The medal and actions row: the medal is the taller one (about 6.4 rem). */
+    --row-h: 6.5rem;
     --stage-top: calc(var(--ring-ry) - var(--paw-size) / 2 + 40px + 0.75rem);
-    /* Below the paw centre: the lower circles, their label and a four line caption. */
-    --stage-bottom: calc(var(--ring-ry) * 0.81 - var(--paw-size) / 2 + 40px + 8.5rem);
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    /* 768 to 1023 px: lower captions under their discs (4 lines), the narration band (5 lines), the row. */
+    --narration-top: calc(var(--labels-bottom) + 6rem + 0.5rem - var(--paw-size) / 2);
+    --narration-w: min(28rem, calc(100vw - 9rem));
+    --stage-bottom: calc(
+      var(--labels-bottom) + 6rem + 0.5rem + 8.5rem + 0.5rem + var(--row-h) + 0.75rem - var(--paw-size) / 2
+    );
     grid-template-areas:
-      'stage stage'
-      'stamp stamp'
-      'medal actions'
-      'wish wish'
-      'examples examples';
+      'stage'
+      'wish'
+      'examples';
   }
 
   .decorLayer {
     grid-area: stage;
   }
 
+  /* One cell, several items. The paw box, the ring and the stamp slot are the same box, so they share one centre. */
   .pawBox,
-  .ringSlot {
+  .ringSlot,
+  .stampSlot {
     grid-area: stage;
     justify-self: center;
     align-self: start;
     width: var(--paw-size);
     height: var(--paw-size);
+    min-height: 0;
     margin-top: var(--stage-top);
     margin-bottom: var(--stage-bottom);
   }
@@ -162,16 +219,68 @@
     max-width: calc(var(--paw-size) * 0.8);
   }
 
+  /* The stamp slot is only a frame for the stamp and the narration. Both are placed against the paw box. */
+  .stampSlot {
+    pointer-events: none;
+  }
+
+  .stampSlot [data-stamp] {
+    bottom: 0.5rem;
+    padding-inline: 1rem;
+  }
+
+  /* The narration: under the state text, in the slot's coordinates (the box is --paw-size square). */
+  .stampSlot [data-narration] {
+    position: absolute;
+    top: calc(100% + var(--narration-top));
+    right: 0;
+    left: 0;
+    width: var(--narration-w);
+    max-width: none;
+    pointer-events: auto;
+  }
+
+  .medalSlot,
+  .actions {
+    grid-area: stage;
+    align-self: end;
+    margin-bottom: 0.75rem;
+  }
+
   .medalSlot {
     justify-self: start;
   }
 
   .actions {
+    justify-self: end;
     justify-content: flex-end;
   }
 
   .soundSlot {
     top: 1rem;
     bottom: auto;
+  }
+}
+
+/*
+ * 1024 px and up: the narration column. Its width is the gap between the two lower circles (their discs are at
+ * 0.588 of --ring-rx from the centre), less 3.8 rem each side for the circle labels. The lower captions go beside
+ * their discs (CurseCircle.module.css), so nothing hangs under the circles and the row of the medal and actions
+ * sits right under the labels.
+ */
+@media (min-width: 1024px) {
+  .layout {
+    --narration-lines: 6;
+    --narration-top: 2.5rem;
+    --narration-w: calc(var(--ring-rx) * 1.1756 - 7.6rem);
+    --stage-bottom: calc(var(--labels-bottom) + 0.5rem + var(--row-h) + 0.75rem - var(--paw-size) / 2);
+  }
+
+  .stampSlot [data-stamp] {
+    font-size: 2rem;
+  }
+
+  .stampSlot [data-narration] {
+    font-size: 1rem;
   }
 }

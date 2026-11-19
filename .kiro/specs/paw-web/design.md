@@ -121,7 +121,7 @@ One full-viewport parchment plate (`PlateFrame`). Back to front:
 4. `RayDisc`: a blood-red ray disc (CSS conic gradient, `#8f1d14`) centred behind the paw. It pulses once when a
    wish is made (ui-brief moment 1). The disc is decoration, so it is `aria-hidden`.
 5. The paw stage (`PawStage`), a 1:1 box centred on the disc. Desktop 300–400 px, mobile 150–200 px, sized with
-   `clamp()` from the viewport width. The poster fills the box and the canvas sits on top of it (see section 2).
+   `clamp()` from the viewport width (desktop: also from its height). The poster fills the box and the canvas sits on top of it (see section 2).
 6. Five `CurseCircle` buttons in `CircleRing`.
 7. The wish line band under the plate, then the example calling cards.
 8. `SoundToggle` top-right (desktop) or bottom-right (mobile, 40 px tap target). `LiveRegion` is visually hidden.
@@ -147,9 +147,31 @@ Circle position is not finger position: circle 0 is upper-left even though the t
 The pairing is by number only (Req 5.8). A Grant has 3–5 curses (`GrantSchema`), so with 3 or 4 curses the last
 circles stay empty parchment discs. Empty circles are not focusable and are `aria-hidden`.
 
+#### Stage placement (desktop, ≥768 px)
+
+One grid area, `stage`, holds the paw box, the decoration, the ring, the `GrantedStamp` slot, the medal and the Stop
+and export actions, stacked in the same cell. There is no `stamp` row and no `medal actions` row; the wish line
+follows the stage directly. The stage height is fixed by `--stage-top` and `--stage-bottom` (`App.module.css`), so a
+Grant arriving moves nothing. The paw box is `clamp(300px, min(30vw, 38vh), 400px)`: it follows the height as well as
+the width, so the stage and the first row of the wish line fit a 1440×900 or 1280×800 screen (the stage is about
+710 px high at 1440×900 and the wish line starts at about y=756).
+
+- The red "Granted." stamp is drawn over the lower part of the paw box. The paw state text sits just under the box.
+- From 1024 px, the narration goes in the free column under the paw between the two lower circles, whose captions
+  sit beside their discs on the outer side. The medal (lower left) and the actions (lower right) sit in a row under
+  the circle labels; the braziers stand above that row. The narration is clamped to 6 lines.
+- From 768 to 1023 px the plate is too narrow for that column. The lower captions stay under their discs, the
+  narration is a 5-line band under them, and the medal and actions share a row under the band. The stage is taller
+  there and the wish line may start below the fold.
+
 #### Mobile (<768 px)
 
-The paw shrinks to 150–200 px. `CircleRing` becomes a vertical list under the paw, in index order 0 to 4, each
+The visual order is the tab order: the paw with its state text, the stamp and the narration, the wish line, the
+examples, then the circle list, then the medal and the actions. The stamp is drawn over the lower part of the paw box;
+the stamp area has one reserved height (5 lines of narration, clamped), so the Grant arriving does not move the wish
+line, and the input is on the first screen under the paw (360×740 and 390×844).
+
+The paw shrinks to 150–200 px. `CircleRing` becomes a vertical list under the examples, in index order 0 to 4, each
 row full width with margins, disc ~60 px with the caption beside it. Inputs stack. Examples become a horizontal
 scroll strip with three cards visible (Req 9.1). The binding card becomes an 80 vh bottom sheet. Orientation
 change reflows through CSS only, with no remount (Req 9.4). The breakpoint is read through `use-media-query.ts`

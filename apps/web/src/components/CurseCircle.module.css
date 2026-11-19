@@ -236,3 +236,27 @@
     line-clamp: 3;
   }
 }
+
+/*
+ * 1024 px and up: the lower circles (3 and 4) have their caption beside the disc, on the outer side, top-aligned with
+ * the disc. That frees the column between them for the narration and keeps the stage short. Circle 3 is lower-right
+ * (caption to the right), circle 4 lower-left (caption to the left, text aligned right).
+ */
+@media (min-width: 1024px) {
+  .slot[data-index='3'] .caption,
+  .slot[data-index='4'] .caption {
+    top: 0;
+    margin-left: 0;
+  }
+
+  .slot[data-index='3'] .caption {
+    left: calc(100% + 1.5rem);
+    text-align: left;
+  }
+
+  .slot[data-index='4'] .caption {
+    right: calc(100% + 1.5rem);
+    left: auto;
+    text-align: right;
+  }
+}

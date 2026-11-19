@@ -40,7 +40,8 @@
   --loop-iterations: infinite;
   --pulse-iterations: 1;
 
-  /* The paw box. Mobile: 150 to 200 px. Desktop (768 px and up): 300 to 400 px. Always 1:1. */
+  /* The paw box. Mobile: 150 to 200 px. Desktop (768 px and up): 300 to 400 px, from the width and from the height, so
+     the stage (paw, circles, stamp, medal) and the first row of the wish line fit one screen. Always 1:1. */
   --paw-size: clamp(150px, 40vw, 200px);
 
   /* Circle ring radii (design section 1). The plate is wider than tall, so rx > ry. Tuned in the ring task. */
@@ -57,7 +58,7 @@
 @media (min-width: 768px) {
   :root {
     font-size: max(18px, 112.5%);
-    --paw-size: clamp(300px, 30vw, 400px);
+    --paw-size: clamp(300px, min(30vw, 38vh), 400px);
   }
 }
 

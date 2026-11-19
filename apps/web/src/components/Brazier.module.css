@@ -97,6 +97,13 @@
   }
 }
 
+/* From 768 px the stage reserves a row at its foot for the medal and the actions (App.module.css): stand above it. */
+@media (min-width: 768px) {
+  .brazier {
+    bottom: calc(var(--row-h, 0px) + 1.5rem);
+  }
+}
+
 @media (max-width: 767.98px) {
   .brazier {
     opacity: 0.55;

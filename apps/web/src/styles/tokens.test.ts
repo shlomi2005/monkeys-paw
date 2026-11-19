@@ -39,7 +39,8 @@ describe('size and type tokens', () => {
 
   it('sizes the paw box 150 to 200 px on mobile and 300 to 400 px on desktop with clamp()', () => {
     expect(base['--paw-size']).toMatch(/^clamp\(150px, [\d.]+vw, 200px\)$/);
-    expect(desktop['--paw-size']).toMatch(/^clamp\(300px, [\d.]+vw, 400px\)$/);
+    // Desktop: from the width and from the height, whichever is smaller, so the stage fits one screen.
+    expect(desktop['--paw-size']).toMatch(/^clamp\(300px, min\([\d.]+vw, [\d.]+vh\), 400px\)$/);
   });
 
   it('declares the ring radii, wider than tall', () => {
