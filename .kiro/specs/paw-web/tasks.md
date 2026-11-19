@@ -252,7 +252,8 @@ and are expected to fail until the matching implementation task lands. Property 
 
 - [ ] 42. Playwright setup in `apps/web` (desktop Chromium and a 390 px mobile project), a stubbed API through
   `page.route` with schema-valid fixtures built from `paw-core` types, helpers for `curl` and `open` timing, and a
-  `webServer` that runs `vite preview`. (tech.md, Req 3, 4)
+  `webServer` that runs `vite preview`. (tech.md, Req 3, 4) Note: `scripts/ui-screenshot-receipt.mjs` of
+  `.kiro/specs/paw-power/` stops skipping once `@playwright/test` is a dependency of `apps/web`.
 - [ ] 43. e2e: full round on desktop. Wish, "Granted.", five curls one at a time, bind and close in a different order from
   the curls, LIFO opens with the thumb last, rest moment, medal 5/5, both export buttons, zip contents. Also a not-closed
   verdict ("The paw remembers.", card stays open). (Req 2.7, 2.8, 4.3, 5.1–5.4, 6.1, 6.2, 6.8)
@@ -273,7 +274,8 @@ and are expected to fail until the matching implementation task lands. Property 
   desktop). (Req 2.2, 9.1, 9.2, 9.3, 9.4, 10.5)
 - [ ] 49. Screenshot receipts: desktop and mobile in the phases listed in design "Testing Strategy" (idle, curses landed,
   card open, closed, not closed, rested with medal, stopped with medal, reduced motion, no WebGL), saved to
-  `apps/web/e2e/receipts/`. (tech.md, Req 1, 4, 6)
+  `apps/web/e2e/receipts/`. (tech.md, Req 1, 4, 6) Note: tag every receipt test `@receipt`; the hook
+  `ui-screenshot-receipt` (`.kiro/specs/paw-power/`) runs `playwright test --grep @receipt`.
 - [ ] 50. `scripts/check-bundle-budget.mjs` and `build.manifest`: gzip the initial set and the 3D chunk from the manifest,
   fail above 200 KB gz initial JS, 30 KB gz CSS, 330 KB gz 3D chunk, 140 KB fonts, 500 KB audio. Add
   `rollup-plugin-visualizer`, confirm `paw-core` tree-shakes to schemas and `computeIntegrity`. Add a Playwright check
