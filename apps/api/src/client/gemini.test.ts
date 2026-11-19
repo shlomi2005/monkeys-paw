@@ -345,8 +345,14 @@ describe('Task 101: Gemini structured output schemas', () => {
     const schema = getSchema(client, 'grantWishSchema');
 
     // Top-level required fields
-    expect([...schema.required].sort()).toEqual(['curses', 'narration', 'userStory']);
-    expect(Object.keys(schema.properties).sort()).toEqual(['curses', 'narration', 'userStory']);
+    expect([...schema.required].sort()).toEqual(['curses', 'narration', 'userStory', 'wishCriterion']);
+    expect(Object.keys(schema.properties).sort()).toEqual([
+      'curses',
+      'narration',
+      'userStory',
+      'wishCriterion',
+    ]);
+    expect(schema.properties.wishCriterion).toEqual({ type: 'string' });
 
     // Curse array items
     const curseItems = schema.properties.curses.items;

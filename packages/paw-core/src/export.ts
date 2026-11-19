@@ -1,55 +1,86 @@
 // exportSpec: generate requirementsMd (user story + EARS acceptance criteria)
 // and propertiesMd (one property per closed curse). Include IntegrityResult.
+//
+// Style: acceptance criteria are plain EARS lines ("1. WHEN ... THE SYSTEM SHALL ...").
+// Property lines have one format, model-written or template:
+//   - *For any* <sentence> [`<curse-type>`] (Requirement 1.<k>)
+// where k is the number of the curse's acceptance criterion.
 
+import { isEarsCriterion } from './ears';
 import { computeIntegrity } from './integrity';
 import type { Curse, Grant, SpecExport, Wish } from './types';
 
+/** Collapse all whitespace (including newlines) so each item stays on one markdown line. */
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+/** Remove trailing sentence punctuation and spaces. */
+function stripTrailingPunctuation(text: string): string {
+  return text.replace(/[\s.!?;:,]+$/, '');
+}
+
+/** Lowercase the first letter, unless the first word looks like an acronym (e.g. "API"). */
+function lowerFirst(text: string): string {
+  if (text.length === 0) return text;
+  if (text.length > 1 && /[A-Z]/.test(text[1]!)) return text;
+  return text[0]!.toLowerCase() + text.slice(1);
+}
+
 /**
- * Generate the EARS acceptance criteria markdown for a single closed binding.
- * The curse's binding.clause is the binding text (either a rewrite or an EARS clause).
- * We format it as an acceptance criterion starting with WHEN/IF/WHILE/WHERE/THE SYSTEM SHALL.
+ * Criterion 1: the wish restated in EARS.
+ * Uses the Genie's `wishCriterion` when it reads as EARS; otherwise a deterministic restatement.
+ */
+function wishCriterionText(wish: Wish, grant: Grant): string {
+  if (grant.wishCriterion && isEarsCriterion(grant.wishCriterion)) {
+    return oneLine(grant.wishCriterion);
+  }
+
+  const wishText = oneLine(wish.text);
+  const body = lowerFirst(stripTrailingPunctuation(wishText) || wishText);
+  const context = wish.context ? stripTrailingPunctuation(oneLine(wish.context)) : '';
+  const where = context ? `, in the context of ${context}` : '';
+  return `THE SYSTEM SHALL ensure that ${body}${where}.`;
+}
+
+/**
+ * Generate the EARS acceptance criterion for a single closed binding.
+ * The curse's binding.clause is either a rewrite or an EARS clause. A clause that already
+ * starts with an EARS keyword (any case) gets the keyword uppercased; anything else is
+ * prefixed with "THE SYSTEM SHALL".
  */
 function earsCriterion(clauseText: string): string {
-  const trimmed = clauseText.trim();
-  // If the clause already starts with an EARS keyword, use it as-is.
-  // Otherwise, prefix with "THE SYSTEM SHALL" and make it a constraint.
-  if (
-    trimmed.startsWith('WHEN ') ||
-    trimmed.startsWith('IF ') ||
-    trimmed.startsWith('WHILE ') ||
-    trimmed.startsWith('WHERE ') ||
-    trimmed.startsWith('THE SYSTEM SHALL ')
-  ) {
-    return trimmed;
+  const trimmed = oneLine(clauseText);
+  const match = /^(WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)\b/i.exec(trimmed);
+  if (match) {
+    return match[1]!.toUpperCase() + trimmed.slice(match[1]!.length);
   }
-  // Fallback: treat as a constraint to enforce.
   return `THE SYSTEM SHALL ${trimmed}`;
 }
 
 /**
- * Generate a testable property statement from a closed curse.
- * One property per closed curse, phrased as a universally quantified invariant.
- * If the curse.verdict.property is present (Task 25), use it; otherwise fall back to template.
- * Format: *For any* <scenario derived from curse and binding>, <property> [<curse-type>] (Req <number>)
+ * One property line for a closed curse, in the one format used for model-written and template
+ * properties: `- *For any* ... [`type`] (Requirement 1.k)`.
+ * The model-written verdict.property is used only when it starts with "For any" (any case).
  */
-function curseProperty(curse: Curse, requirement: Wish, index: number): string {
-  const curseTypeTag = `${curse.type}`;
-  
-  // Task 25: Use verdict.property if available, otherwise fall back to template
-  if (curse.verdict?.property) {
-    return `- ${curse.verdict.property}`;
+function curseProperty(curse: Curse, wish: Wish, requirementNumber: number): string {
+  const suffix = ` [\`${curse.type}\`] (Requirement 1.${requirementNumber})`;
+
+  const modelProperty = curse.verdict?.property ? oneLine(curse.verdict.property) : '';
+  const lead = /^for any\b/i.exec(modelProperty);
+  if (lead) {
+    return `- *For any*${modelProperty.slice(lead[0].length)}${suffix}`;
   }
-  
-  const boundClause = curse.binding?.clause || '(binding not found)';
-  // Fall back to template format
-  return `*For any* wish matching "${requirement.text}", ${boundClause} [\`${curseTypeTag}\`] (Req 6.3)`;
+
+  const boundClause = oneLine(curse.binding?.clause || '(binding not found)');
+  return `- *For any* wish matching "${oneLine(wish.text)}", ${boundClause}${suffix}`;
 }
 
 /**
  * Export a Kiro-ready spec: requirementsMd (user story + EARS criteria)
  * and propertiesMd (one property per closed curse).
- * 
- * Task 22: exportSpec now takes the original Wish to include in the introduction
+ *
+ * Task 22: exportSpec takes the original Wish to include in the introduction
  * and to use in property generation.
  */
 export function exportSpec(wish: Wish, grant: Grant): SpecExport {
@@ -61,22 +92,10 @@ export function exportSpec(wish: Wish, grant: Grant): SpecExport {
   );
 
   // Req 6.2: Generate requirements.md in Kiro format with Introduction, User Story, and EARS criteria.
-  // Start with wish as criterion 1, then add one per closed curse.
+  // Criterion 1 is the wish in EARS, then one criterion per closed curse (numbered from 2).
   const acceptanceCriteria = [
-    `1. **WHEN** a requirement matches "${wish.text}"${wish.context ? ` in ${wish.context}` : ''} **THE SYSTEM SHALL** close all loopholes binding specific edge cases.`,
-    ...closedCurses.map((c, idx) => {
-      const clauseText = c.binding!.clause.trim();
-      let criterion: string;
-      
-      // Check if clause starts with EARS keyword
-      if (clauseText.match(/^(WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)\s/i)) {
-        criterion = clauseText;
-      } else {
-        criterion = `THE SYSTEM SHALL ${clauseText}`;
-      }
-      
-      return `${idx + 2}. ${criterion}`;
-    }),
+    `1. ${wishCriterionText(wish, grant)}`,
+    ...closedCurses.map((c, idx) => `${idx + 2}. ${earsCriterion(c.binding!.clause)}`),
   ];
 
   const requirementsMd = [
@@ -100,8 +119,8 @@ export function exportSpec(wish: Wish, grant: Grant): SpecExport {
   ].join('\n');
 
   // Req 6.3: Generate properties.md with one property per closed curse.
-  // Task 23: Each property is phrased as a universally quantified testable statement.
-  const propertyLines = closedCurses.map((c, i) => curseProperty(c, wish, i + 1));
+  // Each property points at the acceptance criterion that closes its curse (idx + 2).
+  const propertyLines = closedCurses.map((c, idx) => curseProperty(c, wish, idx + 2));
   const propertiesMd = [
     '# Correctness Properties',
     '',

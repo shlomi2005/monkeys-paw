@@ -75,6 +75,8 @@ export interface Grant {
   readonly curses: Curse[];
   /** Optional: a user story written by the Genie (Task 25, Req 11.1). */
   readonly userStory?: string;
+  /** Optional: the wish restated as one EARS acceptance criterion, written by the Genie (Task 25). */
+  readonly wishCriterion?: string;
 }
 
 /** Wish Integrity score 0–5 with counts. */

@@ -44,6 +44,13 @@ describe('grant prompt (paw-api task 61)', () => {
     expect(buildGeniePrompt(WISH)).toContain('"userStory"');
   });
 
+  it('asks for a wishCriterion: the wish in one EARS criterion, max 40 words', () => {
+    expect(prompt).toContain('"wishCriterion"');
+    expect(buildGeniePrompt(WISH)).toContain('"wishCriterion"');
+    expect(buildGeniePrompt(WISH)).toContain('THE SYSTEM SHALL');
+    expect(buildGeniePrompt(WISH)).toMatch(/add no new constraints/);
+  });
+
   it('does not ask the model for curse ids', () => {
     expect(prompt).not.toMatch(/"id"/);
   });

@@ -50,6 +50,7 @@ export const GrantSchema = z.object({
   narration: z.string().min(1).max(260),
   curses: z.array(CurseSchema).min(3).max(5),
   userStory: z.string().optional(), // Task 25, Req 11.1
+  wishCriterion: z.string().optional(), // Task 25: the wish restated in EARS
 });
 
 export const IntegrityResultSchema = z.object({

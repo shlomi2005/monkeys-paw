@@ -8,6 +8,7 @@
 // (apps/api) checking the budget first (iron-rules §5); paw-core trusts the
 // injected ModelClient to already have passed that gate.
 
+import { isEarsCriterion } from './ears';
 import { CurseSchema, GrantSchema, QualityGateSchema, BatchQualityGateSchema } from './schemas';
 import {
   buildGeniePrompt,
@@ -166,12 +167,14 @@ export async function grantWish(wish: Wish, model: ModelClient): Promise<Grant> 
       }
 
       const userStory = parsed.userStory?.trim();
+      const wishCriterion = parsed.wishCriterion?.trim();
 
       return {
         wishId: parsed.wishId,
         narration: parsed.narration,
         curses,
         ...(userStory ? { userStory } : {}),
+        ...(wishCriterion && isEarsCriterion(wishCriterion) ? { wishCriterion } : {}),
       };
     } catch {
       // retry once, then fall back below

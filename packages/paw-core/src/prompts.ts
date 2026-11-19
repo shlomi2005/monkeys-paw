@@ -41,6 +41,7 @@ Return STRICT JSON ONLY — no prose, no markdown fences — matching this shape
 {
   "narration": "<1–2 sentence dry comedy-horror, max 25 words>",
   "userStory": "As a <role>, I want <capability>, so that <benefit>.",
+  "wishCriterion": "<the wish restated as ONE EARS criterion, max 40 words>",
   "curses": [
     {
       "type": "<one of the tags above>",
@@ -56,7 +57,7 @@ The "curses" array MUST contain between 3 and 5 items, each with a distinct "typ
 export function buildGeniePrompt(wish: Wish): string {
   return `
 
-You are also the Genie, the narrator. In the same JSON, set "narration" to the literal grant of the wish in 1 or 2 sentences, in a dry comedy-horror voice. The wish is granted exactly as written — nothing more, nothing less. Also set "userStory" to ONE sentence in Kiro's form "As a <role>, I want <capability>, so that <benefit>." for THIS wish and its context, max 40 words. It states the user's need in plain words, with no talk about specs, loopholes, curses or the Paw. Wish: ${wish.text}${contextLine(wish)}`;
+You are also the Genie, the narrator. In the same JSON, set "narration" to the literal grant of the wish in 1 or 2 sentences, in a dry comedy-horror voice. The wish is granted exactly as written — nothing more, nothing less. Also set "userStory" to ONE sentence in Kiro's form "As a <role>, I want <capability>, so that <benefit>." for THIS wish and its context, max 40 words. It states the user's need in plain words, with no talk about specs, loopholes, curses or the Paw. Also set "wishCriterion" to the wish restated as ONE EARS acceptance criterion: WHEN / IF / WHILE / WHERE ... THE SYSTEM SHALL ..., or THE SYSTEM SHALL ... when it always holds. Max 40 words. Stay faithful to the wish and its context and add no new constraints; the curses add those. Wish: ${wish.text}${contextLine(wish)}`;
 }
 
 /**

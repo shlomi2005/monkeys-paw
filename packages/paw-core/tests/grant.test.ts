@@ -129,6 +129,36 @@ describe('grantWish (task 9)', () => {
     expect('userStory' in grant).toBe(false);
   });
 
+  it('keeps a valid EARS wishCriterion, trimmed', async () => {
+    const criterion =
+      'WHEN a user deletes a project THE SYSTEM SHALL allow it only for the project owner.';
+    const model = fakeModel(() => ({ ...JSON.parse(VALID_GRANT_JSON), wishCriterion: `  ${criterion}\n` }));
+    const grant = await grantWish(makeWish(), model);
+
+    expect(grant.wishCriterion).toBe(criterion);
+  });
+
+  it('keeps a "THE SYSTEM SHALL" wishCriterion', async () => {
+    const criterion = 'THE SYSTEM SHALL let only the project owner delete a project.';
+    const model = fakeModel(() => ({ ...JSON.parse(VALID_GRANT_JSON), wishCriterion: criterion }));
+    const grant = await grantWish(makeWish(), model);
+
+    expect(grant.wishCriterion).toBe(criterion);
+  });
+
+  it.each([
+    ['not EARS', 'Only the owner can delete a project.'],
+    ['EARS keyword without SHALL', 'WHEN the owner deletes a project it is gone.'],
+    ['SHALL without an EARS start', 'The system SHALL let the owner delete.'],
+    ['blank', '  \n '],
+  ])('drops a wishCriterion that is %s', async (_name, wishCriterion) => {
+    const model = fakeModel(() => ({ ...JSON.parse(VALID_GRANT_JSON), wishCriterion }));
+    const grant = await grantWish(makeWish(), model);
+
+    expect('wishCriterion' in grant).toBe(false);
+    expect(grant.curses.length).toBeGreaterThanOrEqual(3);
+  });
+
   it('grants without a userStory when the model gives none', async () => {
     const model = fakeModel(() => VALID_GRANT_JSON);
     const grant = await grantWish(makeWish(), model);

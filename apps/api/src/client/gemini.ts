@@ -223,7 +223,7 @@ export class GeminiModelClient implements ModelClient {
 
   /**
    * Task 101: Grant output schema for buildPawPrompt + buildGeniePrompt.
-   * Model-facing shape: {narration, userStory, curses[{type, story, loophole}]}; the system assigns ids.
+   * Model-facing shape: {narration, userStory, wishCriterion, curses[{type, story, loophole}]}; the system assigns ids.
    */
   private grantWishSchema(): any {
     return {
@@ -231,6 +231,7 @@ export class GeminiModelClient implements ModelClient {
       properties: {
         narration: { type: 'string' },
         userStory: { type: 'string' },
+        wishCriterion: { type: 'string' },
         curses: {
           type: 'array',
           items: {
@@ -258,7 +259,7 @@ export class GeminiModelClient implements ModelClient {
           },
         },
       },
-      required: ['narration', 'userStory', 'curses'],
+      required: ['narration', 'userStory', 'wishCriterion', 'curses'],
     };
   }
 

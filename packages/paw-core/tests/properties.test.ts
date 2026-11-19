@@ -213,22 +213,18 @@ describe('integrity properties (P4)', () => {
 });
 
 describe('export properties (P1, P2)', () => {
-  it('P1: every acceptance criterion matches the EARS pattern', () => {
+  it('P1: every acceptance criterion starts with an EARS keyword', () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 5 }), (closedCount) => {
         const grant = fc.sample(genGrant(closedCount), 1)[0]!;
         const wish = fc.sample(genWish(), 1)[0]!;
         const spec = exportSpec(wish, grant);
 
-        // P1: every numbered criterion must contain EARS keywords.
-        const lines = spec.requirementsMd.split('\n');
-        for (const line of lines) {
-          if (/^\d+\./.test(line)) {
-            // Numbered acceptance criterion
-            const matchesEars =
-              /\b(WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)\b/.test(line);
-            expect(matchesEars).toBe(true);
-          }
+        // P1: after its number, every criterion starts with an EARS keyword.
+        const criteria = spec.requirementsMd.split('\n').filter((l) => /^\d+\./.test(l));
+        expect(criteria).toHaveLength(closedCount + 1);
+        for (const line of criteria) {
+          expect(line).toMatch(/^\d+\. (WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)\b/);
         }
       }),
     );
@@ -241,29 +237,40 @@ describe('export properties (P1, P2)', () => {
         const wish = fc.sample(genWish(), 1)[0]!;
         const spec = exportSpec(wish, grant);
 
-        // P2: count of properties in propertiesMd equals number of closed curses.
-        const propertyCount = (spec.propertiesMd.match(/\*For any\*/g) || []).length;
+        // P2: count of property lines in propertiesMd equals number of closed curses.
+        const propertyCount = spec.propertiesMd
+          .split('\n')
+          .filter((l) => l.startsWith('- *For any*')).length;
         expect(propertyCount).toBe(closedCount);
       }),
     );
   });
 
-  it('P23: each property line starts with "*For any*" and names curse type and requirement', () => {
+  it('P23: each property line starts with "- *For any*" and names curse type and requirement', () => {
     fc.assert(
       fc.property(fc.integer({ min: 1, max: 5 }), (closedCount) => {
         const grant = fc.sample(genGrant(closedCount), 1)[0]!;
         const wish = fc.sample(genWish(), 1)[0]!;
         const spec = exportSpec(wish, grant);
 
-        // Task 23: each property line must start with "*For any*", include curse type, and reference Req 6.3
-        const propertyLines = spec.propertiesMd.split('\n').filter((l) => l.startsWith('*For any*'));
+        const criterionNumbers = new Set(
+          spec.requirementsMd
+            .split('\n')
+            .map((l) => /^(\d+)\./.exec(l)?.[1])
+            .filter((n): n is string => n !== undefined),
+        );
+        const propertyLines = spec.propertiesMd.split('\n').filter((l) => l.startsWith('- *For any*'));
         expect(propertyLines.length).toBe(closedCount);
 
-        for (const line of propertyLines) {
-          expect(line).toMatch(/^\*For any\*/);
-          expect(line).toMatch(/`[a-z-]+`/); // curse type in backticks (curse types have hyphens)
-          expect(line).toMatch(/Req 6\.3/);
-        }
+        const closedCurses = grant.curses.filter((c) => c.status === 'closed');
+        propertyLines.forEach((line, i) => {
+          // Curse type in backticks, then the requirement of that curse's clause (criterion i + 2).
+          expect(line).toContain(` [\`${closedCurses[i]!.type}\`] `);
+          const match = /\(Requirement 1\.(\d+)\)$/.exec(line);
+          expect(match).not.toBeNull();
+          expect(match![1]).toBe(String(i + 2));
+          expect(criterionNumbers.has(match![1]!)).toBe(true);
+        });
       }),
     );
   });

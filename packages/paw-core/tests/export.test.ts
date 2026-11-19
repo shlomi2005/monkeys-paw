@@ -117,11 +117,10 @@ describe('exportSpec (task 16)', () => {
     const lines = spec.requirementsMd.split('\n');
     const criteriaLines = lines.filter((line) => /^\d+\./.test(line));
 
+    expect(criteriaLines.length).toBe(2);
     for (const line of criteriaLines) {
-      // P1: every numbered line must contain one of the EARS keywords.
-      const matchesEars =
-        /\b(WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)\b/.test(line);
-      expect(matchesEars).toBe(true);
+      // P1: after its number, every criterion starts with an EARS keyword.
+      expect(line).toMatch(/^\d+\. (WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)\b/);
     }
   });
 
@@ -177,13 +176,14 @@ describe('exportSpec (task 16)', () => {
     const grant = makeGrant('w1', 1);
     const spec = exportSpec(wish, grant);
 
-    const propertyLines = spec.propertiesMd.split('\n').filter((l) => l.startsWith('*For any*'));
+    const propertyLines = spec.propertiesMd.split('\n').filter((l) => l.startsWith('- *For any*'));
     expect(propertyLines.length).toBe(1);
-    
-    const property = propertyLines[0];
-    expect(property).toMatch(/\*For any\*/);
-    expect(property).toMatch(/\`permissions\`/);
-    expect(property).toMatch(/Req 6\.3/);
+
+    const property = propertyLines[0]!;
+    expect(property).toMatch(/^- \*For any\*/);
+    expect(property).toMatch(/\[`permissions`\]/);
+    expect(property).toMatch(/\(Requirement 1\.2\)$/);
+    expect(property).not.toMatch(/Req 6/);
   });
 
   it('export with model-written userStory and property includes them verbatim (Task 65)', () => {
@@ -223,8 +223,91 @@ describe('exportSpec (task 16)', () => {
     // The userStory should be included in the requirements
     expect(spec.requirementsMd).toContain(grant.userStory);
     
-    // The property should be included in the properties
-    expect(spec.propertiesMd).toContain(grant.curses[0].verdict?.property);
+    // The property is included, with its "For any" marked up, then the curse type and requirement.
+    const sentence = grant.curses[0]!.verdict!.property!;
+    const expected = `- *For any*${sentence.slice('For any'.length)} [\`permissions\`] (Requirement 1.2)`;
+    expect(spec.propertiesMd.split('\n')).toContain(expected);
+  });
+
+  it('criterion 1 is the grant wishCriterion when present', () => {
+    const wish = makeWish();
+    const criterion =
+      'WHEN a user asks to delete a project THE SYSTEM SHALL allow the request only from the project owner.';
+    const spec = exportSpec(wish, { ...makeGrant('w1', 1), wishCriterion: criterion });
+
+    expect(spec.requirementsMd.split('\n')).toContain(`1. ${criterion}`);
+  });
+
+  it('fallback criterion 1 is EARS, not meta, and works the context in', () => {
+    const wish = makeWish('w1', 'Only the owner can delete a project.');
+    const spec = exportSpec(wish, makeGrant('w1', 0));
+
+    const line = spec.requirementsMd.split('\n').find((l) => l.startsWith('1. '))!;
+    expect(line).toBe(
+      '1. THE SYSTEM SHALL ensure that only the owner can delete a project, in the context of a project management app.',
+    );
+    expect(line).not.toMatch(/loophole|curse|matches/i);
+  });
+
+  it('fallback criterion 1 without context, and keeps an acronym capitalised', () => {
+    const wish: Wish = { id: 'w1', text: 'API calls are logged!', createdAt: 1 };
+    const spec = exportSpec(wish, makeGrant('w1', 0));
+
+    expect(spec.requirementsMd.split('\n')).toContain('1. THE SYSTEM SHALL ensure that API calls are logged.');
+  });
+
+  it('a non-EARS wishCriterion is not used; the fallback is', () => {
+    const wish = makeWish('w1', 'Only the owner can delete a project.');
+    const spec = exportSpec(wish, { ...makeGrant('w1', 0), wishCriterion: 'Make deletion safe.' });
+
+    expect(spec.requirementsMd).not.toContain('Make deletion safe.');
+    expect(spec.requirementsMd).toContain('1. THE SYSTEM SHALL ensure that only the owner');
+  });
+
+  it('a model property gets the curse type and the requirement number of its criterion', () => {
+    const wish = makeWish();
+    const grant = makeGrant('w1', 2);
+    const withProperty: Grant = {
+      ...grant,
+      curses: grant.curses.map((c, i) =>
+        i === 1 ? { ...c, verdict: { ...c.verdict!, property: 'for any project, an admin can delete it.' } } : c,
+      ),
+    };
+    const spec = exportSpec(wish, withProperty);
+
+    const lines = spec.propertiesMd.split('\n').filter((l) => l.startsWith('- '));
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toBe('- *For any* project, an admin can delete it. [`permissions`] (Requirement 1.3)');
+    expect(lines[0]).toMatch(/^- \*For any\* wish matching .* \[`permissions`\] \(Requirement 1\.2\)$/);
+  });
+
+  it('a model property not starting with "For any" falls back to the template', () => {
+    const wish = makeWish();
+    const grant = makeGrant('w1', 1);
+    const withProperty: Grant = {
+      ...grant,
+      curses: grant.curses.map((c, i) =>
+        i === 0 ? { ...c, verdict: { ...c.verdict!, property: 'Anyone may delete a project.' } } : c,
+      ),
+    };
+    const spec = exportSpec(wish, withProperty);
+
+    expect(spec.propertiesMd).not.toContain('Anyone may delete a project.');
+    expect(spec.propertiesMd).toMatch(/^- \*For any\* wish matching /m);
+  });
+
+  it('uppercases a lowercase EARS keyword in a bound clause', () => {
+    const wish = makeWish();
+    const grant = makeGrant('w1', 1);
+    const lower: Grant = {
+      ...grant,
+      curses: grant.curses.map((c, i) =>
+        i === 0 ? { ...c, binding: { ...c.binding!, clause: 'when the owner leaves, an admin takes over' } } : c,
+      ),
+    };
+    const spec = exportSpec(wish, lower);
+
+    expect(spec.requirementsMd.split('\n')).toContain('2. WHEN the owner leaves, an admin takes over');
   });
 
   it('export without userStory/property falls back to template (Task 66)', () => {
@@ -331,14 +414,16 @@ describe('exportSpec (task 16)', () => {
     expect(spec.requirementsMd).toContain('Only the owner can delete a project.');
     expect(spec.requirementsMd).toContain('a project management app');
     expect(spec.requirementsMd).toContain('**User Story:**');
-    expect(spec.requirementsMd).toContain('1. **WHEN**');
+    expect(spec.requirementsMd).toContain(
+      '1. THE SYSTEM SHALL ensure that only the owner can delete a project, in the context of a project management app.',
+    );
     expect(spec.requirementsMd).toContain('2. WHEN the owner leaves');
     expect(spec.requirementsMd).toContain('3. IF data is deleted');
     expect(spec.requirementsMd).toContain('**Wish Integrity:** 5/5');
 
     expect(spec.propertiesMd).toContain('# Correctness Properties');
     expect(spec.propertiesMd).toContain('*For any*');
-    const propertyLines = spec.propertiesMd.split('\n').filter((l) => l.startsWith('*For any*'));
+    const propertyLines = spec.propertiesMd.split('\n').filter((l) => l.startsWith('- *For any*'));
     expect(propertyLines).toHaveLength(2);
     expect(propertyLines[0]).toContain('`permissions`');
     expect(propertyLines[1]).toContain('`data-loss`');

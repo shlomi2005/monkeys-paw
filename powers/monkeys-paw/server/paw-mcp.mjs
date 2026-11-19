@@ -21786,8 +21786,10 @@ var GrantSchema = external_exports.object({
   // Task 94: Narration max 25 words ≈ 260 chars.
   narration: external_exports.string().min(1).max(260),
   curses: external_exports.array(CurseSchema).min(3).max(5),
-  userStory: external_exports.string().optional()
+  userStory: external_exports.string().optional(),
   // Task 25, Req 11.1
+  wishCriterion: external_exports.string().optional()
+  // Task 25: the wish restated in EARS
 });
 var IntegrityResultSchema = external_exports.object({
   score: external_exports.number().int().min(0).max(5),

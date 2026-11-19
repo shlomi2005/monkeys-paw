@@ -63,8 +63,9 @@ component has a pure interface. All work happens in `packages/paw-core` unless n
   quantified, testable statement ("*For any* … , … ") derived from the curse and its binding, tagged with the
   curse type, and name the requirement it validates. Today it only repeats the clause. (Req 6.3, P2)
 - [x] **24. Tidy imports** — move the `import type { Curse }` in `export.ts` to the top. (structure.md)
-- [ ] **25. Model-written story and properties** — the deterministic template still writes weak English
+- [x] **25. Model-written story and properties** — the deterministic template still writes weak English
   (criterion 1 is meta, the user story is generic, properties restate the clause). Let the Genie return a real
   `userStory` with the grant, and the Judge return a `property` ("For any project whose owner has left, at least
   one member can still delete it") with every `closed` verdict; `exportSpec` assembles those and keeps the
   template only as a fallback. Criterion 1 becomes the original wish rewritten in EARS. (Req 6, P1, P2)
+  Done: `Grant.wishCriterion` (Genie-written EARS, kept by `grantWish` only if it starts with an EARS keyword and has SHALL); `exportSpec` uses it as criterion 1 (EARS fallback otherwise), all criteria are plain EARS, and every property line is `- *For any* … [`type`] (Requirement 1.k)`.
