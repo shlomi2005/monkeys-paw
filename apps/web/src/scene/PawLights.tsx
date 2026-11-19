@@ -1,14 +1,15 @@
 import type { Vec3 } from './camera-fit';
 
-// Named constants, tuned by eye in task 31. Colours and rough intensities come from design.md section 3.
+// Named constants, tuned in the browser in task 31. Colours come from design.md section 3. The intensities are high
+// because the GLB material has metalness 1 and there is no environment map, and the sepia tint is applied in linear space.
 export const AMBIENT_COLOR = '#f0dcb8';
-export const AMBIENT_INTENSITY = 0.6;
+export const AMBIENT_INTENSITY = 1.8;
 export const KEY_COLOR = '#ffe2b0';
-export const KEY_INTENSITY = 1.6;
+export const KEY_INTENSITY = 4.8;
 /** Upper left, in front of the paw. */
 export const KEY_POSITION: Vec3 = [-2.5, 3, 3.5];
 export const RIM_COLOR = '#8f1d14';
-export const RIM_INTENSITY = 0.35;
+export const RIM_INTENSITY = 1.0;
 /** Behind and to the right. */
 export const RIM_POSITION: Vec3 = [2.5, 1.5, -3];
 
@@ -17,7 +18,10 @@ export const SHADOW_MAP_SIZE_MOBILE = 512;
 /** Half-extent of the key light's shadow camera, in paw units. The paw is 1 unit high. */
 export const SHADOW_FRUSTUM = 1.5;
 
-/** The transparent plane that catches the drop shadow, behind the paw (the mesh spans z -0.11 to 0.13). */
+/**
+ * The transparent plane that catches the drop shadow, behind the paw (the mesh spans z -0.11 to 0.13). Its x is the
+ * centre of the paw's bind-pose box (about 0.085), the same x the camera is centred on (camera-fit.ts).
+ */
 export const SHADOW_PLANE_POSITION: Vec3 = [0.085, 0.5, -0.25];
 export const SHADOW_PLANE_SIZE = 3;
 export const SHADOW_OPACITY = 0.3;

@@ -13,24 +13,39 @@ export type SceneEffect =
     };
 
 /**
+ * What `subscribe` returns: call it to unsubscribe. `setReady` is scoped to this one subscription, so a caller that
+ * was already unsubscribed (a disposed driver) can never change the readiness of the subscriber that replaced it.
+ */
+export interface SceneSubscription {
+  (): void;
+  /** Marks this subscription ready (it receives effects) or not. A no-op once unsubscribed. */
+  setReady(ready: boolean): void;
+}
+
+/**
  * The scene's side. If a `snap` arrives while a command is playing, the scene cancels that command
  * without calling `done`. The reducer has already cleared `anim.active`, so a late `done` is ignored.
  */
 export interface SceneBridge {
-  subscribe(listener: (effect: SceneEffect) => void): () => void;
+  subscribe(listener: (effect: SceneEffect) => void): SceneSubscription;
   /** Dispatches `curl_done`, `open_done` or `rest_done` with the command's id. */
   done(command: AnimCommand): void;
 }
 
-/** The session's side of the same bridge. */
-export interface SceneBridgeHost extends SceneBridge {
-  /** True when a scene has subscribed and called `setReady(true)`. */
-  isReady(): boolean;
+/** What the scene holds: the contract plus the readiness switch. */
+export interface SceneBridgePort extends SceneBridge {
   /**
-   * The scene calls `setReady(true)` once it can play commands (after its first frame) and
-   * `setReady(false)` when it is lost or unmounting.
+   * Bridge-wide readiness: sets every current subscription ready or not. Only for a failure that ends the whole
+   * scene (load error, error boundary, context loss) and for tests. The joint driver uses the `setReady` of its own
+   * subscription instead, because readiness belongs to the driver (design.md section 4).
    */
   setReady(ready: boolean): void;
+}
+
+/** The session's side of the same bridge. */
+export interface SceneBridgeHost extends SceneBridgePort {
+  /** True when at least one subscription is ready. */
+  isReady(): boolean;
   /** Delivers `effect` to the subscribed scene. Returns false, delivering nothing, when no scene is ready. */
   send(effect: SceneEffect): boolean;
   /** The session registers where `done` events go. Returns an unregister function. */
@@ -52,12 +67,15 @@ export function doneEventOf(command: AnimCommand): Extract<PawEvent, { id: numbe
 }
 
 export function createSceneBridge(): SceneBridgeHost {
-  const listeners = new Set<(effect: SceneEffect) => void>();
+  interface Entry {
+    readonly listener: (effect: SceneEffect) => void;
+    ready: boolean;
+  }
+  const entries = new Set<Entry>();
   const doneHandlers = new Set<(event: PawEvent) => void>();
   const detachHandlers = new Set<() => void>();
-  let ready = false;
 
-  const isReady = (): boolean => ready && listeners.size > 0;
+  const isReady = (): boolean => [...entries].some((entry) => entry.ready);
 
   /** Tells the session that a scene that was ready no longer is. */
   const notifyIfDetached = (wasReady: boolean): void => {
@@ -69,20 +87,29 @@ export function createSceneBridge(): SceneBridgeHost {
     isReady,
     setReady(next) {
       const was = isReady();
-      ready = next;
+      for (const entry of entries) entry.ready = next;
       notifyIfDetached(was);
     },
     subscribe(listener) {
-      listeners.add(listener);
-      return () => {
+      const entry: Entry = { listener, ready: false };
+      entries.add(entry);
+      const subscription = (() => {
         const was = isReady();
-        listeners.delete(listener);
+        entries.delete(entry);
+        notifyIfDetached(was);
+      }) as SceneSubscription;
+      subscription.setReady = (next) => {
+        if (!entries.has(entry)) return; // stale: this subscriber is gone
+        const was = isReady();
+        entry.ready = next;
         notifyIfDetached(was);
       };
+      return subscription;
     },
     send(effect) {
-      if (!isReady()) return false;
-      for (const listener of [...listeners]) listener(effect);
+      const targets = [...entries].filter((entry) => entry.ready);
+      if (targets.length === 0) return false;
+      for (const entry of targets) entry.listener(effect);
       return true;
     },
     done(command) {

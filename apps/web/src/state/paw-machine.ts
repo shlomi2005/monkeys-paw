@@ -54,7 +54,7 @@ function clearedAnim(anim: Anim): Anim {
 }
 
 /** Snap amounts of a logical pose: 1 for each curled digit, 0 for the rest (Req 6.10). */
-function amountsFor(curled: readonly Digit[]): SnapEffect['amounts'] {
+export function amountsFor(curled: readonly Digit[]): SnapEffect['amounts'] {
   const amount = (d: Digit): number => (curled.includes(d) ? 1 : 0);
   return [amount(0), amount(1), amount(2), amount(3), amount(4)];
 }

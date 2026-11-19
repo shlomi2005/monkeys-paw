@@ -7,10 +7,14 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { StrictMode, useState } from 'react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SceneBridge } from '../state/scene-bridge';
+import type { SceneBridgePort } from '../state/scene-bridge';
 import type { PawSceneProps } from './PawScene';
 
-const bridge: SceneBridge = { subscribe: () => () => undefined, done: () => undefined };
+const bridge: SceneBridgePort = {
+  subscribe: () => Object.assign(() => undefined, { setReady: () => undefined }),
+  done: () => undefined,
+  setReady: () => undefined,
+};
 
 interface Setup {
   readonly webgl?: boolean;
@@ -160,12 +164,14 @@ describe('PawStage gating', () => {
     expect(matchMedia).toHaveBeenCalledTimes(1);
   });
 
-  it('hands the scene its props: bridge, initial pose, motion preference and the two callbacks', async () => {
+  it('hands the scene its props: bridge, initial pose, granting, motion preference and the two callbacks', async () => {
     const { PawStage, seen } = await load();
-    render(<PawStage bridge={bridge} initialCurled={[0, 1]} reducedMotion />);
+    render(<PawStage bridge={bridge} initialCurled={[0, 1]} initialPose="rested" granting reducedMotion />);
     await flush(200);
     expect(seen.props?.bridge).toBe(bridge);
     expect(seen.props?.initialCurled).toEqual([0, 1]);
+    expect(seen.props?.initialPose).toBe('rested');
+    expect(seen.props?.granting).toBe(true);
     expect(seen.props?.reducedMotion).toBe(true);
     expect(typeof seen.props?.onReady).toBe('function');
     expect(typeof seen.props?.onFailure).toBe('function');

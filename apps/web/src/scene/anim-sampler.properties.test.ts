@@ -127,17 +127,20 @@ describe('P14 sampler: open', () => {
 });
 
 describe('P14 sampler: rest', () => {
-  it('sink and tilt are non-decreasing in elapsed time and stay within [0, full]', () => {
+  it('sink and tilt magnitude are non-decreasing in elapsed time, from 0 to full, with the sign of REST_TILT_DEG', () => {
+    const sign = Math.sign(REST_TILT_DEG);
     fc.assert(
       fc.property(baseAmounts, elapsedPair, (base, [t1, t2]) => {
         const a = sample(rest, t1, base).rest;
         const b = sample(rest, t2, base).rest;
         expect(a.sink).toBeLessThanOrEqual(b.sink);
-        expect(a.tilt).toBeLessThanOrEqual(b.tilt);
+        expect(Math.abs(a.tilt)).toBeLessThanOrEqual(Math.abs(b.tilt));
+        expect(a.tilt * sign).toBeGreaterThanOrEqual(0);
+        expect(b.tilt * sign).toBeGreaterThanOrEqual(0);
         expect(a.sink).toBeGreaterThanOrEqual(0);
         expect(b.sink).toBeLessThanOrEqual(REST_SINK);
-        expect(a.tilt).toBeGreaterThanOrEqual(0);
-        expect(b.tilt).toBeLessThanOrEqual(REST_TILT_DEG);
+        expect(Math.abs(a.tilt)).toBeGreaterThanOrEqual(0);
+        expect(Math.abs(b.tilt)).toBeLessThanOrEqual(Math.abs(REST_TILT_DEG));
       }),
       { numRuns: NUM_RUNS },
     );

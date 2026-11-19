@@ -150,15 +150,21 @@ and are expected to fail until the matching implementation task lands. Property 
   own material, and return the placeholder sepia-tinted material from the single `usePawMaterial` hook. Fire `onReady`
   after the first rendered frame, fade the canvas in over 300 ms, then hide the poster; fire `onFailure` on load
   error or `webglcontextlost`. (Req 2.2, 2.3, 2.5, 2.6, 2.10, 10.5, 10.6)
-- [ ] 30. `scene/use-joint-driver.ts` and `RestGroup.tsx`: the `useFrame` driver builds every pose from bind through
+- [x] 30. `scene/use-joint-driver.ts` and `RestGroup.tsx`: the `useFrame` driver builds every pose from bind through
   `poseJoint` for all 15 digit joints, applies sink and tilt on the model root group, calls `invalidate()` only while a
   command runs, calls `onDone` at the end, and applies `snap` effects in one frame. Add `releaseJoints(mixer, names)`
   and test it with a fake mixer. Connect the component to `SceneBridge` and give the scene `initialCurled`. Test the
   driver logic with a fake bone set (no WebGL): bind at amount 0, no accumulation across frames, one digit at a time.
   (Req 2.7, 2.8, 6.1, 5.4, 10.6)
-- [ ] 31. Granting twitch (250 ms, ui-brief moment 1) on the model root (wrist-only, off under reduced motion), plus an `invalidate`
+- [x] 31. Granting twitch (250 ms, ui-brief moment 1) on the model root (wrist-only, off under reduced motion), plus an `invalidate`
   counter for the idle-cost check. Verify by hand in the browser that curls, opens and the rest moment look right and
   tune `REST_SINK`, `REST_TILT_DEG` and the light intensities. (Req 2.6, 2.7, 2.8, 6.1, 9.4)
+  **Note:** the code, tests and the camera centring (on the GLB bounding-box centre, `centredPawCamera`) are done. The
+  hand check and the tuning were done in the browser (Chromium with WebGL, stubbed API): a 3-curse grant, three closes
+  (LIFO opens: middle, index, thumb) and the rest moment. Tuned values: `AMBIENT_INTENSITY` 1.8, `KEY_INTENSITY` 4.8,
+  `RIM_INTENSITY` 1.0, `REST_SINK` 0.1, `REST_TILT_DEG` −30 (negative: the fingertips lean back, away from the camera).
+  The intensities are high because the GLB material has metalness 1, there is no environment map, and the sepia tint is
+  applied in linear space.
 
 ## Accessibility
 

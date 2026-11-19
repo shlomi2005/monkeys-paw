@@ -104,7 +104,13 @@ export function App() {
 
           <div className={styles.pawBox}>
             <RayDisc pulseKey={grantedSeq} />
-            <PawStage bridge={bridge} initialCurled={ctx.curled} reducedMotion={reducedMotion} />
+            <PawStage
+              bridge={bridge}
+              initialCurled={ctx.curled}
+              initialPose={ctx.phase === 'ended' && ctx.endReason === 'all-closed' ? 'rested' : 'upright'}
+              granting={ctx.phase === 'granting'}
+              reducedMotion={reducedMotion}
+            />
             <div className={styles.stateText}>
               <PawStateText ctx={ctx} />
             </div>

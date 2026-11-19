@@ -27,8 +27,8 @@ describe('durations (Req 2.7, 2.8, 6.1)', () => {
 
 describe('rest-pose', () => {
   it('has the starting constants', () => {
-    expect(REST_SINK).toBe(0.04);
-    expect(REST_TILT_DEG).toBe(12);
+    expect(REST_SINK).toBe(0.1);
+    expect(REST_TILT_DEG).toBe(-30);
   });
 
   it('restTransform scales both values by p and clamps p to [0, 1]', () => {

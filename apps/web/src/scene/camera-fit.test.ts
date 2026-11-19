@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { CAMERA_FOV_DEG, CAMERA_TARGET, FRAME_HEIGHT_UNITS, fitDistance, pawCamera } from './camera-fit';
-import type { Vec3 } from './camera-fit';
+import { CAMERA_FOV_DEG, CAMERA_TARGET, FRAME_HEIGHT_UNITS, centredPawCamera, fitDistance, pawCamera } from './camera-fit';
+import type { Bounds, PawCamera, Vec3 } from './camera-fit';
 import { REST_SINK, REST_TILT_DEG } from './rest-pose';
 
-interface Box {
-  readonly min: Vec3;
-  readonly max: Vec3;
-}
+type Box = Bounds;
+
+/** The bind-pose bounds of both GLBs (docs/art/paw/PAW-ASSET.md). */
+const REAL_BOUNDS: Bounds = { min: [-0.164, 0, -0.108], max: [0.335, 1, 0.129] };
 
 /** Test-only: reads the POSITION accessor min/max from the GLB header and JSON chunk (nothing else is parsed). */
 function readGlbBox(fileName: string): Box {
@@ -49,8 +49,7 @@ function restTransformPoint([x, y, z]: Vec3, tiltDeg: number, sink: number): Vec
 }
 
 /** Perspective projection to normalised view coordinates (±1 at the edge) for the camera on +Z looking at -Z. */
-function project([x, y, z]: Vec3): { nx: number; ny: number } {
-  const cam = pawCamera();
+function project([x, y, z]: Vec3, cam: PawCamera): { nx: number; ny: number } {
   const tanHalf = Math.tan((cam.fov * Math.PI) / 360);
   const depth = cam.position[2] - z;
   expect(depth).toBeGreaterThan(0); // in front of the camera
@@ -58,11 +57,10 @@ function project([x, y, z]: Vec3): { nx: number; ny: number } {
   return { nx: (x - cam.position[0]) / (depth * tanHalf * aspect), ny: (y - cam.position[1]) / (depth * tanHalf) };
 }
 
-const MARGIN = 0.95;
-const POSES: readonly { name: string; tiltDeg: number; sink: number }[] = [
-  { name: 'upright', tiltDeg: 0, sink: 0 },
-  { name: 'rest, tilt +', tiltDeg: REST_TILT_DEG, sink: REST_SINK },
-  { name: 'rest, tilt -', tiltDeg: -REST_TILT_DEG, sink: REST_SINK },
+/** Upright keeps 95% of the half-view. At rest the sunk wrist is the lowest point and is allowed up to 98% (still inside). */
+const POSES: readonly { name: string; tiltDeg: number; sink: number; margin: number }[] = [
+  { name: 'upright', tiltDeg: 0, sink: 0, margin: 0.95 },
+  { name: 'rest', tiltDeg: REST_TILT_DEG, sink: REST_SINK, margin: 0.98 },
 ];
 
 describe('fitDistance', () => {
@@ -74,7 +72,7 @@ describe('fitDistance', () => {
   });
 });
 
-describe('pawCamera', () => {
+describe('pawCamera (the camera before the model is known)', () => {
   it('sits on +Z and looks at (0, 0.5, 0)', () => {
     const cam = pawCamera();
     expect(cam.fov).toBe(CAMERA_FOV_DEG);
@@ -87,34 +85,74 @@ describe('pawCamera', () => {
   });
 });
 
-describe.each(['paw-web.glb', 'paw-mobile.glb'])('the real bounding box of %s fits the view at 1:1', (file) => {
-  const box = readGlbBox(file);
+describe('centredPawCamera', () => {
+  const centreX = (REAL_BOUNDS.min[0] + REAL_BOUNDS.max[0]) / 2;
 
-  it('has the documented size (about x [-0.16, 0.33], y [0, 1], z [-0.11, 0.13])', () => {
-    expect(box.min[0]).toBeCloseTo(-0.16, 1);
-    expect(box.max[0]).toBeCloseTo(0.33, 1);
-    expect(box.min[1]).toBeCloseTo(0, 1);
-    expect(box.max[1]).toBeCloseTo(1, 1);
-    expect(box.min[2]).toBeCloseTo(-0.11, 1);
-    expect(box.max[2]).toBeCloseTo(0.13, 1);
+  it('puts the target and the position at the box centre x (about 0.085) and keeps y, fov and distance', () => {
+    const cam = centredPawCamera(REAL_BOUNDS);
+    expect(centreX).toBeCloseTo(0.0855, 4);
+    expect(cam.target).toEqual([centreX, 0.5, 0]);
+    expect(cam.position[0]).toBe(centreX);
+    expect(cam.position[1]).toBe(CAMERA_TARGET[1]);
+    expect(cam.position[2]).toBe(pawCamera().position[2]);
+    expect(cam.position[2]).toBeCloseTo(fitDistance(FRAME_HEIGHT_UNITS, CAMERA_FOV_DEG), 12);
+    expect(cam.fov).toBe(CAMERA_FOV_DEG);
   });
 
-  it.each(POSES)('keeps every corner inside 95% of the view, $name', ({ tiltDeg, sink }) => {
-    for (const c of corners(box)) {
-      const { nx, ny } = project(restTransformPoint(c, tiltDeg, sink));
-      expect(Math.abs(nx)).toBeLessThanOrEqual(MARGIN);
-      expect(Math.abs(ny)).toBeLessThanOrEqual(MARGIN);
+  it('looks straight down -Z: the position and the target differ only in z', () => {
+    const cam = centredPawCamera(REAL_BOUNDS);
+    expect(cam.position[0]).toBe(cam.target[0]);
+    expect(cam.position[1]).toBe(cam.target[1]);
+  });
+
+  it('puts the middle of the paw in the middle of the view', () => {
+    const cam = centredPawCamera(REAL_BOUNDS);
+    expect(Math.abs(project([centreX, 0.5, 0], cam).nx)).toBeLessThan(1e-12);
+    // The old wrist-centred camera put it off by about 13% of the half-width at the wrist plane.
+    expect(Math.abs(project([centreX, 0.5, 0], pawCamera()).nx)).toBeGreaterThan(0.1);
+  });
+
+  it.each(POSES)('keeps every corner of the real bounds inside the 1:1 view with a margin, $name', ({ tiltDeg, sink, margin }) => {
+    const cam = centredPawCamera(REAL_BOUNDS);
+    for (const c of corners(REAL_BOUNDS)) {
+      const { nx, ny } = project(restTransformPoint(c, tiltDeg, sink), cam);
+      expect(Math.abs(nx)).toBeLessThanOrEqual(margin);
+      expect(Math.abs(ny)).toBeLessThanOrEqual(margin);
     }
   });
 
-  it('reports the horizontal offset of the box centre from the view centre', () => {
-    const centreX = (box.min[0] + box.max[0]) / 2;
-    const cam = pawCamera();
-    const offsetUnits = centreX - cam.target[0];
-    const { nx } = project([centreX, 0.5, 0]);
-    // The target stays at x = 0 on purpose. The paw is not centred on the wrist: its box centre sits about
-    // 0.085 units to the right (+X), which is about 13% of the half-width of the view at the wrist plane.
-    console.info(`${file}: box centre x offset ${offsetUnits.toFixed(4)} units, ${(nx * 100).toFixed(1)}% of half-width`);
-    expect(Math.abs(nx)).toBeLessThan(0.2);
+  it('leaves a margin on both sides in x that is the same left and right', () => {
+    const cam = centredPawCamera(REAL_BOUNDS);
+    const left = project([REAL_BOUNDS.min[0], 0.5, REAL_BOUNDS.max[2]], cam).nx;
+    const right = project([REAL_BOUNDS.max[0], 0.5, REAL_BOUNDS.max[2]], cam).nx;
+    expect(left).toBeCloseTo(-right, 12);
+  });
+
+  it('falls back to the default camera for bounds that are not finite', () => {
+    expect(centredPawCamera({ min: [Infinity, 0, 0], max: [-Infinity, 1, 0] })).toEqual(pawCamera());
+    expect(centredPawCamera({ min: [Number.NaN, 0, 0], max: [1, 1, 0] })).toEqual(pawCamera());
+  });
+});
+
+describe.each(['paw-web.glb', 'paw-mobile.glb'])('the real bounding box of %s', (file) => {
+  const box = readGlbBox(file);
+
+  it('has the documented size (about x [-0.16, 0.33], y [0, 1], z [-0.11, 0.13])', () => {
+    expect(box.min[0]).toBeCloseTo(-0.164, 2);
+    expect(box.max[0]).toBeCloseTo(0.335, 2);
+    expect(box.min[1]).toBeCloseTo(0, 1);
+    expect(box.max[1]).toBeCloseTo(1, 1);
+    expect(box.min[2]).toBeCloseTo(-0.108, 2);
+    expect(box.max[2]).toBeCloseTo(0.129, 2);
+  });
+
+  it.each(POSES)('is centred and fits the view at 1:1 with a margin with the centred camera, $name', ({ tiltDeg, sink, margin }) => {
+    const cam = centredPawCamera(box);
+    expect(cam.position[0]).toBeCloseTo(0.085, 2);
+    for (const c of corners(box)) {
+      const { nx, ny } = project(restTransformPoint(c, tiltDeg, sink), cam);
+      expect(Math.abs(nx)).toBeLessThanOrEqual(margin);
+      expect(Math.abs(ny)).toBeLessThanOrEqual(margin);
+    }
   });
 });

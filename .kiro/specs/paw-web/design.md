@@ -305,17 +305,27 @@ Sequence on mount:
 - `<Canvas frameloop="demand" dpr={[1, 2]} (mobile [1, 1.5]) gl={{ alpha: true, antialias: true }} shadows="percentage" aria-hidden>`
   with `pointer-events: none` so circles near the edge stay clickable. The canvas background is transparent so
   the parchment and the red ray disc show through.
-- **Camera:** perspective, fov 30°, on the **+Z side** looking at `(0, 0.5, 0)`. The wrist is at the origin, the
-  paw is 1 unit high, Y up and the palm faces +Z (PAW-ASSET.md). The distance comes from a pure helper
+- **Camera:** perspective, fov 30°, on the **+Z side** looking straight down -Z at `(cx, 0.5, 0)`, where `cx` is the
+  **centre of the GLB's bind-pose bounding box** (about 0.085, from x [-0.164, 0.335]), not x = 0. The wrist is at the
+  origin, the paw is 1 unit high, Y up and the palm faces +Z (PAW-ASSET.md), but the paw is not symmetric about the
+  wrist, so aiming at x = 0 would leave it to the right of the plate's middle. The distance comes from a pure helper
   `camera-fit.ts`: `fitDistance(heightUnits, fovDeg) = (heightUnits / 2) / tan(fovDeg / 2)`, called with
   `heightUnits = 1.3` (1 unit plus about 15% margin each side, which also leaves room for the sink at rest). That
-  gives a position near `(0, 0.5, 2.4)`. A unit test checks the paw's bounding box fits the frustum at the 1:1
-  aspect.
-- **Lights:** one ambient light, sepia-tinted (`#f0dcb8`, intensity about 0.6); one key directional light from
-  upper-left-front (`#ffe2b0`, about 1.6) that casts a soft shadow (1024 map, 512 on mobile; three 0.187 removed `PCFSoftShadowMap`, so the canvas uses
+  gives a position near `(0.085, 0.5, 2.4)`. `centredPawCamera(bounds)` takes the bind-pose `{ min, max }` and returns
+  the camera with target and position x both at the box centre x; the vertical target (y = 0.5), the fov and the
+  distance are unchanged. The canvas starts with `pawCamera()` (x = 0) because the model does not exist yet. As soon
+  as the model is placed, `use-paw-camera.ts` measures the bounds once, from the mesh geometry's bounding box (the
+  bind pose, before any pose is applied), sets the camera and invalidates once. That happens in the same commit as the
+  model, so the first frame that reports ready already uses the centred camera and the paw never jumps sideways
+  after the fade-in. The camera is never refit while fingers move. The shadow plane sits at the same x. A unit test
+  checks the real bounds fit the frustum at the 1:1 aspect with margin.
+- **Lights:** one ambient light, sepia-tinted (`#f0dcb8`, intensity 1.8); one key directional light from
+  upper-left-front (`#ffe2b0`, intensity 4.8) that casts a soft shadow (1024 map, 512 on mobile; three 0.187 removed `PCFSoftShadowMap`, so the canvas uses
 `shadows="percentage"`, which is the soft PCF filter there); one faint
-  blood-red rim light from behind-right (`#8f1d14`, about 0.35). A transparent `ShadowMaterial` plane behind the
-  paw receives the drop shadow. Intensities are constants in `PawLights.tsx`, tuned in the scene task.
+  blood-red rim light from behind-right (`#8f1d14`, intensity 1.0). A transparent `ShadowMaterial` plane behind the
+  paw receives the drop shadow. Intensities are constants in `PawLights.tsx`, tuned in the browser in task 31. They are high because the GLB
+  material has metalness 1 and roughness 1, there is no environment map to reflect, and the sepia tint is applied in
+  linear space, which lowers the albedo a lot.
 - No environment map from a CDN. All values are local.
 
 #### Material seam (placeholder only)
@@ -343,7 +353,16 @@ When the queue is empty and no cosmetic effect runs, no frames render and the GP
 have ended completes on the next frame.
 
 Cosmetic wrist-only motion: a 250 ms twitch when the phase becomes `granting` (ui-brief moment 1). It uses the model
-root group, never the digit joints, so it cannot fight the joint driver. It is off under reduced motion. There is no
+root group, never the digit joints, so it cannot fight the joint driver: it writes only `rotation.z` of the root
+(a small damped roll about the wrist, two swings, 2.5° at most, exactly 0 at the start and the end), while the rest
+transform uses `position.y` and `rotation.x`. The stage passes `granting` (`ctx.phase === 'granting'`) to the scene;
+only the change to true after the model is placed starts it. It is off under reduced motion and is cancelled if the
+preference turns on mid-twitch.
+
+Every `invalidate()` the scene makes goes through `invalidate-counter.ts`, a tiny module that counts the calls
+(`invalidateCount()`, `resetInvalidateCount()`). It is the only module-level state in the scene. Tests and the later
+Playwright idle-cost check read it: an idle paw must not count up. Nothing is written to storage and nothing is
+exposed on `window`. There is no
 idle motion: while the phase is `idle` nothing moves and no frame renders.
 
 #### Joint pose module (`scene/joint-pose.ts`)
@@ -386,8 +405,37 @@ A `useFrame` callback runs while a command is active. Each frame it:
 3. for every joint of every digit, sets `bone.quaternion` from `poseJoint(spec, amounts[digit])`, always from bind;
 4. writes sink and tilt on the **model root group** (`RestGroup`), not on the wrist bone (allowed by Req 6.1), so
    the asset's "no transforms on the objects" rule holds for the GLB nodes;
-5. calls `invalidate()` while `elapsed < duration`; at the end sets the final values, calls `onDone(commandId)` and
-   stops invalidating.
+5. calls `invalidate()` while `elapsed < duration`; at the end sets the final values, calls `bridge.done(command)` once
+   and stops invalidating (no `invalidate()` at the end or after it, unless the session answers with the next
+   command, which asks for its own frame). The active command is cleared before `done`, so a command started from
+   inside `done` is kept.
+
+The logic lives in `joint-driver.ts` (`createJointDriver`, no React and no WebGL, tested against three `Object3D`s as a
+fake bone set). `use-joint-driver.ts` is the r3f wrapper: a layout effect looks the 15 bones up by name
+(`collectBones`; the GLB nodes are named exactly like the joints in `runtime-controls.json` and sit at their
+`bind_local_rotation_xyzw`, pinned by `glb-skeleton.test.ts`), builds the driver and disposes it, and a `useFrame`
+calls `driver.frame()`. A missing bone fails the scene (`onFailure`, the poster stays).
+
+**Snap.** A `snap` effect cancels the playing command without `done`, sets all 15 joints and the root from the
+effect's amounts and pose in that one call, and invalidates once. A frame that comes after it finds no active command
+and does nothing.
+
+**Starting pose.** On creation the driver poses the model from `initialCurled` (amount 1 for each curled digit, 0
+for the rest) and `initialPose` (`rested` when `ctx.phase === 'ended'` and `endReason === 'all-closed'`, else
+`upright`), because a Grant may arrive before the chunk. The scene reads these props until it is ready and never
+afterwards (App passes `ctx.curled`, which changes on every grant; once ready only play and snap effects move the
+paw). Reading until ready, not only at mount, matters because the GLB can take seconds to load and play and snap
+effects sent before the scene is ready are dropped. The driver re-reads the pose in the microtask just before it
+reports ready.
+
+**Readiness.** The driver subscribes to the bridge on creation. After its first rendered frame (a microtask after
+the first `frame()`, so after that frame was drawn) it calls `setReady(true)` on its own bridge subscription and then
+`onReady` (which makes the stage fade the canvas in). It leaves the bridge when it is disposed (unmount), and the scene
+calls `bridge.setReady(false)` when it reports a failure or on `webglcontextlost`; a pending ready report is dropped in
+all those cases, so the session never waits for a scene that is gone (an active command is then finished by the
+session's `onDetach`). Readiness belongs to the driver and is tied to its subscription, because the react-dom root
+(`PawScene`) and the r3f root (the driver's first frame) are unordered, so a cleanup in `PawScene`, or a disposed
+driver, must never be able to clear the readiness of the live driver.
 
 **No competing animation:** before the first frame of direct control (and on mount) the driver calls
 `releaseJoints(mixer, jointNames)`. It stops every `AnimationAction` whose clip tracks target one of the 15 driven
@@ -404,7 +452,9 @@ every frame, even at amount 0, also means the GLB's own initial pose cannot leak
 | `rest` | about 2000 ms | `p = smoothstep(t/2000)`; root sinks `REST_SINK · p` on Y and tilts `REST_TILT_DEG · p` about X | Req 6.1 |
 
 `cubicOut(u) = 1 − (1 − u)³`, `smoothstep(u) = u²(3 − 2u)`, both clamped to u ∈ [0, 1]. `REST_SINK` and `REST_TILT_DEG`
-are named constants (start near 0.04 units and 12°), tuned in the scene task so the paw "lies down". Only one
+are named constants (tuned in the browser in task 31: `REST_SINK` 0.1 units, `REST_TILT_DEG` −30°), so the paw "lies down". The tilt is
+negative so the fingertips lean back, away from the camera, and the paw reads as lying back onto the plate (a positive tilt
+leans them toward the viewer). Only one
 command is active at a time, so only one digit changes per frame.
 
 **Reduced motion** (Req 2.9, 6.1): the state machine does not queue animations at all. It emits a `snap` effect
@@ -423,6 +473,9 @@ type SceneEffect =
 interface SceneBridge {
   subscribe(listener: (effect: SceneEffect) => void): () => void;
   done(command: AnimCommand): void;        // dispatches curl_done / open_done / rest_done
+}
+interface SceneBridgePort extends SceneBridge {   // what the scene holds
+  setReady(ready: boolean): void;          // true after the first rendered frame, false when lost or unmounted
 }
 ```
 

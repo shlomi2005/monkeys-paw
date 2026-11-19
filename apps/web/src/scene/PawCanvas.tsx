@@ -37,6 +37,8 @@ export function PawCanvas({ mobile, onContextLost, children }: PawCanvasProps) {
       gl={{ alpha: true, antialias: true }}
       // Soft shadows. In three 0.187 `PCFSoftShadowMap` is removed (and warns every frame); `PCFShadowMap` is the soft filter.
       shadows="percentage"
+      // Starts aimed at the wrist (x = 0). `PawModel` centres it on the paw's bind-pose box as soon as the model is placed,
+      // before the first frame that reports ready.
       camera={{ fov: camera.fov, position: [...camera.position], near: 0.1, far: 20 }}
       onCreated={({ camera: created }) => created.lookAt(...camera.target)}
       aria-hidden="true"

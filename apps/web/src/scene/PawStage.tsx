@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Digit } from '../state/paw-machine-types';
-import type { SceneBridge } from '../state/scene-bridge';
+import type { SceneBridgePort } from '../state/scene-bridge';
 import { chooseGlb } from './glb-choice';
 import type { GlbChoice } from './glb-choice';
 import { PawPoster } from './PawPoster';
@@ -27,8 +27,12 @@ export interface PawStageProps {
    * The session's scene bridge. Without it the stage is a plain poster box and never loads the scene.
    * With it, the stage loads the 3D chunk when WebGL works and the visitor has not asked for reduced data.
    */
-  readonly bridge?: SceneBridge;
+  readonly bridge?: SceneBridgePort;
   readonly initialCurled?: readonly Digit[];
+  /** `rested` when the round already ended with every curse closed. Only read until the scene is ready. */
+  readonly initialPose?: 'upright' | 'rested';
+  /** True while the session is granting: the paw twitches once (not under reduced motion). */
+  readonly granting?: boolean;
   readonly reducedMotion?: boolean;
 }
 
@@ -62,6 +66,8 @@ export function PawStage({
   className,
   bridge,
   initialCurled = [],
+  initialPose = 'upright',
+  granting = false,
   reducedMotion = false,
 }: PawStageProps) {
   /** Set once the scene has been requested. It also holds the GLB choice, read once on mount. */
@@ -121,6 +127,8 @@ export function PawStage({
               <PawScene
                 bridge={bridge}
                 initialCurled={initialCurled}
+                initialPose={initialPose}
+                granting={granting}
                 reducedMotion={reducedMotion}
                 glb={glb}
                 onReady={handleReady}
