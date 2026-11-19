@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BindResponseSchema,
   CurseSchema,
+  ExamplesResponseSchema,
+  GrantResponseSchema,
   GrantSchema,
   SpecExportSchema,
   VerdictSchema,
+  WishSchema,
 } from '../src/schemas';
 import type {
   Curse,
@@ -109,5 +113,62 @@ describe('schema rejection of invalid input', () => {
     const bad = makeGrant(3);
     bad.curses[0] = { ...bad.curses[0], loophole: '' };
     expect(() => GrantSchema.parse(bad)).toThrow();
+  });
+});
+
+describe('Wish and response envelope schemas (paw-web task 2)', () => {
+  const wish = { id: 'w1', text: 'Only the owner can delete a project', createdAt: 1 };
+  const grant: Grant = {
+    wishId: 'w1',
+    narration: 'Granted, exactly as written.',
+    curses: [
+      makeCurse(1, 'permissions'),
+      makeCurse(2, 'time'),
+      makeCurse(3, 'abuse'),
+    ],
+  };
+  const verdict: Verdict = {
+    curseId: 'c1',
+    closed: true,
+    reason: 'The clause covers the owner leaving.',
+    judgedAt: 2,
+  };
+
+  it('WishSchema accepts a valid wish, with and without context', () => {
+    expect(WishSchema.safeParse(wish).success).toBe(true);
+    expect(WishSchema.safeParse({ ...wish, context: 'a project tool' }).success).toBe(true);
+  });
+
+  it('WishSchema trims the text and rejects blank text with the original message', () => {
+    expect(WishSchema.parse({ ...wish, text: '  padded  ' }).text).toBe('padded');
+    for (const text of ['', '   ', '\n\t']) {
+      const result = WishSchema.safeParse({ ...wish, text });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0]?.message).toBe('Wish text cannot be empty');
+      }
+    }
+  });
+
+  it('GrantResponseSchema accepts a valid grant envelope', () => {
+    expect(GrantResponseSchema.safeParse({ wish, grant }).success).toBe(true);
+  });
+
+  it('BindResponseSchema accepts a bind envelope', () => {
+    expect(BindResponseSchema.safeParse({ grant, verdict }).success).toBe(true);
+  });
+
+  it('ExamplesResponseSchema accepts an array of wish and grant pairs, including empty', () => {
+    expect(ExamplesResponseSchema.safeParse([{ wish, grant }, { wish, grant }]).success).toBe(true);
+    expect(ExamplesResponseSchema.safeParse([]).success).toBe(true);
+  });
+
+  it('rejects the wrong shape', () => {
+    expect(WishSchema.safeParse({ id: 'w1', text: 'x' }).success).toBe(false);
+    expect(GrantResponseSchema.safeParse({ wish, grant: { wishId: 'w1' } }).success).toBe(false);
+    expect(GrantResponseSchema.safeParse({ grant }).success).toBe(false);
+    expect(BindResponseSchema.safeParse({ grant }).success).toBe(false);
+    expect(ExamplesResponseSchema.safeParse({ wish, grant }).success).toBe(false);
+    expect(ExamplesResponseSchema.safeParse([{ wish }]).success).toBe(false);
   });
 });

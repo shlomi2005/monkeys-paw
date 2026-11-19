@@ -1,26 +1,17 @@
 import { z } from 'zod';
 import {
+  BindResponseSchema,
   BindingKindSchema,
-  BindingSchema,
-  CurseSchema,
+  ExamplesResponseSchema,
+  GrantResponseSchema,
   GrantSchema,
-  IntegrityResultSchema,
-  SpecExportSchema,
-  VerdictSchema,
+  WishSchema,
 } from 'paw-core';
+import type { BindResponse, ExamplesResponse, GrantResponse } from 'paw-core';
 
-/**
- * Wish as created by the API (includes server-generated id and createdAt).
- * (Req 1.1, Task 18)
- */
-export const WishSchema = z.object({
-  id: z.string().min(1),
-  text: z.string().trim().min(1, 'Wish text cannot be empty'),
-  context: z.string().optional(),
-  createdAt: z.number(),
-});
-
-export type Wish = z.infer<typeof WishSchema>;
+// Moved to paw-core (paw-web task 2, decision A7); re-exported so routes and tests keep their imports.
+export { BindResponseSchema, ExamplesResponseSchema, GrantResponseSchema, WishSchema };
+export type { BindResponse, ExamplesResponse, GrantResponse };
 
 /**
  * Request body for POST /api/grant.
@@ -35,16 +26,6 @@ export const GrantRequestSchema = z.object({
 export type GrantRequest = z.infer<typeof GrantRequestSchema>;
 
 /**
- * Response for POST /api/grant.
- */
-export const GrantResponseSchema = z.object({
-  wish: WishSchema,
-  grant: GrantSchema,
-});
-
-export type GrantResponse = z.infer<typeof GrantResponseSchema>;
-
-/**
  * Request body for POST /api/bind.
  */
 export const BindRequestSchema = z.object({
@@ -57,16 +38,6 @@ export const BindRequestSchema = z.object({
 export type BindRequest = z.infer<typeof BindRequestSchema>;
 
 /**
- * Response for POST /api/bind.
- */
-export const BindResponseSchema = z.object({
-  grant: GrantSchema,
-  verdict: VerdictSchema,
-});
-
-export type BindResponse = z.infer<typeof BindResponseSchema>;
-
-/**
  * Request body for POST /api/export.
  */
 export const ExportRequestSchema = z.object({
@@ -75,18 +46,6 @@ export const ExportRequestSchema = z.object({
 });
 
 export type ExportRequest = z.infer<typeof ExportRequestSchema>;
-
-/**
- * Examples array response schema.
- */
-export const ExamplesResponseSchema = z.array(
-  z.object({
-    wish: WishSchema,
-    grant: GrantSchema,
-  }),
-);
-
-export type ExamplesResponse = z.infer<typeof ExamplesResponseSchema>;
 
 /**
  * Health check response schema.

@@ -19,14 +19,24 @@ export type {
 export {
   BindingKindSchema,
   BindingSchema,
+  BindResponseSchema,
   BatchQualityGateSchema,
   CurseSchema,
   CurseTypeSchema,
+  ExamplesResponseSchema,
+  GrantResponseSchema,
   GrantSchema,
   IntegrityResultSchema,
   QualityGateSchema,
   SpecExportSchema,
   VerdictSchema,
+  WishSchema,
+} from './schemas';
+
+export type {
+  BindResponse,
+  ExamplesResponse,
+  GrantResponse,
 } from './schemas';
 
 export type { BudgetConfig, BudgetState } from './budget';

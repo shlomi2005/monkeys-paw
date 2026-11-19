@@ -68,7 +68,7 @@ describe('API Correctness Properties (design.md, Tasks 76-82)', () => {
   it('P3: Grant validation - valid wish ID and context format', () => {
     fc.assert(
       fc.property(
-        fc.string({ minLength: 1, maxLength: 500 }),
+        fc.string({ minLength: 1, maxLength: 500 }).filter((s) => s.trim().length > 0),
         fc.string({ maxLength: 200 }).map((s) => (s ? s : undefined)),
         (wishText, context) => {
           // A valid wish should have non-empty text

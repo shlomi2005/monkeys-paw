@@ -12,7 +12,7 @@ and are expected to fail until the matching implementation task lands. Property 
   dependency on `paw-core`, `.env.example` listing only `VITE_API_BASE_URL`, and `.gitignore` entries for
   `apps/web/public/paw/`, `dist/` and `.env`. Use CSS Modules for all styling. Render an empty `App`. (Req 10.4, 11.1;
   tech.md, structure.md, iron-rules §1)
-- [ ] 2. Prerequisite in `paw-core` and `apps/api`: move `WishSchema` and the envelope schemas
+- [x] 2. Prerequisite in `paw-core` and `apps/api`: move `WishSchema` and the envelope schemas
   (`GrantResponseSchema`, `BindResponseSchema`, `ExamplesResponseSchema`) into `paw-core/src/schemas.ts`, export them
   from `index.ts`, and re-point `apps/api/src/schemas.ts` to import them. Confirm `paw-core/package.json` has
   `"sideEffects": false`. Run both packages' test suites. (A7, Req 3.3, 4.3, 10.4)

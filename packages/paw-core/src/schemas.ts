@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { Wish } from './types';
+
 /** All 10 curse type tags from curse-taxonomy.md, in canonical order. */
 export const CurseTypeSchema = z.enum([
   'permissions',
@@ -78,3 +80,48 @@ export const BatchQualityGateSchema = z.array(
     reason: z.string().min(1),
   }),
 );
+
+/**
+ * Wish as created by the API (includes server-generated id and createdAt).
+ * (Req 1.1, Task 18; moved from apps/api by paw-web task 2, decision A7)
+ */
+export const WishSchema = z.object({
+  id: z.string().min(1),
+  text: z.string().trim().min(1, 'Wish text cannot be empty'),
+  context: z.string().optional(),
+  createdAt: z.number(),
+});
+
+/** Compile-time check: `WishSchema` output and `Wish` (types.ts) are mutually assignable. */
+type WishSchemaOutput = z.infer<typeof WishSchema>;
+type AssertAssignable<_A extends B, B> = true;
+export type WishSchemaMatchesWish = [
+  AssertAssignable<WishSchemaOutput, Wish>,
+  AssertAssignable<Wish, WishSchemaOutput>,
+];
+
+/** Response for POST /api/grant. */
+export const GrantResponseSchema = z.object({
+  wish: WishSchema,
+  grant: GrantSchema,
+});
+
+export type GrantResponse = z.infer<typeof GrantResponseSchema>;
+
+/** Response for POST /api/bind. */
+export const BindResponseSchema = z.object({
+  grant: GrantSchema,
+  verdict: VerdictSchema,
+});
+
+export type BindResponse = z.infer<typeof BindResponseSchema>;
+
+/** Examples array response schema. */
+export const ExamplesResponseSchema = z.array(
+  z.object({
+    wish: WishSchema,
+    grant: GrantSchema,
+  }),
+);
+
+export type ExamplesResponse = z.infer<typeof ExamplesResponseSchema>;
