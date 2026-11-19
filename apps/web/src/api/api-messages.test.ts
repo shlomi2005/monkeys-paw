@@ -21,6 +21,12 @@ describe('api-messages lines', () => {
     expect(messages.EXAMPLES_SLEEPING_MESSAGE).toBe('The examples are sleeping. Write your own wish.');
   });
 
+  it('uses the binding card lines', () => {
+    expect(messages.JUDGE_STIRS_MESSAGE).toBe('The Judge stirs…');
+    expect(messages.PAW_REMEMBERS_MESSAGE).toBe('The paw remembers.');
+    expect(messages.EMPTY_CLAUSE_MESSAGE).toBe('The Judge cannot weigh a blank clause. Write one first.');
+  });
+
   it('keeps every line within the 200 character limit', () => {
     for (const value of Object.values(messages)) {
       if (typeof value === 'string') expect(value.length).toBeLessThanOrEqual(200);

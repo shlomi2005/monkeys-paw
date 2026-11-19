@@ -1,0 +1,241 @@
+/*
+ * BindingCard: a native <dialog> on parchment with an engraved double border, in keeping with the plate.
+ * From 768 px it is a centred card. Under 768 px it is a bottom sheet: full width, 80vh at most, scrollable.
+ * Every control is at least 48 px high (Req 9.3). Text is never under 1rem. Hover effects live inside
+ * (hover: hover) only. The open transition uses --dur-fade, which reduced motion sets to 1 ms.
+ */
+
+.card {
+  box-sizing: border-box;
+  width: min(36rem, calc(100% - 2rem));
+  max-width: none;
+  max-height: min(90vh, 90dvh);
+  margin: auto;
+  padding: 1.5rem 1.5rem 1.25rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 3px solid var(--ink);
+  border-radius: 4px;
+  background:
+    radial-gradient(ellipse at center, transparent 60%, color-mix(in srgb, var(--sepia) 18%, transparent) 100%),
+    var(--parchment);
+  /* Engraved border: ink rule, a parchment gap, then a thin sepia rule inside. */
+  box-shadow:
+    inset 0 0 0 6px var(--parchment),
+    inset 0 0 0 8px var(--sepia),
+    0 0.75rem 2.5rem color-mix(in srgb, var(--ink) 55%, transparent);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: var(--line-height);
+}
+
+.card[open] {
+  opacity: 1;
+  transition: opacity var(--dur-fade) ease-out;
+}
+
+@starting-style {
+  .card[open] {
+    opacity: 0;
+  }
+}
+
+.card::backdrop {
+  background: color-mix(in srgb, var(--ink) 60%, transparent);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  /* Keep the content clear of the engraved rules. */
+  padding: 0.5rem 0.25rem;
+}
+
+.type {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sepia-text);
+}
+
+.described {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.story {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.loophole {
+  margin: 0;
+  padding: 0.25rem 0 0.25rem 0.75rem;
+  border-left: 3px solid var(--sepia);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.loophole::before {
+  content: '\201C';
+}
+
+.loophole::after {
+  content: '\201D';
+}
+
+.remembers {
+  margin: 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.125rem;
+  color: var(--blood);
+}
+
+.clauseLabel {
+  margin-top: 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.clause {
+  width: 100%;
+  min-height: 6rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: var(--control-border-width) solid var(--ink);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--parchment) 70%, white);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: var(--line-height);
+  resize: vertical;
+}
+
+.clause[readonly] {
+  opacity: 0.8;
+}
+
+.clause[aria-invalid='true'] {
+  border-color: var(--blood);
+}
+
+.clause:focus-visible,
+.accept:focus-visible,
+.secondary:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.blank,
+.notice,
+.resting {
+  margin: 0;
+  color: var(--ink);
+}
+
+.blank,
+.error {
+  color: var(--blood);
+}
+
+.resting {
+  font-family: var(--font-display);
+  font-style: italic;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.accept,
+.secondary {
+  min-width: 48px;
+  min-height: 3rem;
+  margin: 0;
+  padding: 0.25rem 1.25rem;
+  border: var(--control-border-width) solid var(--control-border-color);
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  cursor: pointer;
+  transition: box-shadow var(--dur-seal) ease-out;
+}
+
+/* Accept is the seal: blood red with an ink border, so the control boundary keeps 3:1 against the parchment. */
+.accept {
+  background: var(--blood);
+  color: var(--parchment);
+  letter-spacing: 0.04em;
+}
+
+.secondary {
+  background: transparent;
+  color: var(--ink);
+}
+
+.accept:active:not([aria-disabled='true']),
+.secondary:active:not([aria-disabled='true']) {
+  box-shadow: inset 0 2px 4px color-mix(in srgb, var(--ink) 60%, transparent);
+}
+
+/* aria-disabled, not disabled: the button keeps focus while the Judge weighs the clause. */
+.inactive {
+  opacity: 0.7;
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .accept:hover:not([aria-disabled='true']) {
+    box-shadow: 0 0 10px 2px color-mix(in srgb, var(--blood) 70%, transparent);
+  }
+
+  .secondary:hover:not([aria-disabled='true']) {
+    background: color-mix(in srgb, var(--sepia) 18%, transparent);
+  }
+}
+
+/* One line is reserved for the status, so "The Judge stirs…" moves nothing. */
+.status {
+  min-height: calc(1em * var(--line-height));
+  margin: 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--sepia-text);
+}
+
+/* Bottom sheet: full width, at most 80vh, scrollable. CSS only. */
+@media (max-width: 767.98px) {
+  .card {
+    width: 100%;
+    max-width: 100%;
+    max-height: 80vh;
+    margin: auto 0 0;
+    padding: 1.25rem 1rem 1rem;
+    overflow-y: auto;
+    border-bottom: 0;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .buttons {
+    flex-direction: column;
+  }
+
+  .accept,
+  .secondary {
+    width: 100%;
+  }
+}

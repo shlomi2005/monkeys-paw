@@ -54,3 +54,12 @@ export const PAW_STIRS_MESSAGE = 'The Paw stirs…';
 
 /** Placeholder card when `GET /api/examples` is not available (Req 3.7). Not an error. */
 export const EXAMPLES_SLEEPING_MESSAGE = 'The examples are sleeping. Write your own wish.';
+
+/** Status line in the binding card while the Judge weighs a clause (paw-web Req 4.3). */
+export const JUDGE_STIRS_MESSAGE = 'The Judge stirs…';
+
+/** Under the story in the binding card after a "not closed" verdict (paw-web Req 4.3). */
+export const PAW_REMEMBERS_MESSAGE = 'The paw remembers.';
+
+/** "Accept this clause" with a blank clause. No request is made. */
+export const EMPTY_CLAUSE_MESSAGE = 'The Judge cannot weigh a blank clause. Write one first.';

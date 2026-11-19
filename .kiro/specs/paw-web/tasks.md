@@ -124,7 +124,7 @@ and are expected to fail until the matching implementation task lands. Property 
   select on click or Enter, highlight clears when the text is edited, dim while typing, placeholder when examples are
   unavailable, horizontal row (desktop) and strip (mobile). Component tests for each state. (Req 3.2, 3.4, 3.5, 3.6,
   3.7, 3.8, 9.1)
-- [ ] 25. `BindingCard`: native `<dialog>` opened with `showModal()`, curse story and loophole, editable clause
+- [x] 25. `BindingCard`: native `<dialog>` opened with `showModal()`, curse story and loophole, editable clause
   pre-filled with the suggested EARS clause, "Accept this clause", "Rewrite the whole wish", "Cancel", "The Judge
   stirs…", "The paw remembers." line, bottom-sheet variant under 768 px, `aria-labelledby` and `aria-describedby`.
   Wire to `bind_submitted`, `card_closed`, `rewrite`. (Req 4.2, 4.3, 4.4, 4.5, 4.6, 8.4, 9.1)
