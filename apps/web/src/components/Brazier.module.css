@@ -2,8 +2,10 @@
 
 .brazier {
   position: absolute;
+  /* The layout (App.module.css) sets --brazier-w: the caption cap of the lower circles depends on it. */
+  --bw: var(--brazier-w, clamp(2.5rem, 7vw, 6.5rem));
   bottom: 9%;
-  width: clamp(2.5rem, 7vw, 6.5rem);
+  width: var(--bw);
   aspect-ratio: 1 / 2;
   pointer-events: none;
 }
@@ -105,7 +107,14 @@
 }
 
 @media (max-width: 767.98px) {
+  /*
+   * On a phone the braziers flank the paw box, beside it and centred on it, where the sides are free: the narration
+   * and the circle list are under the box. The centre of the box is --content-pad + 0.35 box (ray disc room above)
+   * - 1 rem + half a box under the layout top; the brazier is 2 x --bw high.
+   */
   .brazier {
+    top: calc(var(--content-pad, 0px) + var(--paw-size) * 0.85 - 1rem - var(--bw));
+    bottom: auto;
     opacity: 0.55;
   }
 

@@ -157,10 +157,13 @@ Grant arriving moves nothing. The paw box is `clamp(300px, min(30vw, 38vh), 400p
 the width, so the stage and the first row of the wish line fit a 1440×900 or 1280×800 screen (the stage is about
 710 px high at 1440×900 and the wish line starts at about y=756).
 
-- The red "Granted." stamp is drawn over the lower part of the paw box. The paw state text sits just under the box.
+- The red "Granted." stamp is centred under the wrist: its top edge is at `--stamp-top` (0.84) of the paw box height, never
+  above 0.80, so the red wrist cord (0.64–0.78) stays visible. Its size follows the paw box (18 px letters or more).
+  The paw state text sits just under the box and is not covered.
 - From 1024 px, the narration goes in the free column under the paw between the two lower circles, whose captions
   sit beside their discs on the outer side. The medal (lower left) and the actions (lower right) sit in a row under
-  the circle labels; the braziers stand above that row. The narration is clamped to 6 lines.
+  the circle labels; the braziers stand above that row. The narration is clamped to 6 lines. A lower caption is capped
+  so it ends before the brazier column (`--brazier-inner`); the brazier narrows between 1024 and about 1230 px to leave room.
 - From 768 to 1023 px the plate is too narrow for that column. The lower captions stay under their discs, the
   narration is a 5-line band under them, and the medal and actions share a row under the band. The stage is taller
   there and the wish line may start below the fold.
@@ -169,8 +172,10 @@ the width, so the stage and the first row of the wish line fit a 1440×900 or 12
 
 The visual order is the tab order: the paw with its state text, the stamp and the narration, the wish line, the
 examples, then the circle list, then the medal and the actions. The stamp is drawn over the lower part of the paw box;
-the stamp area has one reserved height (5 lines of narration, clamped), so the Grant arriving does not move the wish
-line, and the input is on the first screen under the paw (360×740 and 390×844).
+the stamp area has no height before a Grant, so the wish line sits right under the paw text and is on the first screen
+(360×740 and 390×844). When the Grant arrives the area takes one reserved height (5 lines of narration, clamped): one
+layout shift, just after the user pressed "Make the wish". The braziers stand beside the paw box, centred on it, so
+no narration text runs over them.
 
 The paw shrinks to 150–200 px. `CircleRing` becomes a vertical list under the examples, in index order 0 to 4, each
 row full width with margins, disc ~60 px with the caption beside it. Inputs stack. Examples become a horizontal

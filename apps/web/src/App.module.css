@@ -6,8 +6,9 @@
  *
  * Mobile (under 768 px): one column. The visual order is the tab order: the paw with its state text, the stamp and the
  * narration, the wish line, the examples, then the circle list, then the medal and the actions. The "Granted." stamp
- * is drawn over the lower part of the paw box. The stamp area has one reserved height (the narration, 5 lines), so the
- * Grant arriving does not move the wish line.
+ * is drawn over the lower part of the paw box. Before a Grant the stamp area has no height, so the wish line sits right
+ * under the paw text. When the Grant arrives, the area takes one reserved height (the narration, 5 lines): one layout
+ * shift, right after the user pressed "Make the wish". The phone braziers stand beside the paw box (Brazier.module.css).
  *
  * From 768 px: ONE grid area ("stage") holds the paw, the decoration, the circle ring, the stamp, the narration, the
  * medal and the actions, stacked in the same cell. The wish line and the examples follow. There is no stamp row and no
@@ -35,6 +36,13 @@
   --state-zone: calc(2.5rem + var(--cue-h));
   /* Lines of the narration that the layout reserves room for. The narration is clipped (with an ellipsis) after that. */
   --narration-lines: 5;
+  /*
+   * The "Granted." stamp: the fraction of the paw box height (from its top) where the stamp's top edge sits. The red wrist
+   * cord is at 0.64 to 0.78 of the box height, so the stamp (and its rotated corners) stays at 0.80 or lower, under it.
+   */
+  --stamp-top: 0.84;
+  /* The brazier width, and from 1024 px the distance from the paw centre to the inner edge of the brazier column. */
+  --brazier-w: clamp(2.5rem, 7vw, 6.5rem);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
@@ -85,7 +93,7 @@
 
 .stateText {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 0.25rem);
   left: 50%;
   width: max-content;
   max-width: min(20rem, calc(100vw - 4rem));
@@ -101,7 +109,12 @@
   grid-area: stamp;
   position: relative;
   z-index: 1;
-  /* One reserved height (--narration-lines of the narration), so the Grant arriving moves nothing. */
+  /* No height without a Grant: the wish line does not wait under an empty band. */
+  min-height: 0;
+}
+
+/* With a Grant: one reserved height (--narration-lines of the narration), so the narration changing moves nothing. */
+.stampSlot:has([data-narration]) {
   min-height: calc(var(--narration-lines) * 1.125rem * var(--line-height));
 }
 
@@ -113,12 +126,19 @@
   position: absolute;
   right: 0;
   left: 0;
-  /* Over the lower part of the paw box: its bottom edge 0.4 rem above the box bottom. */
-  bottom: calc(100% + var(--state-zone) + 0.75rem + 0.4rem);
+  /*
+   * Under the wrist cord, centred: the top edge is at --stamp-top of the paw box height. The paw box ends
+   * (--state-zone + the 0.75 rem row gap) above this slot, so the offset is measured back from the slot top.
+   * The size follows the paw box (at least 14 px), so the rotated stamp fits in the 0.2 of the box under the cord.
+   */
+  top: calc(var(--paw-size) * (var(--stamp-top) - 1) - var(--state-zone) - 0.75rem);
   width: fit-content;
   margin-inline: auto;
-  padding-inline: 0.75rem;
-  font-size: 1.5rem;
+  padding: 0 0.45em;
+  border-width: 2px;
+  font-size: max(0.875rem, calc(var(--paw-size) * 0.093));
+  letter-spacing: 0.06em;
+  line-height: 1.1;
 }
 
 .stampSlot [data-narration] {
@@ -232,9 +252,13 @@
     pointer-events: none;
   }
 
+  /* The slot is the paw box here, so the top edge is a plain fraction of it. Letters of 18 px or more. */
   .stampSlot [data-stamp] {
-    bottom: 0.5rem;
-    padding-inline: 1rem;
+    top: calc(var(--paw-size) * var(--stamp-top));
+    padding-inline: 0.6em;
+    border-width: 3px;
+    font-size: max(1rem, calc(var(--paw-size) * 0.065));
+    letter-spacing: 0.1em;
   }
 
   /* The narration: under the state text, in the slot's coordinates (the box is --paw-size square). */
@@ -284,8 +308,14 @@
     --stage-bottom: calc(var(--labels-bottom) + 0.5rem + var(--row-h) + 0.75rem + var(--cue-h) - var(--paw-size) / 2);
   }
 
-  .stampSlot [data-stamp] {
-    font-size: 2rem;
+  /*
+   * The brazier column: from the paw centre to the inner edge of the brazier (1.25 rem from the plate edge). The lower
+   * circles' captions are capped to end before it (CurseCircle.module.css). The brazier grows with the width, so
+   * from 1280 px it is the same size as before.
+   */
+  .layout {
+    --brazier-w: clamp(2.5rem, calc(2.5rem + (100vw - 1024px) * 0.2), min(7vw, 6.5rem));
+    --brazier-inner: calc(50vw - 1.25rem - var(--brazier-w));
   }
 
   .stampSlot [data-narration] {

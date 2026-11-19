@@ -243,10 +243,19 @@
  * (caption to the right), circle 4 lower-left (caption to the left, text aligned right).
  */
 @media (min-width: 1024px) {
+  /*
+   * The width stops 0.5 rem before the brazier column (--brazier-inner, App.module.css; 1 rem more for a scrollbar).
+   * Distance from the paw centre to the caption start: the disc centre (0.588 of --ring-rx), half a disc, 1.5 rem.
+   * Wide enough for --caption-w from about 1280 px; narrower at 1024 px, where the column is nearer.
+   */
   .slot[data-index='3'] .caption,
   .slot[data-index='4'] .caption {
     top: 0;
     margin-left: 0;
+    width: min(
+      var(--caption-w),
+      calc(var(--brazier-inner, 100vw) - 1.5rem - var(--ring-rx) * 0.588 - var(--disc) / 2 - 1.5rem)
+    );
   }
 
   .slot[data-index='3'] .caption {

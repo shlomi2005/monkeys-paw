@@ -47,8 +47,58 @@ describe('App layout: mobile grid (under 768 px)', () => {
     expect(rows.map((row) => row[0])).toEqual(order);
   });
 
-  it('reserves a height for the stamp area, so the Grant arriving moves nothing', () => {
-    expect(declarationsFor(rules, '.stampSlot', MOBILE)['min-height']).toMatch(/narration-lines/);
+  it('reserves the narration height only when there is a Grant, so the wish line does not wait under an empty band', () => {
+    expect(declarationsFor(rules, '.stampSlot', MOBILE)['min-height']).toBe('0');
+    const withGrant = declarationsFor(rules, '.stampSlot:has([data-narration])', MOBILE);
+    expect(withGrant['min-height']).toMatch(/narration-lines/);
+  });
+});
+
+describe('App layout: the Granted stamp stays under the wrist cord', () => {
+  // The cord is at 0.64 to 0.78 of the paw box height. The stamp's top edge is at --stamp-top of the box height.
+  it('has its top edge at 0.80 of the paw box height or lower', () => {
+    const top = Number(layout(MOBILE)['--stamp-top']);
+    expect(top).toBeGreaterThanOrEqual(0.8);
+    expect(top).toBeLessThan(1);
+  });
+
+  it('is placed from the paw box size, on a phone and on desktop, not in fixed pixels', () => {
+    for (const media of [MOBILE, DESKTOP]) {
+      const stamp = declarationsFor(rules, '.stampSlot [data-stamp]', media);
+      expect(stamp['top'], String(media)).toMatch(/--paw-size\)[^;]*--stamp-top/);
+      expect(stamp['top'], String(media)).not.toMatch(/\d+px/);
+      expect(stamp['bottom'], String(media)).toBeUndefined();
+    }
+  });
+
+  it('sizes the letters from the paw box, at least 14 px on a phone and 18 px on desktop', () => {
+    expect(declarationsFor(rules, '.stampSlot [data-stamp]', MOBILE)['font-size']).toMatch(/^max\(0\.875rem, .*--paw-size/);
+    expect(declarationsFor(rules, '.stampSlot [data-stamp]', DESKTOP)['font-size']).toMatch(/^max\(1rem, .*--paw-size/);
+    // 0.875 rem is 14 px at the 16 px phone base; 1 rem is 18 px at the 18 px desktop base (tokens.css).
+  });
+
+  it('is not given a larger size at 1024 px', () => {
+    expect(declarationsFor(rules, '.stampSlot [data-stamp]', WIDE)['font-size']).toBeUndefined();
+  });
+});
+
+describe('App layout: the lower captions never reach the brazier column (1024 px and up)', () => {
+  const circleRules = parseCss(readText('../components/CurseCircle.module.css', import.meta.url)).flatMap((rule) =>
+    rule.selector.split(',').map((selector) => ({ ...rule, selector: selector.trim() })),
+  );
+
+  it('derives the brazier column from the brazier width', () => {
+    const wide = layout(WIDE);
+    expect(wide['--brazier-inner']).toMatch(/--brazier-w/);
+    expect(wide['--brazier-w']).toMatch(/min\(7vw, 6\.5rem\)/);
+  });
+
+  it('caps the width of captions 3 and 4 with it, beside their discs', () => {
+    for (const index of ['3', '4']) {
+      const caption = declarationsFor(circleRules, `.slot[data-index='${index}'] .caption`, WIDE);
+      expect(caption['width'], index).toMatch(/^min\(\s*var\(--caption-w\),\s*calc\(var\(--brazier-inner, 100vw\)/);
+      expect(caption['top'], index).toBe('0');
+    }
   });
 });
 
