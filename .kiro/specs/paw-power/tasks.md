@@ -5,13 +5,13 @@ Ordered checklist for the Paw inside Kiro. Requirements are cited as `Req N.M` (
 the code, run with `pnpm vitest run` in `packages/paw-mcp`. No agent can run a hook, validate an agent in the IDE or
 install a power, so tasks 7 and 8 are the reviewer's. Do not change `apps/api` or `apps/web` code in any task.
 
-- [ ] 1. Scaffold `packages/paw-mcp` and its pure modules: `package.json` (name `paw-mcp`, private, ESM, scripts `build`,
+- [x] 1. Scaffold `packages/paw-mcp` and its pure modules: `package.json` (name `paw-mcp`, private, ESM, scripts `build`,
   `bundle`, `test`, `typecheck`; dependencies `@modelcontextprotocol/sdk`, `zod`, `paw-core`; dev dependency `esbuild`),
   `tsconfig.json`, `src/version.ts`, `base-url.ts`, `handle.ts`, `grant-memory.ts`, `render.ts`. Resolve `paw-core` the
   way `apps/api` does (D12) and pin the versions pnpm resolves (D13). Tests: `base-url.test.ts` (every row of the URL
   table), `handle.test.ts`, `grant-memory.test.ts` (eviction at 21, newest wins, bare id uses the newest grant, a
   fast-check property that the memory never exceeds 20). Run the new suite and `pnpm typecheck`. (Req 1.1–1.3, 4, 5.1–5.3)
-- [ ] 2. The tools and the server: `api-client.ts` (timeout, `redirect: 'error'`, the error table), `tool-curse.ts`,
+- [x] 2. The tools and the server: `api-client.ts` (timeout, `redirect: 'error'`, the error table), `tool-curse.ts`,
   `tool-bind.ts`, `server.ts`, `index.ts` (stdio, one stderr line, no stdout writes). First check which way the pinned SDK
   reports input-validation failures and apply D8 if needed. Tests: `tools.test.ts`, `roundtrip.test.ts` (stub HTTP server
   on `127.0.0.1:0`, MCP client over the in-memory transport, curse then bind closed and open, stub sees the whole grant,
