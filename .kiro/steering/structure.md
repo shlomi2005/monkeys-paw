@@ -17,8 +17,10 @@ MonkeysPaw/
 │   ├── web/               # Vite + React + r3f — the UI (separate spec)
 │   └── api/               # Hono server — the only model caller
 ├── packages/
-│   ├── paw-core/          # pure logic shared by web, api, power
-│   └── paw-power/         # Kiro power: MCP server + hook
+│   ├── paw-core/          # pure logic shared by web, api, paw-mcp
+│   └── paw-mcp/           # MCP server (stdio): paw_curse, paw_bind
+├── powers/
+│   └── monkeys-paw/       # Kiro power: manifest, skills, committed bundle (server/paw-mcp.mjs)
 ├── docs/                  # product brief, art, write-up
 ├── .gitignore
 ├── LICENSE                # MIT
@@ -30,7 +32,7 @@ MonkeysPaw/
 
 ### `packages/paw-core` — the pure engine
 
-Framework-agnostic. No DOM, no Node-specific imports. Importable from the browser, the server, and the Kiro power.
+Framework-agnostic. No DOM, no Node-specific imports. Importable from the browser, the server, and `paw-mcp`.
 
 ```
 packages/paw-core/
@@ -53,9 +55,13 @@ packages/paw-core/
 └── package.json
 ```
 
-### `packages/paw-power` — the Kiro power
+### `packages/paw-mcp` — the MCP server
 
-Depends on `paw-core`. Ships the MCP server and the hook that comments on saved `requirements.md` files. Separate spec.
+Depends on `paw-core`, `@modelcontextprotocol/sdk` and `zod`. Exposes the tools `paw_curse` and `paw_bind` over stdio and calls `apps/api`. `pnpm bundle` builds it with esbuild into `powers/monkeys-paw/server/paw-mcp.mjs`, which is committed. Separate spec (`paw-power`).
+
+### `powers/monkeys-paw` — the Kiro power
+
+The folder the Powers panel installs: `plugin.json`, `mcp.json`, `README.md`, three skills, and the committed bundle with its `NOTICE.md`. No source code lives here. The hook that comments on saved `requirements.md` files is in `.kiro/hooks/`, with a copy in the `spec-loophole-hook` skill.
 
 ### `apps/web` — the UI
 
@@ -81,4 +87,4 @@ Hono on Railway. Holds the Gemini key in env. Implements the `ModelClient` inter
 - `paw-core` may import only from its own `src/` and from `zod` / `fast-check` (dev). No Node or DOM APIs.
 - `apps/api` imports `paw-core` and Hono/Node APIs. Never imports from `apps/web`.
 - `apps/web` imports `paw-core` for pure logic and calls the API via fetch. Never imports `apps/api` directly.
-- `packages/paw-power` imports `paw-core` only. No web or api imports.
+- `packages/paw-mcp` imports `paw-core`, `@modelcontextprotocol/sdk`, `zod` and Node APIs. Never imports from `apps/web` or `apps/api`.

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "monkeys-paw": {
+      "command": "node",
+      "args": ["powers/monkeys-paw/server/paw-mcp.mjs"],
+      "env": { "PAW_API_URL": "${PAW_API_URL}" }
+    }
+  }
+}

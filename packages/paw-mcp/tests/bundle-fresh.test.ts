@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
-import { BUNDLE_OUT, bundleOptions, listPackages } from '../scripts/build-bundle.mjs';
+import { BUNDLE_OUT, bundleOptions, listPackages, readLicenseText } from '../scripts/build-bundle.mjs';
 
 const POWER_SERVER = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'powers', 'monkeys-paw', 'server');
 
@@ -44,5 +44,16 @@ describe('committed bundle', () => {
       expect(notice, pkg.name).toContain(`| ${pkg.name} | ${pkg.version} | ${pkg.license} |`);
     }
     expect(packages.map((p) => p.name)).not.toContain('paw-core');
+  });
+
+  it('NOTICE.md carries the full licence text of every bundled package under its own ### section', async () => {
+    const result = await build({ ...bundleOptions(), write: false });
+    const notice = readFileSync(join(POWER_SERVER, 'NOTICE.md'), 'utf8').replace(/\r\n/g, '\n');
+    for (const pkg of listPackages(result.metafile)) {
+      expect(notice, `${pkg.name} has no ### section`).toContain(`### ${pkg.name} ${pkg.version} (${pkg.license})\n`);
+      const text = readLicenseText(pkg.dir);
+      expect(text, `${pkg.name} has no LICENSE file`).not.toBeNull();
+      expect(notice, `${pkg.name}: LICENSE text is not in NOTICE.md`).toContain(text!.replace(/\r\n/g, '\n').trimEnd());
+    }
   });
 });

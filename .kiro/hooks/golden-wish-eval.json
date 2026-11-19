@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "golden-wish-eval",
+      "description": "Runs the 25 golden wishes when the prompts or the curse taxonomy change. Costs about 25 model calls. Skips when apps/api/.env has no GEMINI_API_KEY.",
+      "trigger": "PostFileSave",
+      "matcher": "(^|/)(packages/paw-core/src/prompts\\.ts|\\.kiro/steering/curse-taxonomy\\.md|powers/monkeys-paw/skills/curse-taxonomy/SKILL\\.md)$",
+      "action": {
+        "type": "command",
+        "command": "node scripts/golden-wish-eval.mjs"
+      },
+      "timeout": 900
+    }
+  ]
+}

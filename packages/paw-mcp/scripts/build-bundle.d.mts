@@ -6,4 +6,5 @@ export function bundleOptions(): BuildOptions & { metafile: true; outfile: strin
 export function packageNameOf(inputPath: string): string | null;
 export function listPackages(
   metafile: Metafile,
-): { name: string; version: string; license: string; author: string; copyright: string }[];
+): { name: string; version: string; license: string; author: string; copyright: string; dir: string }[];
+export function readLicenseText(dir: string): string | null;

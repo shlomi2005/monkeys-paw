@@ -43,7 +43,19 @@ export function packageNameOf(inputPath) {
   return rest[0].startsWith('@') ? `${rest[0]}/${rest[1]}` : rest[0];
 }
 
-/** Third-party packages inside the bundle: name, version, licence, author, copyright line. */
+/** Third-party packages inside the bundle: name, version, licence, author, copyright line, package dir. */
+/** The full text of a package's licence file, or null when it has none. */
+export function readLicenseText(dir) {
+  for (const file of ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'license']) {
+    try {
+      return readFileSync(join(dir, file), 'utf8');
+    } catch {
+      // try the next file name
+    }
+  }
+  return null;
+}
+
 export function listPackages(metafile) {
   const dirs = new Map();
   for (const input of Object.keys(metafile.inputs)) {
@@ -69,7 +81,7 @@ export function listPackages(metafile) {
         }
       }
       const author = typeof pkg.author === 'string' ? pkg.author : (pkg.author?.name ?? '');
-      return { name, version: pkg.version, license: pkg.license ?? '', author, copyright };
+      return { name, version: pkg.version, license: pkg.license ?? '', author, copyright, dir };
     });
 }
 
@@ -85,5 +97,5 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.stderr.write('paw-core/dist is inside the bundle\n');
     process.exit(1);
   }
-  if (process.argv.includes('--packages')) process.stdout.write(`${JSON.stringify(packages, null, 2)}\n`);
+  if (process.argv.includes('--packages')) process.stdout.write(`${JSON.stringify(packages.map(({ dir, ...rest }) => rest), null, 2)}\n`);
 }

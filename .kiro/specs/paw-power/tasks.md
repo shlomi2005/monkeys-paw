@@ -30,13 +30,13 @@ install a power, so tasks 7 and 8 are the reviewer's. Do not change `apps/api` o
   `references/paw-reviews-requirements.json` (a copy of the hook from task 5; if task 5 is not done, write the hook file
   first, exactly as in design.md, and let task 5 only verify it). Confirm with `git check-ignore` that no new file is
   ignored. Test: `power-format.test.ts`. (Req 8.1–8.3, 8.6, 9, 17.3, 17.5)
-- [ ] 5. Repo wiring: `.kiro/settings/mcp.json`, the three hooks in `.kiro/hooks/` exactly as in design.md,
+- [x] 5. Repo wiring: `.kiro/settings/mcp.json`, the three hooks in `.kiro/hooks/` exactly as in design.md,
   `scripts/golden-wish-eval.mjs` and `scripts/ui-screenshot-receipt.mjs` (each exports its pure decision function).
   Tests: `hooks-format.test.ts` (including the matcher example paths), `guards.test.ts`, `repo-wiring.test.ts` (the MCP
   path exists). Never print or log the Gemini key in any test. The `@receipt` notes in paw-web tasks 42 and 49 were added
   when this spec was written; verify they are still there. Do not run the real eval. (Req 10, 11, 12, 13, 17.1, 17.4,
   17.6)
-- [ ] 6. The five agents in `.kiro/agents/` (`paw`, `genie`, `judge`, `qa`, `legal`, as in design.md "Agents"),
+- [x] 6. The five agents in `.kiro/agents/` (`paw`, `genie`, `judge`, `qa`, `legal`, as in design.md "Agents"),
   `.kiro/steering/tone.md` (about 40 lines), and the edits to `tech.md` and `structure.md`: replace `packages/paw-power`
   and `paw.curse`/`paw.bind` with `packages/paw-mcp`, `powers/monkeys-paw` and `paw_curse`/`paw_bind`, and add the MCP SDK
   and the committed bundle to the stack tables. Tests: `agents-format.test.ts` (including the `qa` deny rules: `fs_write` on `**`; `shell` on `git push*`, `git commit*`, `rm *`, `*>*`; and its prompt says every package command is `pnpm -C <package dir> ...`), plus the `tone.md` check in
