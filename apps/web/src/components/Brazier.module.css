@@ -1,0 +1,112 @@
+/* Brazier: smoke loop of 2 to 3 s (--dur-smoke). Transform and opacity only. */
+
+.brazier {
+  position: absolute;
+  bottom: 9%;
+  width: clamp(2.5rem, 7vw, 6.5rem);
+  aspect-ratio: 1 / 2;
+  pointer-events: none;
+}
+
+.left {
+  left: 1.25rem;
+}
+
+.right {
+  right: 1.25rem;
+  transform: scaleX(-1);
+}
+
+.brazier svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.smoke {
+  stroke: var(--sepia);
+  opacity: 0.55;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation-name: rise;
+  animation-duration: var(--dur-smoke);
+  animation-timing-function: ease-out;
+  animation-iteration-count: var(--loop-iterations);
+  animation-fill-mode: both;
+}
+
+.smokeA {
+  animation-delay: 0s;
+}
+
+.smokeB {
+  animation-delay: -0.93s;
+}
+
+.smokeC {
+  animation-delay: -1.87s;
+}
+
+@keyframes rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.8, 0.9);
+  }
+
+  30% {
+    opacity: 0.7;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-14%) scale(1.25, 1.1);
+  }
+}
+
+.ember {
+  fill: var(--blood);
+}
+
+.bowl {
+  fill: var(--parchment);
+  stroke: var(--ink);
+}
+
+.hatch {
+  stroke: var(--sepia);
+}
+
+.rim {
+  stroke: var(--ink);
+  fill: none;
+}
+
+.foot {
+  fill: var(--ink);
+}
+
+/* Reduced motion: the wisps stay as a still drawing. */
+.reduced .smoke {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .smoke {
+    animation: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .brazier {
+    opacity: 0.55;
+  }
+
+  .left {
+    left: 1.1rem;
+  }
+
+  .right {
+    right: 1.1rem;
+  }
+}

@@ -1,0 +1,21 @@
+/* PawStage: the 1:1 paw box. --paw-size is defined in styles/tokens.css and repeated in the index.html shell. */
+
+.box {
+  position: relative;
+  flex: none;
+  width: var(--paw-size);
+  aspect-ratio: 1 / 1;
+}
+
+/* The lazy canvas goes here. It covers the poster and never takes pointer events, so circles near the edge stay clickable. */
+.canvasSlot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.canvasSlot > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

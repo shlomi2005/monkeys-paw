@@ -4,8 +4,81 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>The Monkey's Paw</title>
+    <link rel="preload" as="image" href="/paw/paw-poster.jpg" type="image/jpeg" fetchpriority="high" />
+    <!--
+      Critical CSS: paints the parchment plate and the reserved 1:1 paw box before any JS or stylesheet loads.
+      The --paw-size values must match src/styles/tokens.css (src/styles/tokens.test.ts checks this).
+    -->
+    <style>
+      :root {
+        --ink: #2b1d12;
+        --sepia: #7a5a3a;
+        --parchment: #e9d8b4;
+        --paw-size: clamp(150px, 40vw, 200px);
+      }
+      @media (min-width: 768px) {
+        :root {
+          --paw-size: clamp(300px, 30vw, 400px);
+        }
+      }
+      html {
+        scrollbar-gutter: stable;
+      }
+      body {
+        margin: 0;
+        background: var(--parchment);
+        color: var(--ink);
+      }
+      #static-shell {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--parchment);
+      }
+      #static-shell::before,
+      #static-shell::after {
+        content: '';
+        position: absolute;
+        pointer-events: none;
+      }
+      #static-shell::before {
+        inset: 0.5rem;
+        border: 3px solid var(--ink);
+      }
+      #static-shell::after {
+        inset: calc(0.5rem + 7px);
+        border: 1px solid var(--sepia);
+      }
+      #static-shell .shell-paw {
+        position: relative;
+        width: var(--paw-size);
+        aspect-ratio: 1 / 1;
+      }
+      #static-shell .shell-paw img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+    </style>
   </head>
   <body>
+    <div id="static-shell" aria-hidden="true">
+      <div class="shell-paw">
+        <img
+          src="/paw/paw-poster.jpg"
+          width="1080"
+          height="1080"
+          alt=""
+          aria-hidden="true"
+          decoding="async"
+          fetchpriority="high"
+        />
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

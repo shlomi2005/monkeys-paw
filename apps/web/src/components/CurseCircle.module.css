@@ -1,0 +1,238 @@
+/*
+ * CurseCircle: one slot of the ring.
+ * Mobile first: a grid row with the disc (and its label underneath) in the first column and the caption beside it.
+ * Desktop (768 px and up): a fixed-size slot placed on the pentagon. Layout never shifts when a circle fills: the
+ * fill, seal and laurel animate with clip-path, transform and opacity only. Durations come from the tokens, so
+ * prefers-reduced-motion collapses them to 1 ms.
+ */
+
+.slot {
+  position: relative;
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  column-gap: 0.75rem;
+  align-items: start;
+  min-height: calc(var(--disc) + var(--label-h));
+}
+
+/* The disc: parchment, ink stroke. An empty circle is just this. */
+.disc {
+  position: relative;
+  display: block;
+  width: var(--disc);
+  height: var(--disc);
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--parchment);
+  overflow: hidden;
+}
+
+.blank {
+  grid-column: 1;
+  justify-self: center;
+}
+
+.button {
+  position: relative;
+  grid-column: 1;
+  justify-self: center;
+  display: block;
+  width: var(--disc);
+  height: var(--disc);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.button[aria-disabled='true'] {
+  cursor: default;
+}
+
+/* Hit area: the disc is 60 px on mobile and 80 px on desktop, both over the 48 px minimum (Req 9.3). */
+.button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Ink: engraved cross-hatching under the vignette. It appears from the centre outwards (Req 4.1). */
+.ink {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle, transparent 38%, color-mix(in srgb, var(--sepia) 22%, transparent) 100%),
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--sepia) 38%, transparent) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(-45deg, color-mix(in srgb, var(--sepia) 22%, transparent) 0 1px, transparent 1px 7px);
+  animation: fill-in var(--dur-fill) ease-out both;
+}
+
+@keyframes fill-in {
+  from {
+    clip-path: circle(0% at 50% 50%);
+  }
+
+  to {
+    clip-path: circle(75% at 50% 50%);
+  }
+}
+
+/* A closed circle is calm: the hatching thins out behind the laurel. */
+.slot[data-status='closed'] .ink {
+  background:
+    radial-gradient(circle, transparent 38%, color-mix(in srgb, var(--sepia) 14%, transparent) 100%),
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--sepia) 16%, transparent) 0 1px, transparent 1px 7px);
+}
+
+/* Seal: centre-bottom of the disc. */
+.sealSlot {
+  position: absolute;
+  bottom: 7%;
+  left: 35%;
+  width: 30%;
+  aspect-ratio: 1 / 1;
+}
+
+.sealPress {
+  animation: seal-press var(--dur-seal) ease-in both;
+}
+
+@keyframes seal-press {
+  from {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.sealCrack {
+  animation: seal-crack var(--dur-seal) ease-out both;
+}
+
+@keyframes seal-crack {
+  0% {
+    transform: scale(1);
+  }
+
+  40% {
+    transform: scale(1.18) rotate(-6deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+.slot[data-status='closed'] svg[data-laurel] {
+  animation: laurel-in var(--dur-seal) ease-out both;
+}
+
+@keyframes laurel-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Curse type label: small caps (16 px mobile, 18 px desktop, tokens.css base), centred under the disc. */
+.label {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+  line-height: var(--label-h);
+  color: var(--sepia-text);
+  animation: text-in var(--dur-fill) ease-out both;
+}
+
+.caption {
+  grid-column: 2;
+  align-self: center;
+  min-width: 0;
+  animation: text-in var(--dur-fill) ease-out both;
+}
+
+@keyframes text-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.story {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+
+.remembers {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--blood);
+}
+
+@media (min-width: 768px) {
+  .slot {
+    position: absolute;
+    display: block;
+    width: var(--disc);
+    height: var(--disc);
+    min-height: 0;
+    /* Centre of the slot on the pentagon: --dx and --dy are sin and -cos of the circle's angle (circle-layout.ts). */
+    left: calc(var(--dx) * var(--ring-rx) - var(--disc) / 2);
+    top: calc(var(--dy) * var(--ring-ry) - var(--disc) / 2);
+  }
+
+  .button {
+    pointer-events: auto;
+  }
+
+  .caption {
+    position: absolute;
+    top: calc(100% + var(--label-h));
+    left: 50%;
+    width: var(--caption-w);
+    margin-left: calc(var(--caption-w) / -2);
+    text-align: center;
+  }
+
+  /* The top-centre circle sits just above the fingertips: its caption goes beside it, not under it. */
+  .slot[data-index='1'] .caption {
+    top: 0;
+    left: calc(100% + 1.5rem);
+    margin-left: 0;
+    text-align: left;
+  }
+
+  /* A caption is an excerpt: the full story and the loophole are in the binding card and in aria-describedby. */
+  .story {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+  }
+
+  .slot[data-status='open-final'] .story {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+}

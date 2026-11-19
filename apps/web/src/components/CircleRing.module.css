@@ -1,0 +1,35 @@
+/*
+ * CircleRing: the five curse circles.
+ * Under 768 px: a vertical list under the paw, full-width rows, ~60 px discs.
+ * From 768 px: a zero-size anchor at the centre of the positioned parent (the paw box, like RayDisc). The slots sit
+ * on a pentagon around it, placed in CurseCircle.module.css from --ring-rx and --ring-ry (tokens.css).
+ */
+
+.ring {
+  --disc: 60px;
+  --label-h: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0;
+  padding: 0 1rem;
+  list-style: none;
+}
+
+@media (min-width: 768px) {
+  .ring {
+    --disc: 80px;
+    /* Caption width narrows with the viewport so the side captions stay inside the plate border. */
+    --caption-w: clamp(10rem, 17vw, 13rem);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: block;
+    width: 0;
+    height: 0;
+    padding: 0;
+    /* Only the buttons take pointer events, so the paw and the decoration under the ring stay inert. */
+    pointer-events: none;
+  }
+}

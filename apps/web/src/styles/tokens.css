@@ -1,0 +1,97 @@
+/*
+ * Design tokens (paw-web design.md section 7 and section 1).
+ *
+ * Contrast ratios are against --parchment. styles/contrast.test.ts recomputes every pair below from this file.
+ * The paw-box values (--paw-size) are repeated in the inline critical CSS of index.html so the static shell and
+ * the React tree reserve the same box. styles/tokens.test.ts fails if the two copies drift apart.
+ */
+
+:root {
+  /* Palette */
+  --ink: #2b1d12; /* body text, borders, focus ring: about 11.6:1 */
+  --sepia-text: #6b4d30; /* small sepia text (type labels, captions): about 5.5:1 */
+  --sepia: #7a5a3a; /* borders, icons, text of 24 px and more only: about 4.5:1 (design A5) */
+  --blood: #8f1d14; /* accent text, "Granted.", seal: about 6.3:1 */
+  --parchment: #e9d8b4;
+
+  /* Focus ring: 3 px ink outline with a 2 px parchment gap, on every focusable control. */
+  --focus-ring-color: var(--ink);
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+
+  /* Red buttons get an ink border so the control boundary stays at 3:1 or more. */
+  --control-border-color: var(--ink);
+  --control-border-width: 2px;
+
+  /* Type. The fallback faces are metric-matched in fonts.css, so the swap does not move text. */
+  --font-display: 'IM Fell English', 'IM Fell English Fallback', 'Times New Roman', serif;
+  --font-body: 'Crimson Text', 'Crimson Text Fallback', Georgia, 'Times New Roman', serif;
+  --line-height: 1.5;
+
+  /* One-off transitions (reduced motion: 1 ms) */
+  --dur-fill: 300ms; /* circle fill, centre outwards */
+  --dur-seal: 200ms; /* seal press and crack */
+  --dur-fade: 300ms; /* canvas fade-in over the poster */
+
+  /* Loops and pulses (reduced motion: off) */
+  --dur-smoke: 2800ms; /* brazier smoke, 2 to 3 s */
+  --dur-curtain: 500ms; /* curtain breathing, each way */
+  --dur-pulse: 700ms; /* ray disc pulse when a wish is made */
+  --loop-iterations: infinite;
+  --pulse-iterations: 1;
+
+  /* The paw box. Mobile: 150 to 200 px. Desktop (768 px and up): 300 to 400 px. Always 1:1. */
+  --paw-size: clamp(150px, 40vw, 200px);
+
+  /* Circle ring radii (design section 1). The plate is wider than tall, so rx > ry. Tuned in the ring task. */
+  --ring-rx: min(calc(var(--paw-size) * 1.2), 36vw);
+  --ring-ry: calc(var(--paw-size) * 0.72);
+}
+
+/* Base size: 16 px under 768 px, 18 px from 768 px. max() keeps these as floors and still honours a larger browser setting. */
+:root {
+  font-size: max(16px, 100%);
+  line-height: var(--line-height);
+}
+
+@media (min-width: 768px) {
+  :root {
+    font-size: max(18px, 112.5%);
+    --paw-size: clamp(300px, 30vw, 400px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fill: 1ms;
+    --dur-seal: 1ms;
+    --dur-fade: 1ms;
+    --dur-smoke: 1ms;
+    --dur-curtain: 1ms;
+    --dur-pulse: 1ms;
+    --loop-iterations: 0;
+    --pulse-iterations: 0;
+  }
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  margin: 0;
+  background: var(--parchment);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}

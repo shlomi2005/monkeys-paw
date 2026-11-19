@@ -1,0 +1,13 @@
+/* PawPoster: fills the 1:1 paw box. The canvas sits on top of it, then the poster is hidden (not removed). */
+
+.poster {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+
+.hidden {
+  visibility: hidden;
+}

@@ -99,19 +99,19 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## Layout and components
 
-- [ ] 19. Styles and shell: `styles/tokens.css` (palette, contrast tokens, 16/18 px base, `line-height: 1.5`, duration
+- [x] 19. Styles and shell: `styles/tokens.css` (palette, contrast tokens, 16/18 px base, `line-height: 1.5`, duration
   tokens, `prefers-reduced-motion` block), `styles/fonts.css` (self-hosted OFL IM Fell English and Crimson Text, Latin
   WOFF2 subsets, `size-adjust` fallbacks, licence files kept), and `index.html` static shell with inline critical CSS
   and the poster in its reserved box. `styles/contrast.test.ts` recomputes every ratio in design section 7. (Req 1.1,
   8.3, 8.5, 10.1, 10.3, 12.2)
-- [ ] 20. `PlateFrame`, `Brazier`, `Curtain`, `RayDisc`: original SVG ornate border (simplified under 768 px), brazier
+- [x] 20. `PlateFrame`, `Brazier`, `Curtain`, `RayDisc`: original SVG ornate border (simplified under 768 px), brazier
   smoke loop 2–3 s, curtain breathing about 500 ms, red ray disc with a one-off pulse. All decorative parts
   `aria-hidden`, all loops off under reduced motion. Component test for `aria-hidden` and the reduced-motion class.
   (Req 1.1, 1.2, 8.2, 8.4, 12.3, 9.1, 9.2)
-- [ ] 21. `PawStage` and `PawPoster`: 1:1 box sized with `clamp()` (300–400 px desktop, 150–200 px mobile) from the same
+- [x] 21. `PawStage` and `PawPoster`: 1:1 box sized with `clamp()` (300–400 px desktop, 150–200 px mobile) from the same
   custom properties as the shell, poster image with explicit dimensions, no canvas yet. `PawStateText` caption.
   (Req 1.3, 2.3, 9.1, 9.2, 10.3)
-- [ ] 22. `components/circle-layout.ts` (pure `circlePosition(index, rx, ry)` for the pentagon table in design section 1),
+- [x] 22. `components/circle-layout.ts` (pure `circlePosition(index, rx, ry)` for the pentagon table in design section 1),
   `CircleRing` and `CurseCircle`: five circles, index 0 upper-left through index 4 lower-left clockwise (three above
   the paw's centre line, two below), tuned against `docs/art/concept-victorian.png` and `docs/ui-brief.md`, mobile
   vertical list under 768 px, fill transition, vignette, type label, seal and laurel, caption with the story, labels

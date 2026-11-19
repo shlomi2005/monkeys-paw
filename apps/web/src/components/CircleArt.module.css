@@ -1,0 +1,46 @@
+/* Circle art: ink and sepia rules, blood-red wax, sepia leaves. Colours come from tokens.css. */
+
+.vignette,
+.laurel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.ruleInk {
+  stroke: var(--ink);
+}
+
+.ruleSepia {
+  stroke: var(--sepia);
+}
+
+.seal {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.wax {
+  fill: var(--blood);
+  stroke: var(--ink);
+}
+
+.waxRing,
+.waxMark {
+  stroke: var(--parchment);
+  opacity: 0.55;
+}
+
+.crack {
+  stroke: var(--parchment);
+}
+
+.leaf {
+  fill: var(--sepia);
+  stroke: var(--ink);
+  stroke-width: 0.6;
+}

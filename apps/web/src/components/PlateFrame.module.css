@@ -1,0 +1,173 @@
+/* PlateFrame: parchment plate, noise, engraved SVG border. Decoration sits behind .content. */
+
+.plate {
+  --corner-scale: 1;
+  --rule-outer: 8px;
+  --rule-inner: calc(var(--rule-outer) + 7px * var(--corner-scale));
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse at center, transparent 62%, rgb(122 90 58 / 0.14) 100%),
+    var(--parchment);
+  color: var(--ink);
+}
+
+.decor {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Light tiled noise, an inline SVG turbulence filter of well under 1 KB. No raster image. */
+.texture {
+  position: absolute;
+  inset: 0;
+  opacity: 0.9;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .17 0 0 0 0 .11 0 0 0 0 .07 0 0 0 .5 -.18'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  padding: calc(var(--rule-inner) + 1rem);
+}
+
+/* Border rules. Each svg is inset by its rule offset, so a 100% rect strokes on the edge. */
+
+.ruleOuter,
+.ruleBeads,
+.ruleInner {
+  /* An svg is a replaced element: inset alone would not stretch it, so width and height are explicit. */
+  position: absolute;
+  top: var(--inset);
+  left: var(--inset);
+  width: calc(100% - 2 * var(--inset));
+  height: calc(100% - 2 * var(--inset));
+  overflow: visible;
+}
+
+.ruleOuter {
+  --inset: var(--rule-outer);
+}
+
+.ruleOuter rect {
+  stroke: var(--ink);
+  stroke-width: 3.5px;
+}
+
+.ruleInner {
+  --inset: var(--rule-inner);
+}
+
+.ruleInner rect {
+  stroke: var(--sepia);
+  stroke-width: 1.25px;
+}
+
+/* A band of beads between the two rules. Dropped on small screens. */
+.ruleBeads {
+  --inset: calc((var(--rule-outer) + var(--rule-inner)) / 2);
+}
+
+.ruleBeads rect {
+  stroke: var(--sepia);
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-dasharray: 0 5;
+}
+
+.corner {
+  position: absolute;
+  width: calc(112px * var(--corner-scale));
+  height: calc(112px * var(--corner-scale));
+}
+
+.cornerTopLeft {
+  top: calc(var(--rule-outer) - 4px * var(--corner-scale));
+  left: calc(var(--rule-outer) - 4px * var(--corner-scale));
+}
+
+.cornerTopRight {
+  top: calc(var(--rule-outer) - 4px * var(--corner-scale));
+  right: calc(var(--rule-outer) - 4px * var(--corner-scale));
+  transform: scaleX(-1);
+}
+
+.cornerBottomLeft {
+  bottom: calc(var(--rule-outer) - 4px * var(--corner-scale));
+  left: calc(var(--rule-outer) - 4px * var(--corner-scale));
+  transform: scaleY(-1);
+}
+
+.cornerBottomRight {
+  right: calc(var(--rule-outer) - 4px * var(--corner-scale));
+  bottom: calc(var(--rule-outer) - 4px * var(--corner-scale));
+  transform: scale(-1, -1);
+}
+
+.cartouche {
+  position: absolute;
+  left: 50%;
+  width: 6rem;
+  height: 1.5rem;
+  margin-left: -3rem;
+}
+
+.cartoucheTop {
+  top: calc(var(--rule-outer) - 0.75rem);
+}
+
+.cartoucheBottom {
+  bottom: calc(var(--rule-outer) - 0.75rem);
+}
+
+/* Colour classes for the SVG parts, so the palette stays in tokens.css. */
+.fillInk {
+  fill: var(--ink);
+}
+
+.fillSepia {
+  fill: var(--sepia);
+}
+
+.fillParchment {
+  fill: var(--parchment);
+}
+
+.fillBlood {
+  fill: var(--blood);
+}
+
+.strokeInk {
+  stroke: var(--ink);
+}
+
+.strokeSepia {
+  stroke: var(--sepia);
+}
+
+/* Simplified under 768 px: thinner rules, smaller corners, no bead band, no scrolls, no cartouches. */
+@media (max-width: 767.98px) {
+  .plate {
+    --corner-scale: 0.6;
+  }
+
+  .ruleOuter rect {
+    stroke-width: 2px;
+  }
+
+  .ruleInner rect {
+    stroke-width: 1px;
+  }
+
+  .ruleBeads,
+  .fine,
+  .cartouche {
+    display: none;
+  }
+}

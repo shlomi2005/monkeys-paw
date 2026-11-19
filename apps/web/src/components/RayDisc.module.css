@@ -1,0 +1,57 @@
+/* RayDisc: conic-gradient rays behind the paw, with a one-off pulse. Transform and opacity only. */
+
+.frame {
+  --ray-size: calc(var(--paw-size) * 1.7);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--ray-size);
+  height: var(--ray-size);
+  margin: calc(var(--ray-size) / -2) 0 0 calc(var(--ray-size) / -2);
+  pointer-events: none;
+}
+
+.disc {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  opacity: 0.55;
+  background: repeating-conic-gradient(from -4deg, var(--blood) 0deg 5deg, transparent 5deg 15deg);
+  /* Soft edge: rays fade out away from the paw. Static mask, so nothing is repainted per frame. */
+  -webkit-mask-image: radial-gradient(circle, #000 18%, transparent 68%);
+  mask-image: radial-gradient(circle, #000 18%, transparent 68%);
+}
+
+.pulse {
+  animation-name: ray-pulse;
+  animation-duration: var(--dur-pulse);
+  animation-timing-function: ease-out;
+  animation-iteration-count: var(--pulse-iterations);
+}
+
+@keyframes ray-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+
+  35% {
+    opacity: 0.95;
+    transform: scale(1.12);
+  }
+
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+}
+
+.reduced .disc {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .disc {
+    animation: none;
+  }
+}
