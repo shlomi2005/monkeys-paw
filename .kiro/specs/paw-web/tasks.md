@@ -91,7 +91,7 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## Session hook
 
-- [ ] 18. `state/scene-bridge.ts` and `state/use-paw-session.ts`: wrap `reduce` in a ref-held context, run effects in
+- [x] 18. `state/scene-bridge.ts` and `state/use-paw-session.ts`: wrap `reduce` in a ref-held context, run effects in
   order (`request-grant`, `request-bind`, `abort-requests`, `play`, `snap`), abort on stop and rewrite, discard aborted
   responses, and complete `play` effects on a microtask when no scene is ready. Add examples-only replay (A9). Test with
   a fake API and fake timers: grant flow, bind flow, stop while judging discards the late response, no scene means no

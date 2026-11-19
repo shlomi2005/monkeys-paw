@@ -42,3 +42,6 @@ export function serverMessageOf(body: unknown): string | undefined {
   if (message.trim() === '' || message.length > MAX_SERVER_MESSAGE_LENGTH) return undefined;
   return message;
 }
+
+/** A bind attempt while the app is in examples-only play (design.md section 6, A9). The server is never asked. */
+export const JUDGE_RESTING_MESSAGE = 'The Judge is resting too.';
