@@ -36,6 +36,14 @@ z.object({
 
 **Flow:** Validate → check budget → create Wish → `grantWish(wish, modelClient)` → record cost → return.
 
+### Wish guardrail
+
+`isHarmfulWish(text, context?)` in `apps/api/src/guardrail.ts` enforces iron-rules §3 (refuse wishes about harming people). It matches whole word tokens only, never substrings ("skills" is not "kill").
+- A harm word (kill, hurt, harass, abuse, hate and similar, with inflections) counts only when aimed at a person or group: one of the first two words after it, skipping determiners, is a person word or a named person/group (capitalised, not an acronym, not modifying a following lowercase content word).
+- A prevention or safety word (prevent, stop, block, report, protect, from, no, never and similar) within the four words before the harm word cancels it.
+- Only genocide, massacre, rape and gore are refused without a target. "Holocaust" is not listed, so history and archive wishes pass.
+- Refused wishes get 400 and the in-character line, before any budget check or model call.
+
 ### POST /api/bind
 
 **Request:** `BindRequestSchema`

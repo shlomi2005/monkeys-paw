@@ -6,26 +6,7 @@ import type { ModelClient, Wish } from 'paw-core';
 import { GrantRequestSchema, GrantResponseSchema } from '../schemas';
 import type { GlobalState, IpState } from '../budget/state';
 import { recordCallInGlobalState } from '../budget/record';
-
-// List of harmful keywords to reject (iron-rules §3: PG-13, no hate, no harm)
-const HARMFUL_KEYWORDS = [
-  'kill',
-  'murder',
-  'rape',
-  'abuse',
-  'hate',
-  'gore',
-  'holocaust',
-  'genocide',
-];
-
-/**
- * Check if a wish contains harmful content.
- */
-function isHarmfulWish(text: string): boolean {
-  const lower = text.toLowerCase();
-  return HARMFUL_KEYWORDS.some((keyword) => lower.includes(keyword));
-}
+import { isHarmfulWish } from '../guardrail';
 
 /**
  * Create the grant route handler.
@@ -47,7 +28,7 @@ export function createGrantRoute(
       const { wish: wishInput } = parsed.data;
 
       // Check for harmful content (Req 1.3)
-      if (isHarmfulWish(wishInput.text)) {
+      if (isHarmfulWish(wishInput.text, wishInput.context)) {
         return c.json(
           {
             message:

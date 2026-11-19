@@ -110,6 +110,25 @@ describe('POST /api/grant', () => {
     expect(data.message.toLowerCase()).toContain('paw');
   });
 
+  it('lets a wish that prevents abuse reach the model', async () => {
+    const app = new Hono();
+    createGrantRoute(app, new MockModelClient(), null);
+
+    const res = await app.request(
+      new Request('http://localhost/api/grant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wish: { text: 'Prevent abuse of the signup form' },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.grant.curses.length).toBeGreaterThanOrEqual(1);
+  });
+
   it('returns 503 when over budget (Task 24, Req 1.4)', async () => {
     const app = new Hono();
     createGrantRoute(app, new MockModelClient(), null);
