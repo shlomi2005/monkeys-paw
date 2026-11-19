@@ -6,7 +6,9 @@
   "description": "The Monkey's Paw web app.",
   "license": "MIT",
   "scripts": {
+    "predev": "node scripts/copy-paw-assets.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-paw-assets.mjs",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",

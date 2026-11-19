@@ -16,7 +16,7 @@ and are expected to fail until the matching implementation task lands. Property 
   (`GrantResponseSchema`, `BindResponseSchema`, `ExamplesResponseSchema`) into `paw-core/src/schemas.ts`, export them
   from `index.ts`, and re-point `apps/api/src/schemas.ts` to import them. Confirm `paw-core/package.json` has
   `"sideEffects": false`. Run both packages' test suites. (A7, Req 3.3, 4.3, 10.4)
-- [ ] 3. `scripts/copy-paw-assets.mjs`: copy `docs/art/paw/*.glb` and `docs/art/paw/*.jpg` to `apps/web/public/paw/`,
+- [x] 3. `scripts/copy-paw-assets.mjs`: copy `docs/art/paw/*.glb` and `docs/art/paw/*.jpg` to `apps/web/public/paw/`,
   then verify byte length and SHA-256 of each copy against its source. Exit non-zero when a source file is missing
   or a copy differs. Wire it as `predev` and `prebuild`. Add a Vitest test that runs the script against a temporary
   directory. Do not copy `runtime-controls.json` (it is imported through a Vite alias, see task 11). (Req 2.2, 12.1)
