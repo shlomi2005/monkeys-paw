@@ -70,7 +70,7 @@ and are expected to fail until the matching implementation task lands. Property 
 - [x] 12. **[PBT]** `scene/easing.ts`, `scene/anim-sampler.ts`, `scene/rest-pose.ts`: write P14 first, then implement
   `cubicOut`, `smoothstep`, curl 500 ms, open 1208 ms, rest 2000 ms sink and tilt (constants `REST_SINK`,
   `REST_TILT_DEG`). (Req 2.7, 2.8, 6.1)
-- [ ] 13. `scene/camera-fit.ts` (`fitDistance`, test that a 1-unit paw at fov 30° and 1:1 aspect fits with margin, camera
+- [x] 13. `scene/camera-fit.ts` (`fitDistance`, test that a 1-unit paw at fov 30° and 1:1 aspect fits with margin, camera
   on +Z looking at `(0, 0.5, 0)`), `scene/glb-choice.ts` (`chooseGlb` with a fake `matchMedia`, 768 px edge cases), and
   `scene/webgl-support.ts` (fake canvas; never throws). (Req 2.1, 2.2, 2.10, 10.5)
 

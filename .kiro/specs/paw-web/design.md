@@ -253,7 +253,7 @@ break the privacy rules). `useGLTF` is called with the decoder paths set explici
 `matchMedia('(max-width: 768px)').matches` and `'web'` otherwise. It is read once on mount and not re-read on
 resize, so rotating a phone never triggers a second 2–3 MB download. `navigator.userAgentData` is not used
 (not available in Firefox or Safari, and viewport width is what the requirement cares about). Exactly one GLB is
-requested per page load.
+requested per page load. A missing or throwing `matchMedia` falls back to the mobile GLB, the smaller download.
 
 #### Poster, loading and WebGL detection (Req 2.3, 2.10)
 
