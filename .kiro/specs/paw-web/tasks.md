@@ -59,11 +59,11 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## Joint pose
 
-- [ ] 10. **[PBT]** `scene/joint-pose.properties.test.ts`, written before the module: P12 (pose depends only on
+- [x] 10. **[PBT]** `scene/joint-pose.properties.test.ts`, written before the module: P12 (pose depends only on
   `(bind, ops, amount)`, interleaved calls, unit length, matches a three `Quaternion` reference built in the test;
   add `three` as a dev dependency used only by this test) and P13 (clamps outside [0, 1], NaN and ±Infinity,
   `amount ≤ 0` returns `bind` exactly). Add a stub `poseJoint` that throws. (Req 2.7)
-- [ ] 11. Implement `scene/joint-pose.ts` (pure tuples, no three, no DOM), `scene/digit-joints.ts` and
+- [x] 11. Implement `scene/joint-pose.ts` (pure tuples, no three, no DOM), `scene/digit-joints.ts` and
   `scene/paw-controls.ts` (zod schema for `runtime-controls.json`, imported through a Vite alias to `docs/art/paw/`
   with `server.fs.allow`). Contract test: 16 joints present, the 15 driven joints map to digits exactly as in
   Req 2.7, `wrist` has no operations, bind quaternions are unit length. (Req 2.7)

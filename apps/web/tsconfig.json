@@ -9,6 +9,7 @@
     "types": ["vite/client"],
     "strict": true,
     "noImplicitAny": true,
+    "paths": { "@paw-asset/*": ["../../docs/art/paw/*"] },
     "noEmit": true,
     "declaration": false,
     "declarationMap": false,
