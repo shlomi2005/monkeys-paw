@@ -9,11 +9,14 @@ export default tseslint.config(
     rules: reactHooks.configs.recommended.rules,
   },
   {
-    // state/arbitraries.ts is test support (fast-check). App code must never import it.
+    // state/arbitraries.ts and api/api-test-support.ts are test support. App code must never import them.
     files: ['src/**/*.{ts,tsx}'],
-    ignores: ['src/**/*.test.{ts,tsx}', 'src/state/arbitraries.ts'],
+    ignores: ['src/**/*.test.{ts,tsx}', 'src/state/arbitraries.ts', 'src/api/api-test-support.ts'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: ['**/arbitraries', '**/arbitraries.ts'] }],
+      'no-restricted-imports': [
+        'error',
+        { patterns: ['**/arbitraries', '**/arbitraries.ts', '**/api-test-support', '**/api-test-support.ts'] },
+      ],
     },
   },
 );

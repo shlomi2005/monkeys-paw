@@ -245,6 +245,9 @@ importers:
       fast-check:
         specifier: ^3.23.0
         version: 3.23.2
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       three:
         specifier: ^0.187.0
         version: 0.187.0

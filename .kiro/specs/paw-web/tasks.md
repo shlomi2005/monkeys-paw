@@ -76,16 +76,16 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## API client and export
 
-- [ ] 14. `api/api-errors.ts`, `api/api-messages.ts` (all in-character lines, one file) and `api/api-schemas.ts`
+- [x] 14. `api/api-errors.ts`, `api/api-messages.ts` (all in-character lines, one file) and `api/api-schemas.ts`
   (`normalizeGrant`, bind consistency check, examples entry type). Unit tests for `normalizeGrant` and the consistency
   check. (Req 3.3, 3.7, 4.3, 11.1)
-- [ ] 15. **[PBT]** `api/api-client.properties.test.ts` for P18 with a fake `fetch` (any status 100–599, invalid JSON,
+- [x] 15. **[PBT]** `api/api-client.properties.test.ts` for P18 with a fake `fetch` (any status 100–599, invalid JSON,
   wrong shapes, thrown errors, timeout, abort), plus example tests for the status mapping table: 400, 404, 429, 503,
   500, network, timeout. Written before the client. (Req 3.3, 3.7, 4.3, 11.4, 11.6)
-- [ ] 16. Implement `api/api-client.ts`: `getExamples`, `postGrant`, `postBind`, `postExport`, base URL from
+- [x] 16. Implement `api/api-client.ts`: `getExamples`, `postGrant`, `postBind`, `postExport`, base URL from
   `import.meta.env.VITE_API_BASE_URL`, `credentials: 'omit'`, `AbortController` timeouts (60 s, 60 s, 15 s, 10 s),
   body-only wish data, zod validation with `paw-core` schemas. Make task 15 pass. (Req 3.3, 3.7, 4.3, 6.2, 11.4, 11.6)
-- [ ] 17. **[PBT]** `export/zip.ts`, `export/slug.ts`, `export/download.ts`: write P17 first (round trip against `fflate`
+- [x] 17. **[PBT]** `export/zip.ts`, `export/slug.ts`, `export/download.ts`: write P17 first (round trip against `fflate`
   as a test-only dependency, valid CRC-32, `slugify` and `safeId` shapes), then implement the store-only zip writer
   with an injected clock. (Req 6.2)
 
