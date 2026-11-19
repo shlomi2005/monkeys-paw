@@ -1,0 +1,78 @@
+/*
+ * ExampleCard: a small calling card. Fixed height (--card-h, set by ExampleCards), so no card ever moves the row.
+ * Text is 1rem (16 px, 18 px from 768 px) or more. The whole card is a hit area far above 48 px.
+ * The selected card gets a blood-red border and glow. The glow is static, so reduced motion needs no variant;
+ * only the transition is timed, and it uses the --dur-fade token (1 ms under prefers-reduced-motion).
+ */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  width: 100%;
+  height: var(--card-h);
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  overflow: hidden;
+  border: 2px solid var(--sepia);
+  border-radius: 4px;
+  background: var(--parchment);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: var(--line-height);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    box-shadow var(--dur-fade) ease-out,
+    border-color var(--dur-fade) ease-out;
+}
+
+.card:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.label {
+  flex: none;
+  font-family: var(--font-display);
+  font-style: italic;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.wish,
+.context {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.wish {
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  font-weight: 600;
+}
+
+.context {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.selected,
+.card[aria-pressed='true'] {
+  border-color: var(--blood);
+  box-shadow:
+    0 0 0 1px var(--blood),
+    0 0 12px 2px color-mix(in srgb, var(--blood) 60%, transparent);
+}
+
+@media (hover: hover) {
+  .card:hover {
+    border-color: var(--blood);
+    box-shadow: 0 0 8px 1px color-mix(in srgb, var(--blood) 45%, transparent);
+  }
+}

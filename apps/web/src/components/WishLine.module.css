@@ -1,0 +1,202 @@
+/*
+ * WishLine: a ruled band (horizontal ink lines) with the wish, the optional context and the seal button.
+ * Mobile first: everything stacks. From 768 px the wish row is one line: prefix, input, seal.
+ * Every control is at least 48 px high (Req 9.3). Text is never under 1rem (16 px, 18 px from 768 px).
+ * Hover effects live inside (hover: hover) only.
+ */
+
+.band {
+  --rule: 2.75rem;
+  /* The DOM order is the tab order (Req 8.1). The areas below only decide where each piece is drawn. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'prefix'
+    'wish'
+    'message'
+    'context'
+    'seal'
+    'status';
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border-top: 2px solid var(--sepia);
+  border-bottom: 2px solid var(--sepia);
+  /* Ink lines every --rule, light enough that body text keeps its contrast. */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--rule) - 1px),
+    color-mix(in srgb, var(--ink) 30%, transparent) calc(var(--rule) - 1px),
+    color-mix(in srgb, var(--ink) 30%, transparent) var(--rule)
+  );
+  background-position: 0 0.5rem;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+}
+
+.prefix {
+  grid-area: prefix;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.125rem;
+  color: var(--ink);
+}
+
+.wishInput {
+  grid-area: wish;
+}
+
+.wishInput,
+.contextInput {
+  width: 100%;
+  min-height: 3rem;
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  border-bottom: var(--control-border-width) solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: var(--line-height);
+}
+
+.wishInput[aria-invalid='true'] {
+  border-bottom-color: var(--blood);
+}
+
+.wishInput:disabled,
+.contextInput:disabled {
+  opacity: 0.7;
+}
+
+.wishInput:focus-visible,
+.contextInput:focus-visible,
+.disclosure:focus-visible,
+.seal:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* The seal: blood red with an ink border, so the control boundary keeps 3:1 against the parchment. */
+.seal {
+  grid-area: seal;
+  min-width: 48px;
+  min-height: 3rem;
+  margin: 0;
+  padding: 0.25rem 1.5rem;
+  border: var(--control-border-width) solid var(--control-border-color);
+  border-radius: 999px;
+  background: var(--blood);
+  color: var(--parchment);
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: box-shadow var(--dur-seal) ease-out;
+}
+
+.seal:active:not(:disabled) {
+  box-shadow: inset 0 2px 4px color-mix(in srgb, var(--ink) 60%, transparent);
+}
+
+.seal:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .seal:hover:not(:disabled) {
+    box-shadow: 0 0 10px 2px color-mix(in srgb, var(--blood) 70%, transparent);
+  }
+}
+
+/* One line is always reserved for the notice, so showing it moves nothing. */
+.message {
+  grid-area: message;
+  min-height: calc(1em * var(--line-height));
+  margin: 0;
+  color: var(--ink);
+}
+
+.error {
+  color: var(--blood);
+}
+
+.contextRow {
+  grid-area: context;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.disclosure {
+  min-width: 48px;
+  min-height: 3rem;
+  margin: 0;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1rem;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.disclosure:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.status {
+  grid-area: status;
+  min-height: calc(1em * var(--line-height));
+  margin: 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  color: var(--sepia-text);
+}
+
+@media (min-width: 768px) {
+  .band {
+    --rule: 3rem;
+    padding: 0.5rem 1.5rem;
+    font-size: 1rem;
+  }
+
+  /* One line: prefix, input, seal. The seal comes last in the DOM and sits at the end of the band. */
+  .band {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'prefix wish seal'
+      'message message message'
+      'context context context'
+      'status status status';
+    column-gap: 0.75rem;
+    align-items: center;
+  }
+
+  /* About 200 characters visible where the viewport allows it. */
+  .wishInput {
+    min-width: 0;
+    max-width: 200ch;
+  }
+
+  .contextRow {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  /* About 100 characters visible. */
+  .contextInput {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100ch;
+  }
+}

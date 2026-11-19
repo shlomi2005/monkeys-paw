@@ -45,3 +45,12 @@ export function serverMessageOf(body: unknown): string | undefined {
 
 /** A bind attempt while the app is in examples-only play (design.md section 6, A9). The server is never asked. */
 export const JUDGE_RESTING_MESSAGE = 'The Judge is resting too.';
+
+/** "Make the wish" with a blank wish line. No request is made (paw-web Req 3.3). */
+export const EMPTY_WISH_MESSAGE = 'The paw waits for a wish. Write one first.';
+
+/** Status text on the wish line while a Grant is on its way. */
+export const PAW_STIRS_MESSAGE = 'The Paw stirs…';
+
+/** Placeholder card when `GET /api/examples` is not available (Req 3.7). Not an error. */
+export const EXAMPLES_SLEEPING_MESSAGE = 'The examples are sleeping. Write your own wish.';

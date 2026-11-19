@@ -117,10 +117,10 @@ and are expected to fail until the matching implementation task lands. Property 
   vertical list under 768 px, fill transition, vignette, type label, seal and laurel, caption with the story, labels
   from `CircleView`. Test the position table (index to angle and quadrant) and the mobile order. (Req 1.4, 1.5, 4.1,
   5.8, 6.7, 6.9, 8.4, 9.1, 9.2)
-- [ ] 23. `WishLine`: "I wish that…" input, collapsible "for…" field, "Make the wish" seal button, form submit on
+- [x] 23. `WishLine`: "I wish that…" input, collapsible "for…" field, "Make the wish" seal button, form submit on
   Enter, blank-wish message, disabled while granting, "The Paw stirs…" loading state. Component tests. (Req 3.1, 3.2,
   3.3, 8.1, 8.4)
-- [ ] 24. `ExampleCards` and `ExampleCard`: load from `GET /api/examples`, snippets with ellipsis, "Example" label,
+- [x] 24. `ExampleCards` and `ExampleCard`: load from `GET /api/examples`, snippets with ellipsis, "Example" label,
   select on click or Enter, highlight clears when the text is edited, dim while typing, placeholder when examples are
   unavailable, horizontal row (desktop) and strip (mobile). Component tests for each state. (Req 3.2, 3.4, 3.5, 3.6,
   3.7, 3.8, 9.1)
