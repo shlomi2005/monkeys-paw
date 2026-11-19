@@ -50,7 +50,7 @@ and are expected to fail until the matching implementation task lands. Property 
 - [x] 7. `state/paw-machine.test.ts`: one example-based test per row of the design's transition table, plus the three
   worked scenarios: a 4-curse grant closed in the order 2, 0, 3, 1 (digits open 3, 2, 1, 0), a stop during curl 3 of 5 (the `snap` shows all five digits curled, one per open curse), and a late `*_done` after a `snap` that is ignored.
   (Req 5.2, 5.3, 6.7, 6.10)
-- [ ] 8. `state/paw-selectors.ts`: `projectGrant`, `curseTypeLabel`, `CircleView` (status and `aria-label` strings),
+- [x] 8. `state/paw-selectors.ts`: `projectGrant`, `curseTypeLabel`, `CircleView` (status and `aria-label` strings),
   `fingerText`, `medal`, `showStop`, `showExport`, `card`, and `isQuiescent`. Write **[PBT]** P15 (medal equals
   `computeIntegrity(projectGrant(ctx))` and the `Integrity N/5: M closed, O open` text) and P16 (digit and circle
   mapping) first, then implement. Add example tests for the labels in design section 7. (Req 6.8, 5.8, 8.4, 6.6)

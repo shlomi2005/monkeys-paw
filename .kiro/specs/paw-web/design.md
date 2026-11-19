@@ -751,6 +751,14 @@ O open" (Req 6.8, 8.4), so the live region does not repeat it. Messages are set 
   open." / "3 fingers curled." / "1 finger curled." / "The paw rests." / "2 fingers stay curled." It is built from
   `curled.length` and the end reason. It is also the cue for reduced motion and for the no-WebGL case (Req 2.9, 2.10,
   8.2). It is not a live region; the main live region carries the announcements.
+- **Circle status rules** (`circleViews` in `state/paw-selectors.ts`, first match wins):
+  - No curse at that index: `empty`, and `ariaLabel` is the empty string (the component hides it).
+  - Phase `curling`: a curse whose curl command is still waiting in `anim.queue` is `empty`, blank parchment until
+    its finger starts to curl (ui-brief moment 2). A curse whose curl is active or already done is `arriving`, with
+    label `"<Type> curse, arriving"`. The reducer ignores circle clicks in `curling`.
+  - Curse id in `closedIds`: `closed`, label `"<Type> curse, closed, sealed"`.
+  - Phase `ended`: `open-final`, label `"<Type> curse, open, the paw remembers"`.
+  - Otherwise: `open`, label `"<Type> curse, open, click to bind"`.
 
 #### Reduced motion
 
