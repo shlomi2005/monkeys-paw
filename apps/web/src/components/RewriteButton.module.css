@@ -34,3 +34,13 @@
     background: color-mix(in srgb, var(--sepia) 18%, var(--parchment));
   }
 }
+
+
+/* From 1024 px: as compact as the export buttons (ExportButtons.module.css), so the three fit one row from about 1280 px. */
+@media (min-width: 1024px) {
+  .rewrite {
+    min-height: 48px;
+    padding-inline: 0.75rem;
+    font-size: 1rem;
+  }
+}

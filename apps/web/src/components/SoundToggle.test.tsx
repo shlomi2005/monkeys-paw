@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSoundController } from '../audio/sound-controller';
 import type { SoundControllerDeps } from '../audio/sound-controller';
 import { FakeAudioContext } from '../audio/fake-audio-context';
+import { declarationsFor, parseCss, readText } from '../styles/css-test-support';
 import { SoundToggle } from './SoundToggle';
 
 function controller(extra: SoundControllerDeps = {}) {
@@ -105,5 +106,28 @@ describe('SoundToggle', () => {
     expect(button().getAttribute('aria-pressed')).toBe('false');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(quiet).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('SoundToggle roundel (CSS text)', () => {
+  const rules = parseCss(readText('./SoundToggle.module.css', import.meta.url));
+  const decl = (selector: string) => declarationsFor(rules, selector, null);
+
+  it('keeps the 48 px hit area and draws a 36 to 40 px parchment roundel with an ink border behind the icon', () => {
+    expect(decl('.toggle')['min-width']).toBe('48px');
+    expect(decl('.toggle')['min-height']).toBe('48px');
+    const disc = decl('.toggle::before');
+    expect(disc['width']).toBe('38px');
+    expect(disc['height']).toBe('38px');
+    expect(disc['background']).toBe('var(--parchment)');
+    expect(disc['border']).toMatch(/var\(--ink\)/);
+    expect(disc['border-radius']).toBe('50%');
+  });
+
+  it('shows the on state as a filled ink roundel with a parchment icon, the off state as an outlined parchment one', () => {
+    expect(decl('.toggle')['color']).toBe('var(--ink)');
+    expect(decl(".toggle[aria-pressed='true']")['color']).toBe('var(--parchment)');
+    expect(decl(".toggle[aria-pressed='true']::before")['background']).toBe('var(--ink)');
   });
 });

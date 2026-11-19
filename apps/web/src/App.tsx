@@ -190,7 +190,7 @@ export function App() {
               <ExportButtons show={view.showExport} wish={ctx.wish} grant={projectGrant(ctx)} api={api} />
             </div>
             {/* Tab order on the end screen: Take the scroll, Open in Kiro, Rewrite, then the sound toggle. */}
-            <RewriteButton show={ctx.phase === 'ended'} onRewrite={rewrite} />
+            <RewriteButton show={view.showExport} onRewrite={rewrite} />
           </div>
 
           {/* Last in the DOM, shown in a corner. */}

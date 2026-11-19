@@ -81,3 +81,31 @@
     width: auto;
   }
 }
+
+
+/*
+ * From 1024 px the end-screen actions sit in a column right of the narration (App.module.css), 300 px or so at 1024 px.
+ * The buttons are a little more compact (1 rem text, smaller side padding, 48 px high), the row may wrap, and the block
+ * never grows past the width it is given.
+ */
+@media (min-width: 1024px) {
+  .root {
+    max-width: 100%;
+    gap: 0.125rem;
+  }
+
+  .row {
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+  }
+
+  .status {
+    line-height: 1.2;
+  }
+
+  .button {
+    min-height: 48px;
+    padding-inline: 0.75rem;
+    font-size: 1rem;
+  }
+}

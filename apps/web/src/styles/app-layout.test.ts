@@ -138,6 +138,26 @@ describe('App layout: desktop grid (768 px and up)', () => {
   });
 });
 
+describe('App layout: the end-screen actions stay clear of the narration (1024 px and up)', () => {
+  it('starts the group right of the narration column, with a gap, from the width of that column', () => {
+    const actions = declarationsFor(rules, '.actions', WIDE);
+    const max = actions['max-width'] ?? '';
+    expect(max).toMatch(/50%/);
+    expect(max).toMatch(/--narration-w\)\s*\/\s*2/);
+    expect(max).toMatch(/- 1rem\)$/);
+    expect(declarationsFor(rules, '.actions', DESKTOP)['justify-self']).toBe('end');
+  });
+
+  it('wraps to a second row that grows upward from the bottom edge', () => {
+    expect(declarationsFor(rules, '.actions', null)['flex-wrap']).toBe('wrap');
+    expect(declarationsFor(rules, '.actions', WIDE)['align-content']).toBe('flex-end');
+  });
+
+  it('aligns the tops of the three buttons from 768 px, so the status line does not push Rewrite down', () => {
+    expect(declarationsFor(rules, '.actions', DESKTOP)['align-items']).toBe('flex-start');
+  });
+});
+
 describe('App layout: DOM order stays the tab order', () => {
   it('never uses the `order` property', () => {
     for (const rule of rules) expect(Object.keys(rule.declarations), rule.selector).not.toContain('order');

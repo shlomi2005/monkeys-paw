@@ -46,6 +46,8 @@ const PAIRS: readonly Pair[] = [
   { use: 'small sepia text: --sepia-text on --parchment', foreground: '--sepia-text', background: '--parchment', floor: 4.5 },
   { use: 'large text and borders: --sepia on --parchment', foreground: '--sepia', background: '--parchment', floor: 3 },
   { use: 'accent text: --blood on --parchment', foreground: '--blood', background: '--parchment', floor: 4.5 },
+  { use: 'sound toggle, off: --ink icon on the --parchment roundel', foreground: '--ink', background: '--parchment', floor: 3 },
+  { use: 'sound toggle, on: --parchment icon on the --ink roundel', foreground: '--parchment', background: '--ink', floor: 3 },
   { use: 'seal button text: --parchment on --blood', foreground: '--parchment', background: '--blood', floor: 4.5 },
   { use: 'focus ring against the parchment around it', foreground: '--focus-ring-color', background: '--parchment', floor: 3 },
   { use: 'control border against the parchment', foreground: '--control-border-color', background: '--parchment', floor: 3 },

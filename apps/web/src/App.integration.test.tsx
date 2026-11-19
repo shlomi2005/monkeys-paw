@@ -14,6 +14,7 @@ import {
 } from './api/api-test-support';
 import { RESTING_MESSAGE } from './api/api-messages';
 import { App } from './App';
+import { readText } from './styles/css-test-support';
 import { SessionProvider } from './state/SessionProvider';
 import { fakeApi, ok, RESTING } from './state/paw-session-test-support';
 import type { FakeApi } from './state/paw-session-test-support';
@@ -356,7 +357,15 @@ describe('App: the end screen (tasks 37 to 39)', () => {
     await bind('Abuse');
     await bind('Data loss');
 
+    // Rewrite appears with the medal and the export buttons, not earlier (the paw may still be coming to rest).
+    const together = (): void => {
+      const shown = screen.queryByRole('button', { name: 'Rewrite' }) !== null;
+      expect(shown).toBe(medalText() !== '');
+      expect(shown).toBe(screen.queryByRole('button', { name: 'Take the scroll' }) !== null);
+    };
+    together();
     await waitFor(() => expect(medalText()).toBe('Integrity 5/5: 3 closed, 0 open'));
+    together();
     expect(document.querySelectorAll('[data-laurel="filled"]')).toHaveLength(5);
     expect(takeScroll()).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open in Kiro' })).toBeTruthy();
@@ -375,6 +384,14 @@ describe('App: the end screen (tasks 37 to 39)', () => {
 
     fireEvent.click(rewriteButton());
     await waitFor(() => expectReset());
+  });
+
+  it('shows Rewrite under the same condition as the export buttons (view.showExport), not at phase ended', () => {
+    // The paw may still be coming to rest in phase `ended`; the medal and export buttons wait for it, so Rewrite does too.
+    const source = readText('./App.tsx', import.meta.url);
+    expect(source).toMatch(/<RewriteButton show=\{view\.showExport\}/);
+    expect(source).toMatch(/<ExportButtons show=\{view\.showExport\}/);
+    expect(source).not.toMatch(/<RewriteButton show=\{ctx\.phase/);
   });
 
   it('Stop with 2 open: cracked seals, "The paw remembers.", laurel, medal and export; Rewrite resets', async () => {

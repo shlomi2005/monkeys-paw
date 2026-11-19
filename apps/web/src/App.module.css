@@ -283,9 +283,11 @@
     justify-self: start;
   }
 
+  /* The three buttons share one top edge: Rewrite is not centred against the taller export block (buttons + status). */
   .actions {
     justify-self: end;
     justify-content: flex-end;
+    align-items: flex-start;
   }
 
   .soundSlot {
@@ -320,5 +322,21 @@
 
   .stampSlot [data-narration] {
     font-size: 1rem;
+  }
+
+  /*
+   * The actions live right of the narration column, with a 1 rem gap: the width left of the plate edge is half the
+   * stage, less half the narration column (the column is centred on the paw), less the gap. What does not fit wraps to
+   * a second row (Rewrite under the export buttons) and the group grows upward from the bottom edge, so it never
+   * covers the narration, the medal or the lower captions. The buttons are a little more compact here
+   * (ExportButtons.module.css, RewriteButton.module.css) so that they stay in one row from about 1280 px.
+   */
+  .actions {
+    max-width: calc(50% - var(--narration-w) / 2 - 1rem);
+    justify-content: flex-start;
+    align-content: flex-end;
+    gap: 0.25rem 0.75rem;
+    /* Room for a second row: it may reach 0.75 rem below the stage, and stops above the rule of the wish line. */
+    margin-bottom: -0.75rem;
   }
 }
