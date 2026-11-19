@@ -128,7 +128,7 @@ and are expected to fail until the matching implementation task lands. Property 
   pre-filled with the suggested EARS clause, "Accept this clause", "Rewrite the whole wish", "Cancel", "The Judge
   stirs…", "The paw remembers." line, bottom-sheet variant under 768 px, `aria-labelledby` and `aria-describedby`.
   Wire to `bind_submitted`, `card_closed`, `rewrite`. (Req 4.2, 4.3, 4.4, 4.5, 4.6, 8.4, 9.1)
-- [ ] 26. `StopButton`, `IntegrityMedal` (five laurels, `role="status"`, `Integrity N/5: M closed, O open`),
+- [x] 26. `StopButton`, `IntegrityMedal` (five laurels, `role="status"`, `Integrity N/5: M closed, O open`),
   `GrantedStamp` (red "Granted." plus narration caption) and `LiveRegion` fed by the announcer. Component tests for
   visibility rules: Stop only with a Grant and an open curse, medal only when ended and quiescent. (Req 3.3, 6.1, 6.6,
   6.8, 8.4)

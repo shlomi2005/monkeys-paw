@@ -76,6 +76,31 @@ describe('grant flow', () => {
     expect(r.session.getSnapshot().grantedSeq).toBe(2);
   });
 
+  it('counts every live-region message, so a repeated line can be told apart', async () => {
+    const r = rig();
+    expect(r.session.getSnapshot().liveSeq).toBe(0);
+    r.session.submitWish({ text: SAMPLE_WISH_TEXT });
+    await flush();
+    expect(r.session.getSnapshot().liveSeq).toBe(1); // "Granted. 3 curses arrive." is shown, three curl lines wait
+    await vi.advanceTimersByTimeAsync(LIVE_GAP_MS * 5);
+    expect(r.session.getSnapshot().liveSeq).toBe(4);
+
+    const api = fakeApi();
+    api.postGrant.mockResolvedValue(failure('network', 'The line to the paw is cut.'));
+    const again = rig(api);
+    again.session.submitWish({ text: 'a' });
+    await settle();
+    const first = again.session.getSnapshot();
+    expect(first.liveText).toBe('The line to the paw is cut.');
+    expect(first.liveSeq).toBe(1);
+
+    again.session.submitWish({ text: 'a' });
+    await settle();
+    const second = again.session.getSnapshot();
+    expect(second.liveText).toBe(first.liveText); // the same string as before
+    expect(second.liveSeq).toBe(2); // but a new message
+  });
+
   it('shows the in-character message and re-enables the form when the grant fails', async () => {
     const api = fakeApi();
     api.postGrant.mockResolvedValue(failure('bad-request', 'The paw trembles and refuses.', 400));

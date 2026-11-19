@@ -73,6 +73,11 @@ export interface PawSnapshot {
   readonly liveText: string;
   /** Counts accepted Grants. The "Granted." stamp plays whenever this changes. 0 before the first. */
   readonly grantedSeq: number;
+  /**
+   * Counts the messages shown in the live region. It changes on every message, even when the text repeats,
+   * so the region can make the DOM text differ and a screen reader announces the repeat. 0 before the first.
+   */
+  readonly liveSeq: number;
 }
 
 export interface PawSession {
@@ -84,6 +89,7 @@ export interface PawSession {
   readonly examplesOnly: boolean;
   readonly liveText: string;
   readonly grantedSeq: number;
+  readonly liveSeq: number;
   /** "Make the wish". Replays a cached example without any API call while `examplesOnly` is set. */
   readonly submitWish: (input: SubmitWishInput) => void;
   /** The scene attaches to this: `subscribe`, `setReady` and `done`. */
@@ -161,10 +167,11 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
   let examplesOnly = false;
   let liveText = '';
   let grantedSeq = 0;
+  let liveSeq = 0;
 
   let viewCtx = ctx;
   let view = selectView(ctx);
-  let snapshot: PawSnapshot = { ctx, view, examples, notice, examplesOnly, liveText, grantedSeq };
+  let snapshot: PawSnapshot = { ctx, view, examples, notice, examplesOnly, liveText, grantedSeq, liveSeq };
   const listeners = new Set<() => void>();
 
   let grantController: AbortController | null = null;
@@ -182,7 +189,7 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
       viewCtx = ctx;
       view = selectView(ctx);
     }
-    snapshot = { ctx, view, examples, notice, examplesOnly, liveText, grantedSeq };
+    snapshot = { ctx, view, examples, notice, examplesOnly, liveText, grantedSeq, liveSeq };
     for (const listener of [...listeners]) listener();
   }
 
@@ -190,6 +197,7 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
 
   function showLive(text: string): void {
     liveText = text;
+    liveSeq += 1;
     cancelLiveGap = scheduler.after(() => {
       cancelLiveGap = null;
       const next = liveQueue.shift();

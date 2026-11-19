@@ -1,0 +1,62 @@
+/*
+ * IntegrityMedal: an engraved medal. Five laurels in a row: filled in sepia with an ink edge, or outlined only.
+ * The status line is visible text, never under 1rem, in the sepia-text colour (5.5:1). Colours come from tokens.css.
+ */
+
+.medal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1.25rem 0.625rem;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--parchment);
+  box-shadow: inset 0 0 0 4px var(--parchment), inset 0 0 0 5px var(--sepia);
+  color: var(--ink);
+}
+
+/* Before the end: only the empty live region. Out of the flow, zero size, so nothing is visible and nothing shifts. */
+.empty {
+  position: absolute;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.laurels {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.laurel {
+  display: block;
+  width: 2.25rem;
+  height: 2.25rem;
+  overflow: visible;
+}
+
+.leaf {
+  stroke: var(--sepia);
+  stroke-width: 0.8;
+}
+
+.filled .leaf {
+  fill: var(--sepia);
+  stroke: var(--ink);
+}
+
+.outlined .leaf {
+  fill: none;
+}
+
+.text {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+  color: var(--ink);
+}
