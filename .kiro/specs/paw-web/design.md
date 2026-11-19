@@ -268,6 +268,9 @@ schema (`paw-controls.ts`) validates it at module load and a test asserts the 15
 The task that wires the loader checks the GLBs' `extensionsUsed`. If they use Draco or meshopt, the decoders are
 served locally from `public/`, never from a third-party CDN (drei's default Draco path points at one, which would
 break the privacy rules). `useGLTF` is called with the decoder paths set explicitly.
+**Result (task 29):** neither GLB lists `extensionsUsed`, so `useGLTF` is called with Draco and meshopt both switched off
+and no decoder is served; `scene/glb-extensions.test.ts` fails if either file ever lists
+`KHR_draco_mesh_compression` or `EXT_meshopt_compression`.
 
 #### Choosing the GLB (Req 2.2, 10.5)
 
@@ -299,7 +302,7 @@ Sequence on mount:
 
 #### Canvas, camera, lights
 
-- `<Canvas frameloop="demand" dpr={[1, 2]} (mobile [1, 1.5]) gl={{ alpha: true, antialias: true }} shadows="soft" aria-hidden>`
+- `<Canvas frameloop="demand" dpr={[1, 2]} (mobile [1, 1.5]) gl={{ alpha: true, antialias: true }} shadows="percentage" aria-hidden>`
   with `pointer-events: none` so circles near the edge stay clickable. The canvas background is transparent so
   the parchment and the red ray disc show through.
 - **Camera:** perspective, fov 30°, on the **+Z side** looking at `(0, 0.5, 0)`. The wrist is at the origin, the
@@ -309,7 +312,8 @@ Sequence on mount:
   gives a position near `(0, 0.5, 2.4)`. A unit test checks the paw's bounding box fits the frustum at the 1:1
   aspect.
 - **Lights:** one ambient light, sepia-tinted (`#f0dcb8`, intensity about 0.6); one key directional light from
-  upper-left-front (`#ffe2b0`, about 1.6) that casts a soft shadow (PCF soft, 1024 map, 512 on mobile); one faint
+  upper-left-front (`#ffe2b0`, about 1.6) that casts a soft shadow (1024 map, 512 on mobile; three 0.187 removed `PCFSoftShadowMap`, so the canvas uses
+`shadows="percentage"`, which is the soft PCF filter there); one faint
   blood-red rim light from behind-right (`#8f1d14`, about 0.35). A transparent `ShadowMaterial` plane behind the
   paw receives the drop shadow. Intensities are constants in `PawLights.tsx`, tuned in the scene task.
 - No environment map from a CDN. All values are local.
@@ -318,7 +322,11 @@ Sequence on mount:
 
 `use-paw-material.ts` exports one hook, `usePawMaterial(gltfScene)`. It walks the loaded meshes and returns the
 material to apply. The first version returns a placeholder: the GLB's own PBR base colour map multiplied by a
-sepia tint (`#c9a97a`), plus the unchanged cord material kept on its own mesh (Req 2.5). The ink cross-hatching
+sepia tint (`#c9a97a`), plus the unchanged cord material kept on its own mesh (Req 2.5). **Deviation (task 29):** each
+GLB has one skinned mesh and one material, and the red cord is painted in the same base-colour texture, so the cord
+cannot be kept on its own material; the placeholder keeps all of the GLB's maps and only multiplies the base colour by
+the tint, so the cord stays red, only darker, and its own look is left to the ink-shader spec (task 41), which can mask it
+by texture. The ink cross-hatching
 shader (Req 2.4) is **a separate later spec item**. It must plug in by replacing the body of this hook and
 nothing else. Nothing in the joint driver, the state machine or the layout depends on the material.
 

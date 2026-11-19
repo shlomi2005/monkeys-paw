@@ -3,11 +3,14 @@
 
 import { cleanup, render } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fakeApi } from './state/paw-session-test-support';
 import { App } from './App';
 import { SessionProvider } from './state/SessionProvider';
 import { removeStaticShell, STATIC_SHELL_ID } from './static-shell';
+
+// jsdom has no WebGL: the page runs in poster mode, and the probe must not print jsdom's "not implemented" error.
+vi.mock('./scene/webgl-support', () => ({ hasWebGL: () => false }));
 
 function addShell(): HTMLElement {
   const shell = document.createElement('div');

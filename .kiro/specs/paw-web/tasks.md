@@ -139,13 +139,13 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## r3f scene
 
-- [ ] 28. Add `three`, `@react-three/fiber` and `@react-three/drei` (used for `useGLTF` only). Create the lazy
+- [x] 28. Add `three`, `@react-three/fiber` and `@react-three/drei` (used for `useGLTF` only). Create the lazy
   `scene/PawScene.tsx` entry, `PawCanvas.tsx` (`frameloop="demand"`, `dpr` caps, transparent background, soft
   shadows, `aria-hidden`, `pointer-events: none`), `PawLights.tsx` (sepia ambient, warm key with soft shadow, faint red
   rim, `ShadowMaterial` receiver) and the camera from `camera-fit.ts`. In `PawStage`, import the scene with `React.lazy`
   after first paint (`requestIdleCallback` with a timeout fallback) and only when `webgl-support` passes. Add the error
   boundary around the scene. (Req 2.1, 2.10, 10.5)
-- [ ] 29. `scene/PawModel.tsx` and `use-paw-material.ts`: load the GLB chosen by `chooseGlb` (one request only), inspect
+- [x] 29. `scene/PawModel.tsx` and `use-paw-material.ts`: load the GLB chosen by `chooseGlb` (one request only), inspect
   `extensionsUsed` and serve Draco or meshopt decoders locally if present (no third-party CDN), keep the cord on its
   own material, and return the placeholder sepia-tinted material from the single `usePawMaterial` hook. Fire `onReady`
   after the first rendered frame, fade the canvas in over 300 ms, then hide the poster; fire `onFailure` on load

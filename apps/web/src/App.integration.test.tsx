@@ -3,13 +3,16 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SAMPLE_WISH_TEXT, sampleGrant, sampleVerdict, sampleWish, withCurseStatus } from './api/api-test-support';
 import { RESTING_MESSAGE } from './api/api-messages';
 import { App } from './App';
 import { SessionProvider } from './state/SessionProvider';
 import { fakeApi, ok, RESTING } from './state/paw-session-test-support';
 import type { FakeApi } from './state/paw-session-test-support';
+
+// jsdom has no WebGL: the page runs in poster mode, and the probe must not print jsdom's "not implemented" error.
+vi.mock('./scene/webgl-support', () => ({ hasWebGL: () => false }));
 
 const EXAMPLE_TEXT = 'Users can reset their password by email';
 const exampleEntry = { wish: { ...sampleWish(EXAMPLE_TEXT), id: 'ex-1', context: 'A small web shop' }, grant: sampleGrant() };

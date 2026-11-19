@@ -28,8 +28,19 @@ import { removeStaticShell } from './static-shell';
  * positive tabindex. The decoration, the paw, the stamp and the medal are not focusable, so they can sit anywhere.
  */
 export function App() {
-  const { ctx, view, examples, notice, examplesOnly, liveText, liveSeq, grantedSeq, dispatch, submitWish } =
-    useSession();
+  const {
+    ctx,
+    view,
+    examples,
+    notice,
+    examplesOnly,
+    liveText,
+    liveSeq,
+    grantedSeq,
+    dispatch,
+    submitWish,
+    bridge,
+  } = useSession();
   const reducedMotion = useReducedMotion();
 
   const [text, setText] = useState('');
@@ -93,7 +104,7 @@ export function App() {
 
           <div className={styles.pawBox}>
             <RayDisc pulseKey={grantedSeq} />
-            <PawStage />
+            <PawStage bridge={bridge} initialCurled={ctx.curled} reducedMotion={reducedMotion} />
             <div className={styles.stateText}>
               <PawStateText ctx={ctx} />
             </div>
