@@ -1,6 +1,10 @@
 import { BoxGeometry, Color, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, Texture } from 'three';
 import { describe, expect, it } from 'vitest';
-import { createPawMaterial, PAW_SEPIA_TINT } from './use-paw-material';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement } from 'react';
+import type { Material, Object3D } from 'three';
+import { selectPawMaterial } from './ink-material';
+import { createPawMaterial, PAW_MATERIAL_STYLE, PAW_SEPIA_TINT, usePawMaterial } from './use-paw-material';
 
 /** A small scene shaped like the GLB: one mesh, one material with three maps, base colour white. */
 function sceneWithPaw(baseColor = '#ffffff') {
@@ -78,5 +82,19 @@ describe('createPawMaterial', () => {
     outer.add(inner);
     inner.add(new Mesh(new BoxGeometry(), new MeshStandardMaterial()));
     expect(createPawMaterial(outer)).not.toBeNull();
+  });
+});
+
+describe('usePawMaterial', () => {
+  it('returns what selectPawMaterial returns for the switch and the scene', () => {
+    const { scene } = sceneWithPaw();
+    let seen: Material | null | undefined;
+    function Probe({ model }: { model: Object3D }) {
+      seen = usePawMaterial(model);
+      return null;
+    }
+    renderToStaticMarkup(createElement(Probe, { model: scene }));
+    expect(seen).not.toBeNull();
+    expect(seen).toBe(selectPawMaterial(PAW_MATERIAL_STYLE, scene, createPawMaterial));
   });
 });

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Color, Mesh } from 'three';
 import type { Material, MeshStandardMaterial, Object3D } from 'three';
+import { selectPawMaterial } from './ink-material';
 
 /** Sepia multiplier for the base colour (design.md, "Material seam"). */
 export const PAW_SEPIA_TINT = '#c9a97a';
@@ -55,10 +56,16 @@ export function createPawMaterial(scene: Object3D): Material | null {
   return result;
 }
 
+type PawMaterialStyle = 'ink' | 'placeholder';
+
+/** Which look the paw wears. Set to 'placeholder' to go back to the sepia-tinted material. */
+export const PAW_MATERIAL_STYLE: PawMaterialStyle = 'ink';
+
 /**
- * The single material seam. The ink cross-hatching shader (task 41) replaces the body of this hook and nothing
- * else; the cord's own look is left to that spec, which can mask it by texture.
+ * The single material seam. By default the paw gets the ink cross-hatching material (paw-ink-shader spec);
+ * `PAW_MATERIAL_STYLE` switches back to the sepia-tinted placeholder. Returns null when the scene has no standard
+ * material; the model then keeps its own.
  */
 export function usePawMaterial(scene: Object3D): Material | null {
-  return useMemo(() => createPawMaterial(scene), [scene]);
+  return useMemo(() => selectPawMaterial(PAW_MATERIAL_STYLE, scene, createPawMaterial), [scene]);
 }
