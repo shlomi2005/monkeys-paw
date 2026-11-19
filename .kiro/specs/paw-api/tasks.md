@@ -82,9 +82,12 @@ Ordered checklist for implementing the Paw API. References requirements by numbe
 
 - [x] 52. Wire all routes into `src/index.ts`: POST /api/grant (with checkBudget), POST /api/bind (with checkBudget), POST /api/export, GET /api/examples, GET /api/health. (Req 1–5)
 - [x] 53. Add CORS middleware to all routes. (Req 10)
-- [ ] 54. Start server locally (`pnpm dev`), test each endpoint with curl or Postman, verify responses match schemas. (Req 1–5)
-- [ ] 55. Test budget enforcement: make 11 rapid calls to /api/grant from same IP, verify 11th returns 503. (Req 7.1)
-- [ ] 56. Test CORS: send request with `Origin: http://localhost:5173`, verify CORS headers present. Send with wrong origin, verify no CORS headers. (Req 10)
+- [x] 54. Start server locally (`pnpm dev`), test each endpoint with curl or Postman, verify responses match schemas. (Req 1–5)
+  Run 20.11 with a fake ModelClient (no real model): health, grant, bind, export and examples answered and matched their paw-core schemas; error paths 400/404 as specified; `src/server.ts` without a key started in examples-only mode. `GET /api/examples` returns 503 with the committed cache, which holds 5 fallback grants with 1 curse each; it must be regenerated with the eval once the key is decided.
+- [x] 55. Test budget enforcement: make 11 rapid calls to /api/grant from same IP, verify 11th returns 503. (Req 7.1)
+  Run 20.11: grants 1-10 from one IP returned 200 and the 11th 503, both by x-forwarded-for and by socket address; with a 1-cent budget the model was called at most 7 times.
+- [x] 56. Test CORS: send request with `Origin: http://localhost:5173`, verify CORS headers present. Send with wrong origin, verify no CORS headers. (Req 10)
+  Run 20.11: matching Origin got Access-Control-Allow-Origin, a wrong Origin got none, the preflight returned 204 with GET,POST,OPTIONS and Content-Type; no Set-Cookie.
 
 ## Wish-Engine Task 25 (Schema Changes)
 
@@ -123,22 +126,27 @@ Ordered checklist for implementing the Paw API. References requirements by numbe
 
 ## Deployment
 
-- [ ] 83. Create `apps/api/Dockerfile` or Railway config (`railway.json`) for Node 24 runtime. (tech.md, Req intro)
+- [x] 83. Create `apps/api/Dockerfile` or Railway config (`railway.json`) for Node 24 runtime. (tech.md, Req intro)
 - [ ] 84. Set Railway env vars: `GEMINI_API_KEY`, `CORS_ORIGIN` (web app URL), budget/rate-limit config. (Req 6, 10)
+  Owner: needs the deploy decision (key, billing, Railway account, CORS origin).
 - [ ] 85. Deploy to Railway, verify `/api/health` returns ok in production. (Req 5)
+  Owner: needs the deploy decision (key, billing, Railway account, CORS origin).
 - [ ] 86. Test production `/api/grant` with a real wish, verify response. (Req 1)
+  Owner: needs the deploy decision (key, billing, Railway account, CORS origin).
 - [ ] 87. Monitor logs: confirm no wish text, no IP+wish, no secrets appear. (Req 9)
+  Owner: needs the deploy decision (key, billing, Railway account, CORS origin).
 
 ## CI Integration
 
-- [ ] 88. Add CI workflow: on PR touching `packages/paw-core/src/prompts.ts`, run `pnpm eval` in `apps/api`. (Req 12.8)
-- [ ] 89. Fail PR if eval exits non-zero. (Req 12.6, 12.8)
+- [x] 88. Add CI workflow: on PR touching `packages/paw-core/src/prompts.ts`, run `pnpm eval` in `apps/api`. (Req 12.8)
+- [x] 89. Fail PR if eval exits non-zero. (Req 12.6, 12.8)
 - [ ] 90. Test CI gate: open PR with intentionally bad prompt, verify eval fails and PR is blocked. (Req 12.8)
+  Owner: needs a real PR with the secret set.
 
 ## Documentation
 
-- [ ] 91. Write `apps/api/README.md`: environment variables, how to run locally, how to run eval, deployment instructions. (Req intro)
-- [ ] 92. Update root `README.md`: link to paw-api spec and eval docs. (Req intro)
+- [x] 91. Write `apps/api/README.md`: environment variables, how to run locally, how to run eval, deployment instructions. (Req intro)
+- [x] 92. Update root `README.md`: link to paw-api spec and eval docs. (Req intro)
 
 ## First real run (owner, 18.11): findings
 - [x] 93. `grantWish` assigns `wishId` and curse ids itself after parsing; the model never supplies them (the real

@@ -20,7 +20,8 @@ These choices are binding for every feature. Deviate only by amending this file.
 
 | Concern            | Technology                                  |
 |--------------------|---------------------------------------------|
-| Runtime            | Node.js 22 (LTS)                            |
+| Runtime            | Node.js 24                                  |
+| Packaging          | Ships as `apps/api/Dockerfile` (repo root as build context) |
 | Framework          | Hono — lightweight, edge-ready HTTP          |
 | Validation         | zod — every API boundary and every model output |
 | Model               | Google Gemini Flash (server-side key only, never shipped to client) |

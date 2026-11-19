@@ -1,0 +1,76 @@
+# Prompt eval gate (paw-api tasks 88-89).
+# Runs the golden-wish eval against the real model when a prompt, the curse taxonomy or the model client changes.
+# The eval exits non-zero when it fails, which fails this check. Make "Prompt eval" a required check in the repo settings.
+# Without the repository secret (for example on a PR from a fork) every step after the check is skipped and the job passes.
+name: Prompt eval
+
+on:
+  pull_request:
+    paths:
+      - packages/paw-core/src/prompts.ts
+      - .kiro/steering/curse-taxonomy.md
+      - apps/api/src/client/gemini.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prompt-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval:
+    name: Prompt eval
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check for the model key
+        id: key
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -n "$GEMINI_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The model key secret is not available to this run. The prompt eval is skipped."
+          fi
+
+      - name: Check out the repository
+        if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@v5
+
+      - name: Set up pnpm
+        if: steps.key.outputs.present == 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        if: steps.key.outputs.present == 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.key.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Build paw-core
+        if: steps.key.outputs.present == 'true'
+        run: pnpm -C packages/paw-core build
+
+      - name: Run the golden-wish eval
+        if: steps.key.outputs.present == 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DAILY_BUDGET_CENTS: '25'
+        run: pnpm -C apps/api eval
+
+      - name: Upload the eval report
+        if: always() && steps.key.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: docs/eval/latest.md
+          if-no-files-found: warn

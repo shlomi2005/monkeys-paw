@@ -190,6 +190,9 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       fast-check:
         specifier: ^3.23.0
         version: 3.23.2
