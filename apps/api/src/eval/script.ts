@@ -3,9 +3,11 @@ import path from 'path';
 import type { CurseType, Wish, Grant } from 'paw-core';
 import { grantWish } from 'paw-core';
 import { GeminiModelClient } from '../client/gemini';
-import { loadBudgetConfig, loadModelCallCost } from '../budget/config';
+import { loadBudgetConfig } from '../budget/config';
+import { loadPriceTable } from '../budget/prices';
+import type { PriceTable } from '../budget/prices';
 import { BudgetedModelClient } from '../budget/guarded-client';
-import type { AvailableModelClient } from '../budget/guarded-client';
+import type { MeteredModelClient } from '../budget/guarded-client';
 import { createGlobalState } from '../budget/state';
 import type { GoldenWish, WishEvalResult, EvalResult } from './types';
 
@@ -19,11 +21,11 @@ export class EvalAbortError extends Error {
 
 export interface EvalOptions {
   /** Defaults to a real GeminiModelClient. Tests inject a fake. */
-  model?: AvailableModelClient;
+  model?: MeteredModelClient;
   /** Daily budget in cents. Defaults to DAILY_BUDGET_CENTS. */
   dailyBudgetCents?: number;
-  /** Cents charged per model call. Defaults to MODEL_CALL_COST_CENTS. */
-  costPerCallCents?: number;
+  /** Model prices for the guard. Defaults to PRICE_TABLE_JSON, then the 1.1.2027 table. */
+  prices?: PriceTable;
   /** Pause between wishes. Defaults to 2000 ms. */
   delayMs?: number;
 }
@@ -112,7 +114,14 @@ function evaluateWish(golden: GoldenWish, grant: Grant): { pass: boolean; reason
 export async function runEval(
   limit?: number,
   options: EvalOptions = {},
-): Promise<EvalResult & { modelCalls: number; examplesList: Array<{ wish: Wish; grant: Grant }> }> {
+): Promise<
+  EvalResult & {
+    modelCalls: number;
+    /** Cents the guard charged for the whole run (fractional, never rounded). */
+    costCents: number;
+    examplesList: Array<{ wish: Wish; grant: Grant }>;
+  }
+> {
   const model = options.model ?? new GeminiModelClient();
 
   // Check for API key before any call or any other work (Req 12.7)
@@ -131,7 +140,7 @@ export async function runEval(
     createGlobalState(),
     { perIpLimit: Number.MAX_SAFE_INTEGER, windowMs: 60_000, dailyBudgetCents },
     Date.now,
-    options.costPerCallCents ?? loadModelCallCost(),
+    options.prices ?? loadPriceTable(),
   );
   const delayMs = options.delayMs ?? 2000;
 
@@ -225,7 +234,7 @@ export async function runEval(
   const passPercentage = passedWishes / wishesToEval.length;
   const pass = passPercentage >= threshold;
 
-  const result: EvalResult & { modelCalls: number } = {
+  const result: EvalResult & { modelCalls: number; costCents: number } = {
     timestamp: new Date().toISOString(),
     wishes,
     overallSpecificity: calculateSpecificityScore(
@@ -235,6 +244,7 @@ export async function runEval(
     overallTypeCoverage: wishes.reduce((sum, w) => sum + w.typeCoverage, 0) / wishes.length,
     pass,
     modelCalls: modelClient.calls,
+    costCents: modelClient.costCents,
   };
 
   return { ...result, examplesList };
@@ -335,7 +345,7 @@ async function main() {
       (result.wishes.filter((w) => w.verdict === 'PASS').length / result.wishes.length) *
       100
     ).toFixed(1);
-    const summary = `${result.wishes.length} wishes: ${result.pass ? 'PASS ✓' : 'FAIL ✗'} (${passRate}% pass rate, specificity ${(result.overallSpecificity * 100).toFixed(1)}%, coverage ${(result.overallTypeCoverage * 100).toFixed(1)}%, ${result.modelCalls} model calls)`;
+    const summary = `${result.wishes.length} wishes: ${result.pass ? 'PASS ✓' : 'FAIL ✗'} (${passRate}% pass rate, specificity ${(result.overallSpecificity * 100).toFixed(1)}%, coverage ${(result.overallTypeCoverage * 100).toFixed(1)}%, ${result.modelCalls} model calls, ${result.costCents.toFixed(4)} cents charged)`;
     console.log(summary);
 
     // Exit with appropriate code

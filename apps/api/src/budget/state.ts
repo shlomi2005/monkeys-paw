@@ -10,7 +10,10 @@ export interface IpState {
 }
 
 export interface GlobalState {
+  /** Real cost charged today, in fractional cents. Reset by the day roll. */
   spentCents: number;
+  /** Ceilings of the `generate` calls in flight, in fractional cents. Never reset by the day roll. */
+  reservedCents: number;
   dayStart: number;
   ipStates: Map<string, IpState>;
 }
@@ -18,6 +21,7 @@ export interface GlobalState {
 export function createGlobalState(now: number = Date.now()): GlobalState {
   return {
     spentCents: 0,
+    reservedCents: 0,
     dayStart: now,
     ipStates: new Map(),
   };
@@ -43,7 +47,8 @@ export function isDayElapsed(state: Pick<GlobalState, 'dayStart'>, now: number):
 
 /**
  * Starts a new day with nothing spent when the current one has elapsed
- * (Req 8.5). Returns true when it rolled over.
+ * (Req 8.5). Returns true when it rolled over. Reservations belong to calls
+ * still in flight, so they are kept.
  */
 export function rollDayIfElapsed(state: GlobalState, now: number): boolean {
   if (!isDayElapsed(state, now)) return false;

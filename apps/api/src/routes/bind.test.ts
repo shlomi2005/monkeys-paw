@@ -4,11 +4,12 @@ import type { ModelClient } from 'paw-core';
 import { createBindRoute } from './bind';
 import { BudgetedModelClient } from '../budget/guarded-client';
 import { createGlobalState } from '../budget/state';
+import { FakeMeteredModel } from '../budget/fake-metered';
 
 /** A per-request guard factory over `model` with a budget large enough not to matter. */
 function guarded(model: ModelClient, dailyBudgetCents = 500) {
   const state = createGlobalState();
-  const inner = { available: true, generate: (prompt: string) => model.generate(prompt) };
+  const inner = new FakeMeteredModel({ answer: (prompt) => model.generate(prompt) });
   return () =>
     new BudgetedModelClient(inner, state, { perIpLimit: 10, windowMs: 60_000, dailyBudgetCents });
 }

@@ -27,7 +27,10 @@ export function createHealthRoute(
     rollDayIfElapsed(globalState, now);
 
     const mode = getCurrentMode(hasApiKey(), globalState, config, now);
-    const remainingCents = Math.max(0, config.dailyBudgetCents - globalState.spentCents);
+    const remainingCents = Math.max(
+      0,
+      config.dailyBudgetCents - globalState.spentCents - globalState.reservedCents,
+    );
 
     return c.json(
       {

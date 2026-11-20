@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { DAY_MS } from 'paw-core';
 import { createApp } from './app';
-import type { AvailableModelClient } from './budget/guarded-client';
+import { FakeMeteredModel } from './budget/fake-metered';
+import type { FakeMeteredOptions } from './budget/fake-metered';
+import type { MeteredModelClient } from './budget/guarded-client';
 import type { BudgetConfig } from './budget/config';
 import { fileURLToPath } from 'url';
 
@@ -11,12 +13,12 @@ const EXAMPLES_FIXTURE = fileURLToPath(new URL('../tests/fixtures/examples-cache
 const RESTING = 'The paw is resting. Browse the examples until it wakes.';
 
 /** A fake model that answers each paw-core prompt with valid JSON and counts its calls. */
-class FakeModel implements AvailableModelClient {
-  calls = 0;
-  constructor(public available = true) {}
+class FakeModel extends FakeMeteredModel {
+  constructor(options: FakeMeteredOptions = {}) {
+    super(options);
+  }
 
-  async generate(prompt: string): Promise<unknown> {
-    this.calls += 1;
+  protected override async answer(prompt: string): Promise<unknown> {
     if (prompt.includes('Task: GRANT_WISH')) {
       return {
         narration: 'Your wish is granted, exactly as stated.',
@@ -44,11 +46,14 @@ class FakeModel implements AvailableModelClient {
 /** One grant makes exactly this many model calls with FakeModel: the grant and the batch gate. */
 const CALLS_PER_GRANT = 2;
 
+/** Reports the whole output cap as used, so a call is charged about its ceiling (a bit over 3 cents). */
+const FULL: FakeMeteredOptions = { usage: 'ceiling' };
+
 const BUDGET: BudgetConfig = { perIpLimit: 10, windowMs: 60_000, dailyBudgetCents: 500 };
 
 function makeApp(
-  model: AvailableModelClient,
-  overrides: { budget?: Partial<BudgetConfig>; costPerCallCents?: number; clock?: () => number } = {},
+  model: MeteredModelClient,
+  overrides: { budget?: Partial<BudgetConfig>; clock?: () => number } = {},
 ) {
   return createApp({
     model,
@@ -56,7 +61,6 @@ function makeApp(
     corsOrigin: '*',
     examplesCachePath: EXAMPLES_FIXTURE,
     clock: overrides.clock ?? (() => 1_000_000),
-    costPerCallCents: overrides.costPerCallCents ?? 0.135,
   });
 }
 
@@ -102,7 +106,9 @@ describe('createApp', () => {
     const two = makeApp(model);
 
     expect((await post(one, '/api/grant', grantBody)).status).toBe(200);
-    expect((await health(one)).budget.spentCents).toBeCloseTo(CALLS_PER_GRANT * 0.135, 5);
+    const spent = (await health(one)).budget.spentCents;
+    expect(spent).toBeGreaterThan(0);
+    expect(spent).toBeLessThan(1); // the real cost of two small answers, far below one ceiling
     expect((await health(two)).budget.spentCents).toBe(0);
   });
 
@@ -152,9 +158,10 @@ describe('createApp', () => {
 
   describe('budget guard on every model call (iron-rules §5)', () => {
     it('a grant that needs more model calls than the budget allows returns 503, and the model is called no more than the budget allows', async () => {
-      const model = new FakeModel();
-      // The budget pays for exactly one call; a grant needs two.
-      const app = makeApp(model, { budget: { dailyBudgetCents: 1 }, costPerCallCents: 1 });
+      const model = new FakeModel(FULL);
+      // One call is reserved at about 3.3 cents and charged about the same. The budget
+      // pays for one; a grant needs two.
+      const app = makeApp(model, { budget: { dailyBudgetCents: 4 } });
 
       const res = await post(app, '/api/grant', grantBody);
       expect(res.status).toBe(503);
@@ -162,39 +169,46 @@ describe('createApp', () => {
       expect(model.calls).toBe(1);
 
       const after = await health(app);
-      expect(after.budget.spentCents).toBe(1);
-      expect(after.mode).toBe('examples-only');
+      expect(after.budget.spentCents).toBeGreaterThan(3);
+      expect(after.budget.spentCents).toBeLessThanOrEqual(4);
 
-      // Examples-only now: no further call reaches the model.
+      // No further call reaches the model: the next one cannot be covered either.
       expect((await post(app, '/api/grant', grantBody)).status).toBe(503);
       expect(model.calls).toBe(1);
     });
 
-    it('stops mid-way across requests: the spend never passes the daily budget', async () => {
+    it('a 1-cent budget admits no grant, because one grant ceiling is several cents', async () => {
       const model = new FakeModel();
-      const app = makeApp(model, { budget: { dailyBudgetCents: 3 }, costPerCallCents: 1 });
+      const app = makeApp(model, { budget: { dailyBudgetCents: 1 } });
 
-      expect((await post(app, '/api/grant', grantBody)).status).toBe(200); // calls 1 and 2
-      expect((await post(app, '/api/grant', grantBody)).status).toBe(503); // call 3, then denied
-      expect(model.calls).toBe(3);
-      expect((await health(app)).budget.spentCents).toBe(3);
+      const res = await post(app, '/api/grant', grantBody);
+      expect(res.status).toBe(503);
+      expect(model.calls).toBe(0);
+      expect((await health(app)).budget.spentCents).toBe(0);
+    });
+
+    it('stops mid-way across requests: the spend never passes the daily budget', async () => {
+      const model = new FakeModel(FULL);
+      const app = makeApp(model, { budget: { dailyBudgetCents: 7 } });
+
+      expect((await post(app, '/api/grant', grantBody)).status).toBe(200); // two calls, about 6.5 cents
+      expect((await post(app, '/api/grant', grantBody)).status).toBe(503); // refused before its first call
+      expect(model.calls).toBe(2);
+      expect((await health(app)).budget.spentCents).toBeLessThanOrEqual(7);
     });
 
     it('parallel grants cannot spend more than the budget', async () => {
-      const model = new FakeModel();
-      const app = makeApp(model, {
-        budget: { dailyBudgetCents: 5, perIpLimit: 100 },
-        costPerCallCents: 1,
-      });
+      const model = new FakeModel(FULL);
+      const app = makeApp(model, { budget: { dailyBudgetCents: 10, perIpLimit: 100 } });
 
       await Promise.all(Array.from({ length: 10 }, () => post(app, '/api/grant', grantBody)));
-      expect(model.calls).toBeLessThanOrEqual(5);
-      expect((await health(app)).budget.spentCents).toBeLessThanOrEqual(5);
+      expect(model.calls).toBeLessThanOrEqual(3); // each call reserves over 3 cents
+      expect((await health(app)).budget.spentCents).toBeLessThanOrEqual(10);
     });
 
     it('a bind that the guard refuses returns 503, not the fallback verdict', async () => {
       const model = new FakeModel();
-      const app = makeApp(model, { budget: { dailyBudgetCents: 0.5 }, costPerCallCents: 1 });
+      const app = makeApp(model, { budget: { dailyBudgetCents: 0.5 } });
       const res = await post(app, '/api/bind', {
         grant: sampleGrant,
         curseId: 'c1',
@@ -207,19 +221,15 @@ describe('createApp', () => {
 
     it('the spend resets when the day rolls over (Req 8.5)', async () => {
       let now = 1_000_000;
-      const model = new FakeModel();
-      const app = makeApp(model, {
-        budget: { dailyBudgetCents: 2 },
-        costPerCallCents: 1,
-        clock: () => now,
-      });
+      const model = new FakeModel(FULL);
+      const app = makeApp(model, { budget: { dailyBudgetCents: 7 }, clock: () => now });
 
       expect((await post(app, '/api/grant', grantBody)).status).toBe(200);
-      expect((await health(app)).mode).toBe('examples-only');
+      expect((await health(app)).budget.spentCents).toBeGreaterThan(6);
       expect((await post(app, '/api/grant', grantBody)).status).toBe(503);
 
       now += DAY_MS;
-      expect((await health(app)).mode).toBe('normal');
+      expect((await health(app)).budget.spentCents).toBe(0);
       expect((await post(app, '/api/grant', grantBody)).status).toBe(200);
     });
   });
@@ -235,21 +245,27 @@ describe('createApp', () => {
 
       const after = await health(app);
       expect(after.mode).toBe('normal');
-      expect(after.budget.spentCents).toBeCloseTo(CALLS_PER_GRANT * 0.135, 5);
-      expect(after.budget.remainingCents).toBeCloseTo(500 - CALLS_PER_GRANT * 0.135, 5);
+      expect(after.budget.spentCents).toBeGreaterThan(0);
+      expect(after.budget.remainingCents).toBeCloseTo(500 - after.budget.spentCents, 2);
     });
 
     it('says examples-only once the budget is spent, not "normal" from startup', async () => {
-      const app = makeApp(new FakeModel(), { budget: { dailyBudgetCents: 2 }, costPerCallCents: 1 });
+      // The answer used more than its ceiling (10000 output tokens, 7.5 cents). The real cost is
+      // charged, so the spend is past the 5-cent budget and every later call is refused.
+      const model = new FakeModel({ usage: { promptTokens: 0, outputTokens: 10_000 } });
+      const app = makeApp(model, { budget: { dailyBudgetCents: 5 } });
       expect((await health(app)).mode).toBe('normal');
-      await post(app, '/api/grant', grantBody);
-      expect((await health(app)).mode).toBe('examples-only');
+      expect((await post(app, '/api/grant', grantBody)).status).toBe(503);
+      const after = await health(app);
+      expect(after.mode).toBe('examples-only');
+      expect(after.budget).toMatchObject({ spentCents: 7.5, remainingCents: 0 });
+      expect(model.calls).toBe(1);
     });
   });
 
   describe('without an API key (Req 6.2, 8)', () => {
     it('starts in examples-only mode, refuses grant and bind, still serves examples and export', async () => {
-      const model = new FakeModel(false);
+      const model = new FakeModel({ available: false });
       const app = makeApp(model);
 
       expect(await health(app)).toMatchObject({ status: 'ok', mode: 'examples-only' });

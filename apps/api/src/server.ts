@@ -2,7 +2,8 @@ import { serve } from '@hono/node-server';
 
 import { createApp } from './app';
 import { GeminiModelClient } from './client/gemini';
-import { loadBudgetConfig, loadModelCallCost } from './budget/config';
+import { loadBudgetConfig } from './budget/config';
+import { loadPriceTable } from './budget/prices';
 import { createGlobalState } from './budget/state';
 import { getCurrentMode } from './modes';
 import { defaultExamplesCachePath } from './paths';
@@ -16,7 +17,7 @@ const app = createApp({
   budget,
   corsOrigin: process.env.CORS_ORIGIN || '*',
   examplesCachePath: defaultExamplesCachePath(),
-  costPerCallCents: loadModelCallCost(),
+  prices: loadPriceTable(),
 });
 
 const mode = getCurrentMode(model.available, createGlobalState(), budget);

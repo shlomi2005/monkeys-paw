@@ -54,9 +54,9 @@ export const HealthResponseSchema = z.object({
   status: z.literal('ok'),
   mode: z.enum(['normal', 'examples-only']),
   budget: z.object({
-    dailyBudgetCents: z.number().int().min(0),
-    spentCents: z.number().int().min(0),
-    remainingCents: z.number().int().min(0),
+    dailyBudgetCents: z.number().min(0),
+    spentCents: z.number().min(0),
+    remainingCents: z.number().min(0),
   }),
 });
 

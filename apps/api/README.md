@@ -21,17 +21,21 @@ Names match [`.env.example`](.env.example). `pnpm start` loads no `.env` file. S
 | Variable                     | Default                                                        | Meaning                                                                        |
 |------------------------------|----------------------------------------------------------------|--------------------------------------------------------------------------------|
 | `GEMINI_API_KEY`             | empty                                                          | Model key. Empty means examples-only mode.                                     |
-| `GEMINI_MODEL`               | `gemini-3.5-flash`                                             | Primary model name.                                                            |
+| `GEMINI_MODEL`               | `gemini-3.6-flash`                                             | Primary model name. The retired name `gemini-3.5-flash` routes to it.          |
 | `GEMINI_MODEL_FALLBACKS`     | `gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite` | Comma-separated models to try on 503, 429 or 404.                              |
 | `GEMINI_TIMEOUT_MS`          | `30000`                                                        | Timeout of one model request.                                                  |
 | `PORT`                       | `8787`                                                         | Port to listen on. Railway sets it.                                            |
-| `MODEL_CALL_COST_CENTS`      | `0.135`                                                        | Cents charged to the daily budget per model call.                              |
+| `PRICE_TABLE_JSON`           | the built-in 1.1.2027 table                                    | Optional JSON object `{"<model id>":{"inputUsdPerMTok":n,"outputUsdPerMTok":n}}` that replaces it. Invalid means the default table and one warning line. |
 | `EXAMPLES_CACHE_PATH`        | `apps/api/examples-cache.json`, found from the package         | Path of the examples cache.                                                    |
 | `CORS_ORIGIN`                | `*` when unset (`.env.example` uses `http://localhost:5173`)   | The origin allowed to call the API. Set it to the web app's exact origin.      |
 | `PER_IP_LIMIT`               | `10`                                                           | Model calls per IP within one window.                                          |
 | `RATE_WINDOW_MS`             | `60000`                                                        | Length of that window.                                                         |
 | `DAILY_BUDGET_CENTS`         | `500`                                                          | Daily budget in cents. When it is spent the server serves examples only.       |
 | `EVAL_SPECIFICITY_THRESHOLD` | `0.80`                                                         | Minimum specificity score the eval needs to pass.                              |
+
+### How the budget guard charges
+
+Every model call goes through the guard. Before the call it reserves a ceiling: for each model of the fallback chain, the estimated input tokens at the input rate plus the output cap (`MAX_OUTPUT_TOKENS`, 4096, thinking included) at the output rate. If the day's spend plus what is already reserved plus this ceiling is above `DAILY_BUDGET_CENTS`, the call is refused and the model is not called. After the call it releases the reservation and charges the real cost from the token counts in the response, at the price of the model that answered. An attempt that reported no token counts (a timeout, a network error, an HTTP error) is charged its ceiling. Cents are fractional and never rounded in the state. The prices are the ones that apply from 1.1.2027 (see `src/budget/prices.ts`). They are higher than today's, so the guard over-counts today and never under-counts. An unknown model is priced at the most expensive row.
 
 ## Run locally
 
@@ -83,7 +87,7 @@ Nothing is deployed and no account exists yet.
    - `RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile`
    - `GEMINI_API_KEY` (the key from step 2)
    - `CORS_ORIGIN` (the web app's exact origin, for example `https://paw.example`)
-   - `PER_IP_LIMIT`, `RATE_WINDOW_MS`, `DAILY_BUDGET_CENTS`, `MODEL_CALL_COST_CENTS`
+   - `PER_IP_LIMIT`, `RATE_WINDOW_MS`, `DAILY_BUDGET_CENTS`
 5. In the service settings, set the health check path to `/api/health`. Railway sets `PORT`.
 6. Deploy. Open `/api/health` and check that it answers.
 7. Point the web app at the Railway URL, and set `PAW_API_URL` to the same URL for the MCP server.

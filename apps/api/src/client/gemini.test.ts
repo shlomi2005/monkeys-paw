@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GeminiModelClient } from './gemini';
-import type { ModelCallLogEntry } from './gemini';
+import { DEFAULT_MODEL, GeminiModelClient, MAX_OUTPUT_TOKENS } from './gemini';
+import type { AttemptReport, ModelCallLogEntry } from './gemini';
 
 const FAKE_KEY = 'test-key-not-real';
 const PROMPT_SECRET = 'prompt-words-that-must-not-leak';
@@ -117,7 +117,7 @@ describe('GeminiModelClient', () => {
     });
     await expect(withDefaults.generate('x')).rejects.toThrow();
     expect(defaults.fetchMock.mock.calls.map((_, i) => requestOf(defaults.fetchMock, i).url)).toEqual(
-      ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'].map(
+      ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'].map(
         (m) => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`,
       ),
     );
@@ -167,7 +167,11 @@ describe('GeminiModelClient', () => {
     const { client, fetchMock } = setup([geminiOk('{}')]);
     await client.generate('just a prompt');
     const { body } = requestOf(fetchMock);
-    expect(body.generationConfig).toEqual({ responseMimeType: 'application/json' });
+    expect(body.generationConfig).toEqual({
+      responseMimeType: 'application/json',
+      thinkingConfig: { thinkingLevel: 'low' },
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+    });
   });
 
   it('joins the text parts of the first candidate and parses them as JSON', async () => {
@@ -431,5 +435,293 @@ describe('Task 101: Gemini structured output schemas', () => {
       expect(typeEnum).toContain(tag);
     }
     expect(typeEnum).toHaveLength(10);
+  });
+});
+
+/** A 200 response with usage and a model version, as the real API sends them. */
+function geminiWithUsage(
+  text: string,
+  extra: { finishReason?: string; usageMetadata?: unknown; modelVersion?: string } = {},
+): Response {
+  return new Response(
+    JSON.stringify({
+      candidates: [
+        { content: { parts: [{ text }] }, ...(extra.finishReason ? { finishReason: extra.finishReason } : {}) },
+      ],
+      ...(extra.usageMetadata !== undefined ? { usageMetadata: extra.usageMetadata } : {}),
+      ...(extra.modelVersion ? { modelVersion: extra.modelVersion } : {}),
+    }),
+    { status: 200 },
+  );
+}
+
+describe('request shape (paw-api task 103)', () => {
+  it('the default model is gemini-3.6-flash, and MAX_OUTPUT_TOKENS is 4096, not above 8192', () => {
+    expect(DEFAULT_MODEL).toBe('gemini-3.6-flash');
+    expect(MAX_OUTPUT_TOKENS).toBe(4096);
+    expect(MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(8192);
+  });
+
+  it.each([
+    'Task: GRANT_WISH',
+    'Task: JUDGE_VERDICT',
+    'Task: JUDGE_QUALITY',
+    'Task: JUDGE_BATCH_QUALITY',
+    'Task: REPLACE_CURSE',
+    'no known task',
+  ])('%s: thinkingLevel is low and maxOutputTokens is MAX_OUTPUT_TOKENS', async (task) => {
+    const { client, fetchMock } = setup([geminiOk('{}')]);
+    await client.generate(`${task}\nbody`);
+    const { generationConfig } = requestOf(fetchMock).body;
+    expect(generationConfig.thinkingConfig.thinkingLevel).toBe('low');
+    expect(generationConfig.maxOutputTokens).toBe(MAX_OUTPUT_TOKENS);
+  });
+
+  it('the same on a fallback attempt', async () => {
+    const { client, fetchMock } = setup([status(503), geminiOk('{}')]);
+    await client.generate('Task: GRANT_WISH');
+    for (const index of [0, 1]) {
+      const { generationConfig } = requestOf(fetchMock, index).body;
+      expect(generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'low' });
+      expect(generationConfig.maxOutputTokens).toBe(MAX_OUTPUT_TOKENS);
+    }
+    expect(requestOf(fetchMock, 1).url).toContain('/models/model-b:');
+  });
+});
+
+describe('plan (paw-api task 104)', () => {
+  it('has one entry per model of the chain, in order, with the input estimate and the output cap', () => {
+    const { client, fetchMock } = setup([]);
+    const prompt = 'Task: GRANT_WISH ' + 'x'.repeat(100);
+    const schemaLength = JSON.stringify((client as any).grantWishSchema()).length;
+
+    const plan = client.plan(prompt);
+
+    expect(plan).toEqual(
+      MODELS.map((model) => ({
+        model,
+        inputTokens: Math.ceil((prompt.length + schemaLength) / 3),
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+      })),
+    );
+    expect(fetchMock).not.toHaveBeenCalled(); // pure: no I/O
+  });
+
+  it('counts no schema when the prompt has no known Task', () => {
+    const { client } = setup([]);
+    expect(client.plan('abcd')[0].inputTokens).toBe(2); // ceil(4 / 3)
+    expect(client.plan('')[0].inputTokens).toBe(0);
+  });
+
+  it('needs no key, and follows the deduplicated chain', () => {
+    const client = new GeminiModelClient({ apiKey: '', models: ['a', ' b ', 'a', ''] });
+    expect(client.available).toBe(false);
+    expect(client.plan('x').map((p) => p.model)).toEqual(['a', 'b']);
+  });
+});
+
+describe('generateMetered (paw-api task 104)', () => {
+  const USAGE = { promptTokenCount: 100, candidatesTokenCount: 30, thoughtsTokenCount: 12 };
+
+  it('reports usage as prompt tokens and candidates + thoughts, and copies modelVersion', async () => {
+    const { client } = setup([
+      geminiWithUsage('{"a":1}', { usageMetadata: USAGE, modelVersion: 'model-a-001', finishReason: 'STOP' }),
+    ]);
+    const reports: AttemptReport[] = [];
+    await expect(client.generateMetered('x', (r) => reports.push(r))).resolves.toEqual({ a: 1 });
+    expect(reports).toEqual([
+      {
+        model: 'model-a',
+        inputTokens: 1,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        modelVersion: 'model-a-001',
+        usage: { promptTokens: 100, outputTokens: 42 },
+      },
+    ]);
+  });
+
+  it('counts a missing candidates or thoughts count as 0', async () => {
+    const { client } = setup([
+      geminiWithUsage('{}', { usageMetadata: { promptTokenCount: 7 } }),
+      geminiWithUsage('{}', { usageMetadata: { promptTokenCount: 7, thoughtsTokenCount: 5 } }),
+    ]);
+    const reports: AttemptReport[] = [];
+    await client.generateMetered('x', (r) => reports.push(r));
+    await client.generateMetered('x', (r) => reports.push(r));
+    expect(reports.map((r) => r.usage)).toEqual([
+      { promptTokens: 7, outputTokens: 0 },
+      { promptTokens: 7, outputTokens: 5 },
+    ]);
+    expect(reports[0].modelVersion).toBeUndefined();
+  });
+
+  it.each([
+    ['no usageMetadata', undefined],
+    ['usageMetadata that is not an object', 'many'],
+    ['no promptTokenCount', { candidatesTokenCount: 5 }],
+    ['a negative promptTokenCount', { promptTokenCount: -1, candidatesTokenCount: 5 }],
+    ['a promptTokenCount that is not a number', { promptTokenCount: '5' }],
+    ['a promptTokenCount that is not finite', { promptTokenCount: null }],
+  ])('has no usage for %s', async (_label, usageMetadata) => {
+    const { client } = setup([geminiWithUsage('{}', { usageMetadata })]);
+    const reports: AttemptReport[] = [];
+    await client.generateMetered('x', (r) => reports.push(r));
+    expect(reports).toHaveLength(1);
+    expect('usage' in reports[0]).toBe(false);
+  });
+
+  const SCENARIOS: Array<[string, Array<Response | (() => Promise<Response>)>, number, boolean]> = [
+    ['success', [geminiOk('{}')], 1, true],
+    ['HTTP 503 then success', [status(503), geminiOk('{}')], 2, true],
+    ['503, 429 and 404 until the chain is exhausted', [status(503), status(429), status(404)], 3, false],
+    ['HTTP 400', [status(400)], 1, false],
+    ['HTTP 500', [status(500)], 1, false],
+    ['a network error', [() => Promise.reject(new TypeError('boom'))], 1, false],
+    ['an unreadable body', [new Response('garbage', { status: 200 })], 1, false],
+    ['a body that fails while it is read', [
+      () => {
+        const failing = new ReadableStream({ start: (c) => c.error(new Error('broken pipe')) });
+        return Promise.resolve(new Response(failing, { status: 200 }));
+      },
+    ], 1, false],
+    ['no candidates', [new Response('{}', { status: 200 })], 1, false],
+    ['text that is not JSON', [geminiOk('nope')], 1, false],
+    ['MAX_TOKENS', [geminiWithUsage('{"a"', { finishReason: 'MAX_TOKENS', usageMetadata: USAGE })], 1, false],
+    ['cut-off JSON', [geminiWithUsage('{"a": "cut', { finishReason: 'STOP', usageMetadata: USAGE })], 1, false],
+  ];
+
+  it.each(SCENARIOS)('%s: exactly one report per HTTP attempt', async (_label, responses, attempts, succeeds) => {
+    const { client, fetchMock } = setup(responses);
+    const reports: AttemptReport[] = [];
+    const outcome = await client.generateMetered('x', (r) => reports.push(r)).then(
+      () => 'ok',
+      () => 'error',
+    );
+    expect(outcome).toBe(succeeds ? 'ok' : 'error');
+    expect(fetchMock).toHaveBeenCalledTimes(attempts);
+    expect(reports.map((r) => r.model)).toEqual(MODELS.slice(0, attempts));
+  });
+
+  it('reports a timeout once, with no usage', async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init!.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        }),
+    );
+    const client = new GeminiModelClient({ apiKey: FAKE_KEY, models: MODELS, timeoutMs: 10, fetch: fetchMock, log: () => {} });
+    const reports: AttemptReport[] = [];
+    await expect(client.generateMetered('x', (r) => reports.push(r))).rejects.toThrow('timed out');
+    expect(reports).toHaveLength(1);
+    expect('usage' in reports[0]).toBe(false);
+  });
+
+  it('reports each attempt before the next one starts and before the promise settles', async () => {
+    const events: string[] = [];
+    const queue = [status(503), status(429), geminiOk('{}')];
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      events.push(`fetch ${String(url).split('/models/')[1].split(':')[0]}`);
+      return queue.shift()!;
+    });
+    const client = new GeminiModelClient({ apiKey: FAKE_KEY, models: MODELS, fetch: fetchMock, log: () => {} });
+
+    await client.generateMetered('x', (r) => events.push(`report ${r.model}`));
+    events.push('settled');
+
+    expect(events).toEqual([
+      'fetch model-a',
+      'report model-a',
+      'fetch model-b',
+      'report model-b',
+      'fetch model-c',
+      'report model-c',
+      'settled',
+    ]);
+
+    const failing = new GeminiModelClient({
+      apiKey: FAKE_KEY,
+      models: ['model-a'],
+      fetch: vi.fn<typeof fetch>(async () => status(400)),
+      log: () => {},
+    });
+    const order: string[] = [];
+    await failing.generateMetered('x', () => order.push('report')).catch(() => order.push('rejected'));
+    expect(order).toEqual(['report', 'rejected']);
+  });
+
+  it('reports nothing without a key: no HTTP attempt was made', async () => {
+    const client = new GeminiModelClient({ apiKey: '', models: MODELS, fetch: vi.fn<typeof fetch>() });
+    const onAttempt = vi.fn();
+    await expect(client.generateMetered('x', onAttempt)).rejects.toThrow();
+    expect(onAttempt).not.toHaveBeenCalled();
+  });
+
+  it('generate keeps working with no listener', async () => {
+    const { client } = setup([geminiWithUsage('{"a":1}', { usageMetadata: USAGE })]);
+    await expect(client.generate('x')).resolves.toEqual({ a: 1 });
+  });
+});
+
+describe('MAX_TOKENS and cut-off JSON (paw-api task 103)', () => {
+  const USAGE = { promptTokenCount: 100, candidatesTokenCount: 3000, thoughtsTokenCount: 996 };
+
+  it('a 200 with finishReason MAX_TOKENS and cut-off JSON rejects, reports one attempt with its usage, and does not try the next model', async () => {
+    const { client, fetchMock, logs } = setup([
+      geminiWithUsage('{"narration": "The pa', { finishReason: 'MAX_TOKENS', usageMetadata: USAGE }),
+      geminiOk('{"from":"b"}'),
+    ]);
+    const reports: AttemptReport[] = [];
+
+    await expect(client.generateMetered('x', (r) => reports.push(r))).rejects.toThrow(
+      'Model call failed (model-a: output cut off)',
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(reports).toHaveLength(1);
+    expect(reports[0].usage).toEqual({ promptTokens: 100, outputTokens: 3996 });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ model: 'model-a', status: 200, ok: false, finishReason: 'MAX_TOKENS' });
+  });
+
+  it('MAX_TOKENS with empty text is also a cut-off, not "no text returned"', async () => {
+    const { client } = setup([geminiWithUsage('', { finishReason: 'MAX_TOKENS', usageMetadata: USAGE })]);
+    await expect(client.generate('x')).rejects.toThrow('output cut off');
+  });
+
+  it('text that is not complete JSON, with a normal finish reason, is a failed attempt too', async () => {
+    const { client, fetchMock } = setup([
+      geminiWithUsage('{"narration": "cut', { finishReason: 'STOP', usageMetadata: USAGE }),
+      geminiOk('{}'),
+    ]);
+    await expect(client.generate('x')).rejects.toThrow('model-a');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the model_call log line (paw-api task 103)', () => {
+  it('adds promptTokens, outputTokens and finishReason, as numbers and an enum, when the response has them', async () => {
+    const { client, logs } = setup([
+      geminiWithUsage(`{"a":"${RESPONSE_SECRET}"}`, {
+        finishReason: 'STOP',
+        usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 30, thoughtsTokenCount: 12 },
+        modelVersion: 'model-a-001',
+      }),
+    ]);
+    await client.generate(`Task: GRANT_WISH ${PROMPT_SECRET}`);
+
+    expect(logs).toHaveLength(1);
+    expect(Object.keys(logs[0]).sort()).toEqual(
+      ['event', 'finishReason', 'model', 'ms', 'ok', 'outputTokens', 'promptTokens', 'status'],
+    );
+    expect(logs[0]).toMatchObject({ promptTokens: 100, outputTokens: 42, finishReason: 'STOP', ok: true });
+    expect(JSON.stringify(logs)).not.toContain(RESPONSE_SECRET);
+    expect(JSON.stringify(logs)).not.toContain(PROMPT_SECRET);
+    expect(JSON.stringify(logs)).not.toContain(FAKE_KEY);
+  });
+
+  it('drops a finishReason that is not an enum-like token', async () => {
+    const { client, logs } = setup([geminiWithUsage('{}', { finishReason: `free text ${RESPONSE_SECRET}` })]);
+    await client.generate('x');
+    expect('finishReason' in logs[0]).toBe(false);
   });
 });

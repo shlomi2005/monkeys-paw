@@ -3,6 +3,11 @@ import * as fc from 'fast-check';
 import { canCall, recordCall, DAY_MS } from 'paw-core';
 import type { BudgetState } from 'paw-core';
 import type { BudgetConfig } from '../src/budget/config';
+import { BudgetedModelClient } from '../src/budget/guarded-client';
+import { createGlobalState } from '../src/budget/state';
+import { DEFAULT_PRICE_TABLE, loadPriceTable, priceFor } from '../src/budget/prices';
+import type { ModelPrice } from '../src/budget/prices';
+import { GeminiModelClient, MAX_OUTPUT_TOKENS } from '../src/client/gemini';
 
 /**
  * Property-based tests for the Paw API using fast-check (Req design.md)
@@ -186,6 +191,222 @@ describe('API Correctness Properties (design.md, Tasks 76-82)', () => {
           expect(allowedCalls).toBeLessThanOrEqual(mockConfig.perIpLimit);
         },
       ),
+    );
+  });
+});
+
+/** Hands control of the event loop back once; no timer, no wait. */
+const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+type Outcome =
+  | { kind: 'ok' | 'maxTokens'; promptFrac: number; outFrac: number; split: number }
+  | { kind: 'status'; code: 503 | 429 | 404 }
+  | { kind: 'network' };
+
+const fraction = fc.double({ min: 0, max: 1, noNaN: true });
+// Weighted toward 503/429/404, so fallback chains run long and several attempts are charged per call.
+const outcomeArb: fc.Arbitrary<Outcome> = fc.oneof(
+  {
+    weight: 2,
+    arbitrary: fc.record({
+      kind: fc.constantFrom('ok' as const, 'maxTokens' as const),
+      promptFrac: fraction,
+      outFrac: fraction,
+      split: fraction,
+    }),
+  },
+  {
+    weight: 5,
+    arbitrary: fc.record({
+      kind: fc.constant('status' as const),
+      code: fc.constantFrom(503 as const, 429 as const, 404 as const),
+    }),
+  },
+  { weight: 1, arbitrary: fc.constant({ kind: 'network' as const }) },
+);
+
+describe('Property 7: parallel calls near the cap can never overspend (paw-api task 106)', () => {
+  const MODELS = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite'];
+  const EPS = 1e-9;
+
+  it('P7: reservations at admission, a zero reservation and a spend within the budget at the end', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 2, max: 8 }), // calls, all started in the same tick
+        fc.integer({ min: 0, max: 3000 }), // prompt length
+        fc.double({ min: 0.2, max: 7, noNaN: true }), // budget, in chain ceilings
+        fc.array(outcomeArb, { minLength: 1, maxLength: 12 }), // outcome of fetch number i
+        fc.array(fc.nat(1000), { minLength: 1, maxLength: 40 }), // which pending attempt settles next
+        async (calls, promptLength, budgetInCeilings, outcomes, order) => {
+          const prompt = `Task: JUDGE_VERDICT ${'x'.repeat(promptLength)}`;
+          const pending: Array<() => void> = [];
+          let fetched = 0;
+
+          const fetchStub = (async () => {
+            const outcome = outcomes[fetched++ % outcomes.length];
+            return new Promise<Response>((resolve, reject) => {
+              pending.push(() => {
+                if (outcome.kind === 'network') return reject(new TypeError('network down'));
+                if (outcome.kind === 'status') return resolve(new Response('{}', { status: outcome.code }));
+                const promptTokens = Math.floor(outcome.promptFrac * inputTokens);
+                const outputTokens = Math.floor(outcome.outFrac * MAX_OUTPUT_TOKENS);
+                const candidates = Math.floor(outputTokens * outcome.split);
+                const maxed = outcome.kind === 'maxTokens';
+                return resolve(
+                  new Response(
+                    JSON.stringify({
+                      candidates: [
+                        {
+                          content: { parts: [{ text: maxed ? '{"closed": tr' : '{"closed":true}' }] },
+                          finishReason: maxed ? 'MAX_TOKENS' : 'STOP',
+                        },
+                      ],
+                      usageMetadata: {
+                        promptTokenCount: promptTokens,
+                        candidatesTokenCount: candidates,
+                        thoughtsTokenCount: outputTokens - candidates,
+                      },
+                    }),
+                    { status: 200 },
+                  ),
+                );
+              });
+            });
+          }) as typeof fetch;
+
+          const client = new GeminiModelClient({
+            apiKey: 'test-key-not-real',
+            models: MODELS,
+            timeoutMs: 60_000,
+            fetch: fetchStub,
+            log: () => {},
+          });
+          const inputTokens = client.plan(prompt)[0].inputTokens;
+          const price = (model: string): ModelPrice => priceFor(DEFAULT_PRICE_TABLE, model);
+          const chainCeiling = client
+            .plan(prompt)
+            .reduce(
+              (sum, p) =>
+                sum +
+                (inputTokens * price(p.model).inputUsdPerMTok) / 10_000 +
+                (MAX_OUTPUT_TOKENS * price(p.model).outputUsdPerMTok) / 10_000,
+              0,
+            );
+
+          const dailyBudgetCents = chainCeiling * budgetInCeilings;
+          const config: BudgetConfig = { perIpLimit: 100, windowMs: 60_000, dailyBudgetCents };
+          const state = createGlobalState(0);
+          const guards = Array.from({ length: calls }, () => new BudgetedModelClient(client, state, config, () => 0));
+
+          let settled = 0;
+          const done = guards.map((guard) =>
+            guard.generate(prompt).then(
+              () => undefined,
+              () => undefined,
+            ).finally(() => {
+              settled += 1;
+            }),
+          );
+
+          const withinBudget = () =>
+            expect(state.spentCents + state.reservedCents).toBeLessThanOrEqual(dailyBudgetCents + EPS);
+
+          // Every admission has happened by now, in this one tick.
+          withinBudget();
+
+          let steps = 0;
+          let idle = 0;
+          while (settled < calls) {
+            if (pending.length === 0) {
+              await flush();
+              if (++idle > 200) throw new Error('stuck: calls neither settle nor fetch');
+              continue;
+            }
+            idle = 0;
+            const release = pending.splice(order[steps++ % order.length] % pending.length, 1)[0];
+            release();
+            await flush();
+            await flush();
+            withinBudget();
+          }
+          await Promise.all(done);
+
+          expect(state.reservedCents).toBe(0);
+          expect(state.spentCents).toBeLessThanOrEqual(dailyBudgetCents + EPS);
+          const charged = guards.reduce((sum, guard) => sum + guard.costCents, 0);
+          expect(Math.abs(state.spentCents - charged)).toBeLessThanOrEqual(EPS);
+        },
+      ),
+      { numRuns: 100 },
+    );
+  }, 30_000);
+});
+
+describe('Property 8: the price table (paw-api task 106)', () => {
+  const marker = fc.string({ minLength: 1, maxLength: 12 }).map((s) => `secret-${s}`);
+
+  it('P8a: an invalid PRICE_TABLE_JSON gives the default table and one warning that holds no part of the value', () => {
+    fc.assert(
+      fc.property(
+        marker,
+        fc.constantFrom(-1, '5', null, true, [1]),
+        fc.string(),
+        (key, badRate, junk) => {
+          const invalid = [
+            `{${junk}\u0000`, // a control character is never valid JSON
+            JSON.stringify({ [key]: { inputUsdPerMTok: badRate, outputUsdPerMTok: 1 } }),
+            JSON.stringify({ [key]: { inputUsdPerMTok: 1 } }),
+            JSON.stringify([key]),
+            '{}',
+          ];
+          for (const raw of invalid) {
+            const lines: string[] = [];
+            expect(loadPriceTable(raw, (line) => lines.push(line))).toBe(DEFAULT_PRICE_TABLE);
+            expect(lines).toEqual(['{"event":"price_table_invalid"}']);
+            expect(lines[0]).not.toContain(key);
+          }
+        },
+      ),
+    );
+  });
+
+  it('P8b: any valid non-empty table is used as written, with no warning', () => {
+    fc.assert(
+      fc.property(
+        fc.dictionary(
+          fc.string({ minLength: 1, maxLength: 20 }).filter((k) => k.trim() !== '' && k !== '__proto__'),
+          fc.record({
+            inputUsdPerMTok: fc.double({ min: 0, max: 1000, noNaN: true }),
+            outputUsdPerMTok: fc.double({ min: 0, max: 1000, noNaN: true }),
+          }),
+          { minKeys: 1, maxKeys: 6 },
+        ),
+        (table) => {
+          const lines: string[] = [];
+          expect(loadPriceTable(JSON.stringify(table), (line) => lines.push(line))).toEqual(table);
+          expect(lines).toEqual([]);
+        },
+      ),
+    );
+  });
+
+  it('P8c: priceFor takes the longest known key that is a dash-prefix, and the top row for anything else', () => {
+    const keys = Object.keys(DEFAULT_PRICE_TABLE);
+    const top: ModelPrice = { inputUsdPerMTok: 1.5, outputUsdPerMTok: 7.5 };
+    fc.assert(
+      fc.property(fc.boolean(), fc.string({ maxLength: 30 }), (withPrefix, id) => {
+        const full = withPrefix ? `models/${id}` : id;
+        const bare = full.startsWith('models/') ? full.slice('models/'.length) : full;
+        const matches = keys.filter((k) => bare === k || bare.startsWith(`${k}-`)).sort((a, b) => b.length - a.length);
+        const expected = matches.length > 0 ? DEFAULT_PRICE_TABLE[matches[0]] : top;
+        expect(priceFor(DEFAULT_PRICE_TABLE, full)).toEqual(expected);
+      }),
+    );
+    fc.assert(
+      fc.property(fc.constantFrom(...keys), fc.string({ minLength: 1, maxLength: 10 }), (key, suffix) => {
+        const longest = keys.filter((k) => `${key}-${suffix}`.startsWith(`${k}-`)).sort((a, b) => b.length - a.length)[0];
+        expect(priceFor(DEFAULT_PRICE_TABLE, `${key}-${suffix}`)).toEqual(DEFAULT_PRICE_TABLE[longest]);
+      }),
     );
   });
 });

@@ -9,25 +9,25 @@ import { createExportRoute } from './routes/export';
 import { createExamplesRoute } from './routes/examples';
 import { createHealthRoute } from './routes/health';
 import { checkBudget } from './budget/middleware';
-import { DEFAULT_MODEL_CALL_COST_CENTS } from './budget/config';
 import type { BudgetConfig } from './budget/config';
 import { BudgetedModelClient } from './budget/guarded-client';
-import type { AvailableModelClient } from './budget/guarded-client';
+import type { MeteredModelClient } from './budget/guarded-client';
+import type { PriceTable } from './budget/prices';
 import { RESTING_MESSAGE } from './budget/messages';
 import { createGlobalState } from './budget/state';
 import { getCurrentMode, isModelCallAllowed } from './modes';
 
 export interface AppDeps {
   /** The model client. `available` is false when no API key is set (examples-only mode). */
-  model: AvailableModelClient;
+  model: MeteredModelClient;
   budget: BudgetConfig;
   corsOrigin: string;
   /** Absolute path of the examples cache file. */
   examplesCachePath: string;
   /** Epoch-ms clock. Defaults to Date.now. */
   clock?: () => number;
-  /** Cents charged per model call. Defaults to the design estimate. */
-  costPerCallCents?: number;
+  /** Model prices for the budget guard. Defaults to the 1.1.2027 table. */
+  prices?: PriceTable;
 }
 
 /**
@@ -37,7 +37,6 @@ export interface AppDeps {
 export function createApp(deps: AppDeps): Hono {
   const { model, budget, corsOrigin, examplesCachePath } = deps;
   const clock = deps.clock ?? Date.now;
-  const costPerCallCents = deps.costPerCallCents ?? DEFAULT_MODEL_CALL_COST_CENTS;
 
   const app = new Hono();
   const globalState = createGlobalState(clock());
@@ -74,7 +73,7 @@ export function createApp(deps: AppDeps): Hono {
 
   // Each request gets its own guard; all guards share the one global state.
   const createClient = () =>
-    new BudgetedModelClient(model, globalState, budget, clock, costPerCallCents);
+    new BudgetedModelClient(model, globalState, budget, clock, deps.prices);
 
   createHealthRoute(app, globalState, budget, () => model.available, clock);
   createGrantRoute(app, createClient);

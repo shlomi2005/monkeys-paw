@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { DAY_MS } from 'paw-core';
 import { createHealthRoute } from './health';
 import { createGlobalState } from '../budget/state';
+import { HealthResponseSchema } from '../schemas';
 import type { BudgetConfig } from '../budget/config';
 
 const config: BudgetConfig = { perIpLimit: 10, windowMs: 60_000, dailyBudgetCents: 500 };
@@ -70,5 +71,28 @@ describe('GET /api/health', () => {
     const data = await getHealth(app);
     expect(data.mode).toBe('normal');
     expect(data.budget.spentCents).toBe(0);
+  });
+
+  it('remaining is the budget minus what is spent and what is reserved (Req 7.7)', async () => {
+    const app = new Hono();
+    const state = createGlobalState();
+    state.spentCents = 1.65;
+    state.reservedCents = 3.1;
+    createHealthRoute(app, state, config, () => true);
+
+    const data = await getHealth(app);
+    expect(data.budget).toEqual({ dailyBudgetCents: 500, spentCents: 1.65, remainingCents: 495.25 });
+  });
+
+  it('remaining never goes below 0, and fractional cents pass the schema', async () => {
+    const app = new Hono();
+    const state = createGlobalState();
+    state.spentCents = 499.5;
+    state.reservedCents = 3;
+    createHealthRoute(app, state, config, () => true);
+
+    const data = await getHealth(app);
+    expect(data.budget.remainingCents).toBe(0);
+    expect(HealthResponseSchema.safeParse(data).success).toBe(true);
   });
 });

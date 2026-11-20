@@ -7,6 +7,7 @@ import type { BudgetConfig } from './budget/config';
 describe('Examples-only mode (Req 8, Tasks 44-47)', () => {
   const mockGlobalState = (spentCents: number): GlobalState => ({
     spentCents,
+    reservedCents: 0,
     dayStart: Date.now(),
     ipStates: new Map(),
   });
@@ -52,14 +53,14 @@ describe('Examples-only mode (Req 8, Tasks 44-47)', () => {
   });
 
   it('treats an elapsed day as a reset (Req 8.5)', () => {
-    const state = { spentCents: 500, dayStart: 0, ipStates: new Map() };
+    const state = { spentCents: 500, reservedCents: 0, dayStart: 0, ipStates: new Map() };
     expect(getCurrentMode(true, state, mockConfig(500), DAY_MS - 1)).toBe('examples-only');
     expect(getCurrentMode(true, state, mockConfig(500), DAY_MS)).toBe('normal');
     expect(state.spentCents).toBe(500); // a view, not a mutation
   });
 
   it('stays examples-only without a key even after the day rolls over', () => {
-    const state = { spentCents: 0, dayStart: 0, ipStates: new Map() };
+    const state = { spentCents: 0, reservedCents: 0, dayStart: 0, ipStates: new Map() };
     expect(getCurrentMode(false, state, mockConfig(500), DAY_MS * 3)).toBe('examples-only');
   });
 });
