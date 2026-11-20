@@ -250,16 +250,24 @@ and are expected to fail until the matching implementation task lands. Property 
 
 ## End-to-end, receipts and budgets
 
-- [ ] 42. Playwright setup in `apps/web` (desktop Chromium and a 390 px mobile project), a stubbed API through
+- [x] 42. Playwright setup in `apps/web` (desktop Chromium and a 390 px mobile project), a stubbed API through
   `page.route` with schema-valid fixtures built from `paw-core` types, helpers for `curl` and `open` timing, and a
   `webServer` that runs `vite preview`. (tech.md, Req 3, 4) Note: `scripts/ui-screenshot-receipt.mjs` of
   `.kiro/specs/paw-power/` stops skipping once `@playwright/test` is a dependency of `apps/web`.
-- [ ] 43. e2e: full round on desktop. Wish, "Granted.", five curls one at a time, bind and close in a different order from
+  Note (done): `@playwright/test` 1.63.0 (exact), `playwright.config.ts` (projects `desktop` and `mobile`, the mobile one runs only
+  `*.mobile.spec.ts`), `e2e/support/` (fixtures, stub API, timeline recorder, canvas pictures), `tsconfig.e2e.json`, and `e2e/webgl.spec.ts`.
+  No product hook was added. The recorder is injected by the tests with `addInitScript`.
+- [x] 43. e2e: full round on desktop. Wish, "Granted.", five curls one at a time, bind and close in a different order from
   the curls, LIFO opens with the thumb last, rest moment, medal 5/5, both export buttons, zip contents. Also a not-closed
   verdict ("The paw remembers.", card stays open). (Req 2.7, 2.8, 4.3, 5.1–5.4, 6.1, 6.2, 6.8)
-- [ ] 44. e2e: Stop paths. Stop with open curses ends without sink or tilt, curled digits stay curled, medal and export
+  Note (done, `e2e/round.spec.ts`): the DOM shows when each curl starts and ends and when the rest moment ends, but not which digit
+  moves or when an open ends. LIFO and "thumb last" are checked on pictures of the paw (digit strips move from the little finger
+  towards the index, the digit left curled lies below every fingertip); the length of each open is checked through the medal time.
+- [x] 44. e2e: Stop paths. Stop with open curses ends without sink or tilt, curled digits stay curled, medal and export
   show, circles are focusable but open no card and no `POST /api/bind` is sent; stop during queued curls shows one
   curled digit per open curse; "Rewrite" resets everything. (Req 6.6, 6.7, 6.9, 6.10, 4.4)
+  Note (done, `e2e/stop.spec.ts`): "no sink or tilt" and "one curled digit per open curse" are checked on pictures of the paw (the
+  picture after Stop equals the one before it, and equals the fully curled paw). The DOM alone cannot show the pose.
 - [ ] 45. e2e: keyboard and accessibility. Tab order matches Req 8.1, dialog traps and restores focus, Escape closes,
   Enter and Space work, `@axe-core/playwright` finds no serious or critical issues in each phase, 200% zoom (640 px
   wide) has no horizontal scroll. (Req 8.1, 8.3, 8.4, 8.5)
