@@ -188,9 +188,10 @@ paw-core swallows errors from `generate`, so a refusal inside `grantWish` or `ju
 
 The worst case is what one request can cost when every call runs to its ceiling. Each `generate` is charged at most its full chain ceiling, so `worst case = Σ over the generates of chainCeiling(prompt at maximum size)`.
 
-- **Grant** (`grantWish` as written today): 34 generates. The Genie call 2 (retry once), the batch quality judge 2, and for each of up to 5 curses `QUALITY_MAX_RETRIES = 3` regenerations of 2 generates each, 30. Prompts at maximum size: wish 500 and context 200 chars (the API caps; the Genie prompt carries the wish twice), model-written curse fields at story 360 and loophole 1000 chars.
+- **Grant** (`grantWish`): 14 generates. The Genie call 2 (retry once), the batch quality judge 2, and for each of up to 5 curses one replacement of 2 generates (`regenerateCurse` retries once; a generic curse is replaced exactly once and not judged again, wish-engine Req 2.4), 10. 2 + 2 + 5 × 1 × 2 = 14. Prompts at maximum size: wish 500 and context 200 chars (the API caps; the Genie prompt carries the wish twice), model-written curse fields at story 360 and loophole 1000 chars.
+- Worst case per grant = 2 × 8.37809 + 2 × 8.73451 + 10 × 8.142725 = 16.75618 + 17.46902 + 81.42725 = 115.65245 cents (115.65). Before the fix of `ensureSpecific` it was 34 generates and 278.50695 cents.
 - **Bind** (`judgeBinding`): 2 generates, the judge prompt with story 360, loophole 1000 and clause 1000.
-- The CI eval grants 5 golden wishes and makes no binds, so its cap is `ceil(5 × worst case per grant)`.
+- The CI eval grants 5 golden wishes and makes no binds, so its cap is `ceil(5 × worst case per grant)` = ceil(5 × 115.65245) = ceil(578.26225) = 579 cents.
 
 The numbers, with the arithmetic, live in `apps/api/README.md`. A unit test recomputes both from the real prompt builders, `plan()` and the price table, and checks that the README states them.
 

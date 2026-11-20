@@ -21,11 +21,11 @@ const readme = readFileSync(path.join(API_ROOT, 'README.md'), 'utf8');
 const worst = computeWorstCase();
 
 describe('worst case per grant and per bind (task 108)', () => {
-  it('counts 34 generate calls per grant and 2 per bind, as grant.ts and judge.ts do', () => {
+  it('counts 14 generate calls per grant and 2 per bind, as grant.ts and judge.ts do', () => {
     expect(GENIE_CALLS).toBe(2);
     expect(BATCH_CALLS).toBe(2);
-    expect(REPLACEMENT_CALLS).toBe(30); // 5 curses x 3 regenerations x 2 calls
-    expect(GRANT_CALLS).toBe(34);
+    expect(REPLACEMENT_CALLS).toBe(10); // 5 curses x 1 replacement x 2 calls
+    expect(GRANT_CALLS).toBe(14);
     expect(BIND_CALLS).toBe(2);
   });
 
@@ -45,9 +45,9 @@ describe('worst case per grant and per bind (task 108)', () => {
     }
   });
 
-  it('adds up to 2 genie + 2 batch + 30 replacement ceilings, and 2 judge ceilings', () => {
+  it('adds up to 2 genie + 2 batch + 10 replacement ceilings, and 2 judge ceilings', () => {
     expect(worst.grantCents).toBeCloseTo(
-      2 * worst.genie.ceilingCents + 2 * worst.batch.ceilingCents + 30 * worst.replacement.ceilingCents,
+      2 * worst.genie.ceilingCents + 2 * worst.batch.ceilingCents + 10 * worst.replacement.ceilingCents,
       9,
     );
     expect(worst.bindCents).toBeCloseTo(2 * worst.judge.ceilingCents, 9);
@@ -65,7 +65,7 @@ describe('worst case per grant and per bind (task 108)', () => {
   it('shows the grant and the bind worst case in the README with 2 decimals', () => {
     expect(readme).toContain(`worst case per grant = ${formatCents(worst.grantCents)} cents`);
     expect(readme).toContain(`**${formatCents(worst.bindCents)} cents**`);
-    expect(readme).toContain(`(${formatCents(worst.grantCents)} cents) is more than the whole day`);
+    expect(readme).toContain(`(${formatCents(worst.grantCents)} cents) is less than the whole day`);
   });
 
   it('states the sizes and the ceiling of each prompt kind in the README', () => {
@@ -81,15 +81,17 @@ describe('worst case per grant and per bind (task 108)', () => {
   it('says how many worst-case binds fit in the default day, and what a typical grant reserves', () => {
     const fits = Math.floor(DEFAULT_DAILY_BUDGET_CENTS / worst.bindCents);
     expect(readme).toContain(`Worst-case binds fit ${fits} times`);
-    expect(worst.grantCents).toBeGreaterThan(DEFAULT_DAILY_BUDGET_CENTS);
+    expect(worst.grantCents).toBeLessThan(DEFAULT_DAILY_BUDGET_CENTS);
+    expect(2 * worst.grantCents).toBeGreaterThan(DEFAULT_DAILY_BUDGET_CENTS);
     expect(readme).toContain(`about ${formatCents(worst.typicalGrantReserveCents)} cents together`);
     expect(worst.typicalGrantReserveCents).toBeLessThan(worst.grantCents);
   });
 
-  it('says that 30 of the 34 calls come from the regeneration loop and that paw-core did not change', () => {
-    expect(readme).toContain('up to 34 `generate` calls');
-    expect(readme).toContain('30 of the 34 calls come from the regeneration loop in paw-core');
-    expect(readme).toContain('This batch did not change paw-core.');
+  it('says that 10 of the 14 calls are replacements, each generic curse replaced once', () => {
+    expect(readme).toContain('up to 14 `generate` calls');
+    expect(readme).toContain('10 of the 14 calls come from the replacements in paw-core');
+    expect(readme).toContain('replaces a generic curse once');
+    expect(readme).not.toContain('QUALITY_MAX_RETRIES = 3` times');
   });
 
   it('keeps the price table, its source and the check date in the README', () => {

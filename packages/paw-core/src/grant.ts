@@ -31,9 +31,6 @@ const FALLBACK_CURSE: Curse = {
   status: 'open',
 };
 
-/** Up to this many replacement attempts per generic curse before we keep the last one. */
-const QUALITY_MAX_RETRIES = 3;
-
 function fallbackGrant(wish: Wish): Grant {
   return { wishId: wish.id, narration: FALLBACK_NARRATION, curses: [FALLBACK_CURSE] };
 }
@@ -110,25 +107,21 @@ async function regenerateCurse(wish: Wish, curse: Curse, model: ModelClient): Pr
   return curse;
 }
 
-/** Reject generic curses and request replacements, up to QUALITY_MAX_RETRIES times. */
+/**
+ * Replace a curse the batch Judge marked generic, exactly once (Req 2.4).
+ * The replacement keeps the original id, so the verdict map must be read only
+ * once per curse; it is not judged again. `regenerateCurse` makes at most 2
+ * `generate` calls, so one curse costs at most 2 calls here.
+ */
 async function ensureSpecific(
   wish: Wish,
   curse: Curse,
   model: ModelClient,
   verdictMap: Map<string, QualityResult>,
 ): Promise<Curse> {
-  let current = curse;
-
-  for (let attempt = 0; attempt < QUALITY_MAX_RETRIES; attempt++) {
-    const verdict = verdictMap.get(current.id);
-    if (!verdict || verdict.specific) return current;
-
-    current = await regenerateCurse(wish, current, model);
-    // After regeneration, assume it's specific
-    // In a full iteration, we'd re-batch-judge here, but for efficiency we keep it once
-  }
-
-  return current;
+  const verdict = verdictMap.get(curse.id);
+  if (!verdict || verdict.specific) return curse;
+  return regenerateCurse(wish, curse, model);
 }
 
 /**

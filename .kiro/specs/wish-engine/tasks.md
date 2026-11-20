@@ -76,3 +76,15 @@ component has a pure interface. All work happens in `packages/paw-core` unless n
   reserved before the call so the daily budget is not passed (except by the documented excess), and the fixed
   per-call estimate is removed. Done in `apps/api`; see paw-api tasks 102-109. (Req 7.5, 7.6, 7.7)
   Done: the guard in `apps/api` reserves the whole fallback-chain ceiling before each model call and settles to the real token cost at the answering model's 1.1.2027 price; the fixed per-call estimate is gone; the worst case is 278.51 cents per grant and 16.39 cents per bind (`apps/api/README.md`); `paw-core` is unchanged.
+
+## Quality gate fix
+
+- [x] **27. Replace a generic curse exactly once** — `ensureSpecific` in `grant.ts` kept the original curse id on the
+  replacement, so the fixed verdict map marked it generic again and the loop regenerated it `QUALITY_MAX_RETRIES` (3)
+  times, up to 6 `generate` calls per weak curse and 34 per grant. A curse the batch Judge marks generic is now
+  replaced once (`regenerateCurse` still retries once on a schema failure and keeps the original if both fail), with
+  no re-judge round. `QUALITY_MAX_RETRIES` is removed; the public API is unchanged. (Req 2.4)
+  Done: tests in `tests/grant.test.ts` count `generate` calls with a stub model: one generic curse causes exactly one
+  replacement request, specific curses cause none, and 5 generic curses make at most 2 + 2 + 5 x 2 = 14 generates.
+  The paw-mcp bundle is rebuilt. The worst case per grant is now 14 generates and 115.65 cents (was 34 and
+  278.51), and the CI eval cap is 579 cents (was 1393); see `apps/api/README.md` and paw-api `design.md`.

@@ -84,22 +84,22 @@ The whole chain is reserved because a 503, 429 or 404 moves on to the next model
   - `gemini-3.1-flash-lite`: 0.028975 + 0.6144 = 0.643375.
   - Chain ceiling: 8.193845 cents.
 
-**Worst case per grant.** `grantWish` in paw-core makes up to 34 `generate` calls:
+**Worst case per grant.** `grantWish` in paw-core makes up to 14 `generate` calls:
 
 - 2 for the Paw and Genie prompt (`for (attempt < 2)`, the retry after an answer that failed validation).
 - 2 for the batch judge (`batchJudgeQuality`, `for (attempt < 2)`).
-- 30 for replacements: up to 5 curses (`GrantSchema` allows 3 to 5), each regenerated up to `QUALITY_MAX_RETRIES = 3` times, each regeneration making up to 2 calls (`regenerateCurse`). 5 x 3 x 2 = 30.
+- 10 for replacements: up to 5 curses (`GrantSchema` allows 3 to 5), each replaced exactly once when the batch judge marks it generic, each replacement making up to 2 calls (`regenerateCurse`). 5 x 1 x 2 = 10.
 
-30 of the 34 calls come from the regeneration loop in paw-core. It regenerates a generic curse up to 3 times without judging the replacement again (the verdict map is fixed), so a curse the batch judge marked generic is replaced 3 times whatever the replacements are. This batch did not change paw-core.
+10 of the 14 calls come from the replacements in paw-core. `ensureSpecific` replaces a generic curse once and does not judge the replacement again, so a weak curse costs 2 calls at most (wish-engine requirement 2.4). Before this fix the same loop replaced a generic curse 3 times (up to 34 calls and 278.51 cents per grant).
 
 ```
-2 x 8.37809  +  2 x 8.73451  +  30 x 8.142725  =  16.75618 + 17.46902 + 244.28175
-worst case per grant = 278.51 cents
+2 x 8.37809  +  2 x 8.73451  +  10 x 8.142725  =  16.75618 + 17.46902 + 81.42725
+worst case per grant = 115.65 cents
 ```
 
 **Worst case per bind.** `judgeBinding` makes up to 2 calls: 2 x 8.193845 = 16.38769, so **16.39 cents**.
 
-**Against the 200-cent day.** One worst-case grant (278.51 cents) is more than the whole day, so the guard stops it part-way: it refuses the call that would pass the budget, and the route answers 503. Worst-case binds fit 12 times (12 x 16.38769 = 196.65). A typical grant (a wish of 100 characters with 50 of context, 4 curses) makes 2 single-attempt calls, the genie and the batch judge. They reserve about 16.31 cents together (the whole-chain ceiling of each), then settle to their real usage.
+**Against the 200-cent day.** One worst-case grant (115.65 cents) is less than the whole day, and a second (2 x 115.65245 = 231.30) would pass it, so the guard refuses the call that would pass the budget and the route answers 503. Worst-case binds fit 12 times (12 x 16.38769 = 196.65). A typical grant (a wish of 100 characters with 50 of context, 4 curses) makes 2 single-attempt calls, the genie and the batch judge. They reserve about 16.31 cents together (the whole-chain ceiling of each), then settle to their real usage.
 
 The two worst-case figures above are recomputed by `src/budget/worst-case.ts` from the real prompt builders, `GeminiModelClient.plan()` and the default price table. A unit test fails when this section drifts from them. The 1000-character `loophole` of a model-written curse is an assumption of this worst case: paw-core caps the `story` of a curse but not its `loophole`. The guard does not depend on it, because it prices every call from its real prompt.
 
@@ -168,7 +168,7 @@ Railway's "Config as Code" (`railway.json`) is deprecated, so the repo uses the 
 
 ## CI eval gate
 
-`.github/workflows/prompt-eval.yml` runs the eval on pull requests that change `packages/paw-core/src/prompts.ts`, `.kiro/steering/curse-taxonomy.md` or `apps/api/src/client/gemini.ts`. It caps the run at `DAILY_BUDGET_CENTS=1393`: `ceil(5 x 278.51)`, the worst case of the default 5-wish eval (5 grants at 278.50695 cents each, no binds; see "Cost guard and worst case"). A run that stays inside its worst case is never refused. If the guard still refuses a call, the eval fails loudly with "budget exhausted" and writes nothing. To turn it on:
+`.github/workflows/prompt-eval.yml` runs the eval on pull requests that change `packages/paw-core/src/prompts.ts`, `.kiro/steering/curse-taxonomy.md` or `apps/api/src/client/gemini.ts`. It caps the run at `DAILY_BUDGET_CENTS=579`: `ceil(5 x 115.65)`, the worst case of the default 5-wish eval (5 grants at 115.65245 cents each, 578.26225 in all, no binds; see "Cost guard and worst case"). A run that stays inside its worst case is never refused. If the guard still refuses a call, the eval fails loudly with "budget exhausted" and writes nothing. To turn it on:
 
 1. Add the repository secret `GEMINI_API_KEY`.
 2. Make "Prompt eval" a required check on the main branch.

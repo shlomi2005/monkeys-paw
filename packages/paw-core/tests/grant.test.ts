@@ -229,3 +229,153 @@ describe('grantWish (task 9)', () => {
     expect(grant.curses.map((c) => c.id)).toEqual(['curse-0', 'curse-1', 'curse-2']);
   });
 });
+
+// A generic curse is replaced exactly once (wish-engine Req 2.4, task 27). The replacement keeps the
+// original id and is not judged again, so the number of `generate` calls is bounded.
+describe('grantWish replaces a generic curse exactly once (task 27)', () => {
+  const FIVE_CURSES_JSON = JSON.stringify({
+    narration: 'Granted. Exactly.',
+    curses: (['permissions', 'time', 'money', 'scale', 'abuse'] as const).map((type) => ({
+      type,
+      story: `The ${type} loophole, as the wish is written.`,
+      loophole: `${type} words`,
+    })),
+  });
+
+  interface Counted {
+    model: ModelClient;
+    calls: Record<'grant' | 'judge' | 'replace', number>;
+    total: () => number;
+  }
+
+  /** `generic` lists the curse ids the batch judge marks generic; `replaceReply` answers each replacement request. */
+  function countingModel(
+    grantJson: string,
+    generic: readonly string[],
+    replaceReply: () => unknown,
+  ): Counted {
+    const calls = { grant: 0, judge: 0, replace: 0 };
+    const ids = (JSON.parse(grantJson).curses as unknown[]).map((_, i) => `curse-${i}`);
+    const model: ModelClient = {
+      async generate(prompt: string): Promise<unknown> {
+        if (prompt.includes('GRANT_WISH')) {
+          calls.grant += 1;
+          return grantJson;
+        }
+        if (prompt.includes('JUDGE_BATCH_QUALITY')) {
+          calls.judge += 1;
+          return JSON.stringify(
+            ids.map((curseId) => ({ curseId, specific: !generic.includes(curseId), reason: 'test' })),
+          );
+        }
+        if (prompt.includes('REPLACE_CURSE')) {
+          calls.replace += 1;
+          return replaceReply();
+        }
+        throw new Error('unexpected prompt');
+      },
+    };
+    return { model, calls, total: () => calls.grant + calls.judge + calls.replace };
+  }
+
+  const goodReplacement = () =>
+    JSON.stringify({
+      type: 'edge-input',
+      story: 'A replacement curse, specific to the wish.',
+      loophole: 'replacement loophole words',
+    });
+
+  it('makes exactly one replacement request for one generic curse', async () => {
+    const counted = countingModel(VALID_GRANT_JSON, ['curse-1'], goodReplacement);
+    const grant = await grantWish(makeWish(), counted.model);
+
+    expect(counted.calls).toEqual({ grant: 1, judge: 1, replace: 1 });
+    expect(grant.curses.map((c) => c.id)).toEqual(['curse-0', 'curse-1', 'curse-2']);
+    expect(grant.curses[1].loophole).toBe('replacement loophole words');
+    expect(grant.curses[0].loophole).toBe('Only the owner can delete a project');
+    expect(grant.curses[2].loophole).toBe('a project');
+  });
+
+  it('makes no replacement request when every curse is specific', async () => {
+    const counted = countingModel(FIVE_CURSES_JSON, [], goodReplacement);
+    const grant = await grantWish(makeWish(), counted.model);
+
+    expect(counted.calls).toEqual({ grant: 1, judge: 1, replace: 0 });
+    expect(grant.curses).toHaveLength(5);
+  });
+
+  it('replaces each generic curse once, and only the generic ones', async () => {
+    const counted = countingModel(FIVE_CURSES_JSON, ['curse-0', 'curse-3'], goodReplacement);
+    const grant = await grantWish(makeWish(), counted.model);
+
+    expect(counted.calls.replace).toBe(2);
+    expect(grant.curses.map((c) => c.loophole)).toEqual([
+      'replacement loophole words',
+      'time words',
+      'money words',
+      'replacement loophole words',
+      'abuse words',
+    ]);
+  });
+
+  it('makes at most 2 + 2 + 5 * 2 = 14 generates when all 5 curses are generic and every replacement fails', async () => {
+    // The judge answers validly and marks all 5 generic; every replacement answer is invalid.
+    const counted = countingModel(
+      FIVE_CURSES_JSON,
+      ['curse-0', 'curse-1', 'curse-2', 'curse-3', 'curse-4'],
+      () => 'definitely not json',
+    );
+    const grant = await grantWish(makeWish(), counted.model);
+
+    // 1 genie + 1 judge + 5 curses x 2 failed replacement attempts.
+    expect(counted.calls).toEqual({ grant: 1, judge: 1, replace: 10 });
+    expect(counted.total()).toBeLessThanOrEqual(14);
+    // Both attempts failed, so each original curse is kept.
+    expect(grant.curses.map((c) => c.loophole)).toEqual([
+      'permissions words',
+      'time words',
+      'money words',
+      'scale words',
+      'abuse words',
+    ]);
+  });
+
+  it('stays at 14 generates in the worst case of every call: genie and judge retried, all replacements failing', async () => {
+    const calls = { grant: 0, judge: 0, replace: 0 };
+    const ids = ['curse-0', 'curse-1', 'curse-2', 'curse-3', 'curse-4'];
+    const model: ModelClient = {
+      async generate(prompt: string): Promise<unknown> {
+        if (prompt.includes('GRANT_WISH')) {
+          calls.grant += 1;
+          return calls.grant === 1 ? 'definitely not json' : FIVE_CURSES_JSON;
+        }
+        if (prompt.includes('JUDGE_BATCH_QUALITY')) {
+          calls.judge += 1;
+          if (calls.judge === 1) return 'definitely not json';
+          return JSON.stringify(ids.map((curseId) => ({ curseId, specific: false, reason: 'test' })));
+        }
+        if (prompt.includes('REPLACE_CURSE')) {
+          calls.replace += 1;
+          return 'definitely not json';
+        }
+        throw new Error('unexpected prompt');
+      },
+    };
+    const grant = await grantWish(makeWish(), model);
+
+    expect(calls).toEqual({ grant: 2, judge: 2, replace: 10 });
+    expect(calls.grant + calls.judge + calls.replace).toBe(14);
+    expect(grant.curses).toHaveLength(5);
+  });
+
+  it('retries a replacement once on a schema failure, then keeps the new curse', async () => {
+    let n = 0;
+    const counted = countingModel(VALID_GRANT_JSON, ['curse-2'], () =>
+      ++n === 1 ? 'definitely not json' : goodReplacement(),
+    );
+    const grant = await grantWish(makeWish(), counted.model);
+
+    expect(counted.calls.replace).toBe(2);
+    expect(grant.curses[2].loophole).toBe('replacement loophole words');
+  });
+});

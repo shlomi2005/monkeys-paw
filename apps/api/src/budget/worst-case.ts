@@ -25,15 +25,15 @@ import type { PriceTable } from './prices';
  * price table. Nothing here calls the network.
  *
  * The call counts come from `packages/paw-core/src/grant.ts` and `judge.ts`
- * exactly as they are today. A grant makes up to 34 `generate` calls:
+ * exactly as they are today. A grant makes up to 14 `generate` calls:
  * - GENIE_CALLS = 2: the Paw+Genie prompt, `for (attempt < 2)` in `grantWish`;
  *   the second attempt is the retry after a first answer that failed validation.
  *   Only a failed genie answer retries, and a failed answer never reaches the next step.
  * - BATCH_CALLS = 2: `batchJudgeQuality`, `for (attempt < 2)`.
- * - REPLACEMENT_CALLS = 30: `ensureSpecific` runs `QUALITY_MAX_RETRIES = 3`
- *   regenerations per curse, never judging the replacement again (the verdict map is
- *   fixed), and `regenerateCurse` makes up to 2 `generate` calls each; up to 5 curses
- *   (GrantSchema allows 3 to 5): 5 x 3 x 2 = 30.
+ * - REPLACEMENT_CALLS = 10: `ensureSpecific` replaces a curse the batch judge marked
+ *   generic exactly once, never judging the replacement again, and `regenerateCurse`
+ *   makes up to 2 `generate` calls for it; up to 5 curses (GrantSchema allows 3 to 5):
+ *   5 x 1 x 2 = 10.
  * A bind makes up to 2 calls: `judgeBinding`, `for (attempt < 2)`.
  * Each `generate` call is charged at most its full chain ceiling.
  */
@@ -44,13 +44,13 @@ export const GENIE_CALLS = 2;
 export const BATCH_CALLS = 2;
 /** Most curses in a grant: `GrantSchema` allows 3 to 5. */
 export const MAX_CURSES = 5;
-/** `QUALITY_MAX_RETRIES` in paw-core's `grant.ts`: regenerations per generic curse. */
-export const REGENERATIONS_PER_CURSE = 3;
+/** `ensureSpecific` in paw-core's `grant.ts`: a generic curse is replaced exactly once. */
+export const REGENERATIONS_PER_CURSE = 1;
 /** `regenerateCurse`: each regeneration tries `generate` at most twice. */
 export const CALLS_PER_REGENERATION = 2;
-/** 5 curses x 3 regenerations x 2 calls. */
+/** 5 curses x 1 replacement x 2 calls. */
 export const REPLACEMENT_CALLS = MAX_CURSES * REGENERATIONS_PER_CURSE * CALLS_PER_REGENERATION;
-/** 2 + 2 + 30. */
+/** 2 + 2 + 10. */
 export const GRANT_CALLS = GENIE_CALLS + BATCH_CALLS + REPLACEMENT_CALLS;
 /** `judgeBinding`: tried at most twice. */
 export const BIND_CALLS = 2;
@@ -92,7 +92,7 @@ export interface WorstCase {
   batch: PromptCeiling;
   replacement: PromptCeiling;
   judge: PromptCeiling;
-  /** 2 genie + 2 batch + 30 replacement ceilings. */
+  /** 2 genie + 2 batch + 10 replacement ceilings. */
   grantCents: number;
   /** 2 judge ceilings. */
   bindCents: number;
