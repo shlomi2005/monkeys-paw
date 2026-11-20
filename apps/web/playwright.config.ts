@@ -10,6 +10,12 @@ const ORIGIN = `http://${HOST}:${PORT}`;
 /** Software GL, so the 3D canvas mounts on machines and CI runners without a GPU. */
 const WEBGL_ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 
+/** Tests that need a browser without WebGL carry this tag. Only the `desktop-no-webgl` project runs them. */
+const NO_WEBGL_TAG = /@no-webgl/;
+
+/** Chromium without WebGL: the 3D APIs are off and software GL is not enabled. */
+const NO_WEBGL_ARGS = ['--disable-3d-apis'];
+
 export default defineConfig({
   testDir: 'e2e',
   outputDir: 'test-results',
@@ -35,10 +41,19 @@ export default defineConfig({
       // Every spec except `*.mobile.spec.ts`.
       name: 'desktop',
       testIgnore: /.*\.mobile\.spec\.ts$/,
+      grepInvert: NO_WEBGL_TAG,
       use: { viewport: { width: 1280, height: 800 } },
     },
     {
-      // Only `*.mobile.spec.ts` (task 48 adds them).
+      // Task 46: a browser launched without WebGL. It runs only the tests tagged `@no-webgl` (e2e/fallbacks.spec.ts).
+      // `--disable-3d-apis` makes `canvas.getContext('webgl')` return null, so the app's own `hasWebGL()` is false.
+      name: 'desktop-no-webgl',
+      testMatch: /fallbacks\.spec\.ts$/,
+      grep: NO_WEBGL_TAG,
+      use: { viewport: { width: 1280, height: 800 }, launchOptions: { args: NO_WEBGL_ARGS } },
+    },
+    {
+      // Only `*.mobile.spec.ts` (task 48).
       name: 'mobile',
       testMatch: /.*\.mobile\.spec\.ts$/,
       use: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },

@@ -268,18 +268,26 @@ and are expected to fail until the matching implementation task lands. Property 
   curled digit per open curse; "Rewrite" resets everything. (Req 6.6, 6.7, 6.9, 6.10, 4.4)
   Note (done, `e2e/stop.spec.ts`): "no sink or tilt" and "one curled digit per open curse" are checked on pictures of the paw (the
   picture after Stop equals the one before it, and equals the fully curled paw). The DOM alone cannot show the pose.
-- [ ] 45. e2e: keyboard and accessibility. Tab order matches Req 8.1, dialog traps and restores focus, Escape closes,
+- [x] 45. e2e: keyboard and accessibility. Tab order matches Req 8.1, dialog traps and restores focus, Escape closes,
   Enter and Space work, `@axe-core/playwright` finds no serious or critical issues in each phase, 200% zoom (640 px
   wide) has no horizontal scroll. (Req 8.1, 8.3, 8.4, 8.5)
-- [ ] 46. e2e: reduced motion (`emulateMedia`) gives instant state changes and text cues with the queue never used;
+  Note (done, `e2e/a11y.spec.ts`): `@axe-core/playwright` 4.14.0 (exact). Axe finds no serious or critical issue in the seven phases, so no product
+  change was needed and no rule is disabled. A native modal dialog does not wrap Tab by itself: after its last control focus goes to the
+  browser (the body) and the next press returns to the dialog, so the trap is checked as "the page behind never takes focus".
+- [x] 46. e2e: reduced motion (`emulateMedia`) gives instant state changes and text cues with the queue never used;
   no-WebGL launch flag keeps the poster, shows text state and leaves the UI usable; `GET /api/examples` 503 shows the
   placeholder; a 503 on grant shows the resting message and enables examples-only replay. (Req 2.9, 2.10, 3.7, 8.2; A9)
-- [ ] 47. e2e: privacy. After a full round assert `localStorage` keys are at most `pawSoundEnabled`, `sessionStorage`
+  Note (done, `e2e/fallbacks.spec.ts`): the no-WebGL test is tagged `@no-webgl` and runs only in the project `desktop-no-webgl`
+  (`--disable-3d-apis`; `desktop` skips that tag). Reduced motion is observed through the timeline log: no `arriving` circle, the five circles
+  land in one commit, the medal comes with the last close. That the scene snaps its joints is not read from the canvas here.
+- [x] 47. e2e: privacy. After a full round assert `localStorage` keys are at most `pawSoundEnabled`, `sessionStorage`
   and `document.cookie` are empty, the URL never changed, no request URL contains the wish text, all requests go to the
   app origin or the API origin, every API request has no credentials. (Req 7.4, 11.1–11.6)
-- [ ] 48. e2e: mobile project. Circles form a vertical list under a small paw, the card is a bottom sheet, 48 px targets,
+  Note (done, `e2e/privacy.spec.ts`): two tests, a full round with both exports (sound off) and one with the sound toggled on and off.
+- [x] 48. e2e: mobile project. Circles form a vertical list under a small paw, the card is a bottom sheet, 48 px targets,
   rotation reflows without remounting the canvas, `paw-mobile.glb` is the only GLB requested (and `paw-web.glb` on
   desktop). (Req 2.2, 9.1, 9.2, 9.3, 9.4, 10.5)
+  Note (done, `e2e/layout.mobile.spec.ts`, plus a desktop `paw-web.glb` test in `e2e/webgl.spec.ts`): no product change was needed.
 - [ ] 49. Screenshot receipts: desktop and mobile in the phases listed in design "Testing Strategy" (idle, curses landed,
   card open, closed, not closed, rested with medal, stopped with medal, reduced motion, no WebGL), saved to
   `apps/web/e2e/receipts/`. (tech.md, Req 1, 4, 6) Note: tag every receipt test `@receipt`; the hook

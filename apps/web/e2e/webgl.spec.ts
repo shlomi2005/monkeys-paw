@@ -20,3 +20,16 @@ test('the 3D canvas mounts and the poster steps aside', async ({ paw }) => {
   expect(hidden.t, 'the poster hides after the canvas mounts').toBeGreaterThanOrEqual(mounted.t);
   expect(eventsOf(events, 'canvas')).toHaveLength(1);
 });
+
+
+// Task 48 (desktop half): above 768 px the app picks the big model, and only that one (Req 2.2, 10.5).
+test('desktop requests paw-web.glb and no other GLB', async ({ paw }) => {
+  const glbs: string[] = [];
+  paw.page.on('request', (request) => {
+    if (/\.glb(\?|$)/.test(request.url())) glbs.push(new URL(request.url()).pathname);
+  });
+  await paw.open();
+  await paw.makeWish();
+  await paw.expectCurled(5);
+  expect(glbs).toEqual(['/paw/paw-web.glb']);
+});
