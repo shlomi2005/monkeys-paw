@@ -45,10 +45,11 @@ export default defineConfig({
       use: { viewport: { width: 1280, height: 800 } },
     },
     {
-      // Task 46: a browser launched without WebGL. It runs only the tests tagged `@no-webgl` (e2e/fallbacks.spec.ts).
+      // Task 46: a browser launched without WebGL. It runs only the tests tagged `@no-webgl`: the fallback test in
+      // e2e/fallbacks.spec.ts and the receipt in e2e/receipts.spec.ts.
       // `--disable-3d-apis` makes `canvas.getContext('webgl')` return null, so the app's own `hasWebGL()` is false.
       name: 'desktop-no-webgl',
-      testMatch: /fallbacks\.spec\.ts$/,
+      testMatch: /(fallbacks|receipts)\.spec\.ts$/,
       grep: NO_WEBGL_TAG,
       use: { viewport: { width: 1280, height: 800 }, launchOptions: { args: NO_WEBGL_ARGS } },
     },

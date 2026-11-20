@@ -8,5 +8,7 @@ dist/
 coverage/
 playwright-report/
 test-results/
+# Screenshot receipts are generated locally by `playwright test --grep @receipt`, never committed.
+apps/web/e2e/receipts/*.png
 # NOTE: /.kiro must stay committed (Kiroween rule). Never ignore it.
 apps/web/public/paw/

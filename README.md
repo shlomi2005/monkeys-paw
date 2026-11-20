@@ -25,6 +25,7 @@ You write a software requirement. The Paw follows it to the letter and acts out 
 
 ## More
 
+- [Web app guide](apps/web/README.md): scripts, tests, screenshot receipts and the bundle budget.
 - [API guide](apps/api/README.md): endpoints, environment variables, the eval, Docker and Railway.
 - [Latest eval report](docs/eval/latest.md): the golden-wish results.
 - [Power guide](powers/monkeys-paw/README.md): how to install and use the Kiro power.

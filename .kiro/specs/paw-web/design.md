@@ -1058,7 +1058,7 @@ Model output is untrusted (iron-rules §6). The client validates every response 
 | End to end | Playwright (desktop and a 390 px mobile project) | Full round against a stubbed API (`page.route` with schema-valid fixtures), both endings, stop during curls, lock after end, keyboard-only run, focus order and dialog focus restore, reduced motion (`emulateMedia`), no-WebGL fallback (launch flag), storage and URL privacy checks, examples 503, export download contents |
 | Accessibility | `@axe-core/playwright` | No serious or critical violations in each phase; contrast tokens |
 | Performance | Lighthouse CI, bundle script, Playwright metrics | Section 8 table |
-| Receipts | Playwright screenshots | Desktop and mobile in phases: idle, curses landed, card open, closed verdict, not-closed verdict, rested with medal, stopped with medal, reduced motion, no WebGL. Stored in `apps/web/e2e/receipts/` |
+| Receipts | Playwright screenshots | Desktop and mobile in phases: idle, curses landed, card open, closed verdict, not-closed verdict, rested with medal, stopped with medal, reduced motion, no WebGL. Written to `apps/web/e2e/receipts/` as `<project>-<phase>.png`. Generated locally by `playwright test --grep @receipt` and gitignored, not committed (the hook regenerates them on every UI save). No mobile no-WebGL shot |
 
 The API is stubbed in end-to-end tests so they are deterministic and cost nothing. One optional smoke test runs
 against a local `apps/api` in examples-only mode (no model key needed).

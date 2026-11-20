@@ -288,17 +288,26 @@ and are expected to fail until the matching implementation task lands. Property 
   rotation reflows without remounting the canvas, `paw-mobile.glb` is the only GLB requested (and `paw-web.glb` on
   desktop). (Req 2.2, 9.1, 9.2, 9.3, 9.4, 10.5)
   Note (done, `e2e/layout.mobile.spec.ts`, plus a desktop `paw-web.glb` test in `e2e/webgl.spec.ts`): no product change was needed.
-- [ ] 49. Screenshot receipts: desktop and mobile in the phases listed in design "Testing Strategy" (idle, curses landed,
+- [x] 49. Screenshot receipts: desktop and mobile in the phases listed in design "Testing Strategy" (idle, curses landed,
   card open, closed, not closed, rested with medal, stopped with medal, reduced motion, no WebGL), saved to
   `apps/web/e2e/receipts/`. (tech.md, Req 1, 4, 6) Note: tag every receipt test `@receipt`; the hook
   `ui-screenshot-receipt` (`.kiro/specs/paw-power/`) runs `playwright test --grep @receipt`.
-- [ ] 50. `scripts/check-bundle-budget.mjs` and `build.manifest`: gzip the initial set and the 3D chunk from the manifest,
+  Note (done, `e2e/receipts.spec.ts`, `e2e/receipts.mobile.spec.ts`, `e2e/support/receipts.ts`): PNGs are generated locally and gitignored; mobile has no no-WebGL shot.
+- [x] 50. `scripts/check-bundle-budget.mjs` and `build.manifest`: gzip the initial set and the 3D chunk from the manifest,
   fail above 200 KB gz initial JS, 30 KB gz CSS, 330 KB gz 3D chunk, 140 KB fonts, 500 KB audio. Add
   `rollup-plugin-visualizer`, confirm `paw-core` tree-shakes to schemas and `computeIntegrity`. Add a Playwright check
   that the 3D chunk is requested only after the load event. (Req 10.4, 10.5)
+  Note (done): `build.manifest` is on, `pnpm budget` runs `scripts/check-bundle-budget.mjs` (pure parts tested in
+  `scripts/check-bundle-budget.test.ts`), and `rollup-plugin-visualizer` 7.1.3 (exact) runs only with `PAW_VISUALIZE=1` and writes
+  `dist/stats.html` and `dist/stats.json`. The report shows `paw-core` reduced to `schemas.js` and `integrity.js` in the entry chunk;
+  `prompts`, `grant`, `bind`, `judge`, `export`, `budget` and `ears` render 0 bytes. The load-event check is in `e2e/webgl.spec.ts`.
+  Measured (gzip): initial JS 103.2 KB, CSS 8.2 KB, 3D chunk 278.0 KB; fonts 137.1 KB raw; audio 0. 1 KB is 1000 bytes.
 - [ ] 51. Performance runs: Lighthouse CI with fast-3G throttling (FCP ≤ 1.5 s, LCP ≤ 3.0 s, CLS < 0.1), Playwright
   metrics for CLS over a full round, first-frame marks, `requestAnimationFrame` frame-time p95 during a curl and an
   open, reflow under 100 ms on resize, and zero rendered frames after 2 s idle. Record results in
   `apps/web/e2e/receipts/perf.md`. (Req 10.1, 10.2, 10.3, 10.6, 10.7, 9.4)
-- [ ] 52. Write `apps/web/README.md`: scripts, the `VITE_API_BASE_URL` variable (name only), the asset copy step, how to
+  Note (skipped in this build): Lighthouse is not installed here, and the brief allows it only if it runs fully locally with
+  no download. Not done, so this stays unticked, and the Playwright metrics in it are not done either. An owner needs a Lighthouse
+  install (CLI or `@lhci/cli`) and a local Chrome, run against `vite preview` with no upload to any service.
+- [x] 52. Write `apps/web/README.md`: scripts, the `VITE_API_BASE_URL` variable (name only), the asset copy step, how to
   run unit, property and e2e tests, and the single storage item. (Req 11.1, 12.6)
