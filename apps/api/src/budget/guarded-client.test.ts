@@ -7,7 +7,7 @@ import { FakeMeteredModel } from './fake-metered';
 import { createGlobalState } from './state';
 import type { BudgetConfig } from './config';
 import { DEFAULT_PRICE_TABLE } from './prices';
-import { GeminiModelClient, MAX_OUTPUT_TOKENS } from '../client/gemini';
+import { GeminiModelClient, MAX_OUTPUT_TOKENS, QuotaExhaustedError } from '../client/gemini';
 
 const config = (dailyBudgetCents: number): BudgetConfig => ({
   perIpLimit: 10,
@@ -541,5 +541,206 @@ describe('BudgetedModelClient with the real GeminiModelClient and a stubbed fetc
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(state.spentCents).toBeCloseTo((100 * 1.5 + 50 * 7.5) / 10_000, 12);
     });
+  });
+});
+
+describe('quota attempts: charged 0 cents, and the guard stops after one (paw-api task 114, Req 13.5, 13.6)', () => {
+  const PROMPT = 'Task: JUDGE_VERDICT ask the judge';
+  const MODELS = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite'];
+
+  const perModel = () =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          error: {
+            status: 'RESOURCE_EXHAUSTED',
+            details: [
+              {
+                '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+                violations: [
+                  { quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', quotaDimensions: { model: 'm' } },
+                ],
+              },
+            ],
+          },
+        }),
+        { status: 429 },
+      ),
+    );
+  const shared = () =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          error: {
+            status: 'RESOURCE_EXHAUSTED',
+            details: [
+              {
+                '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+                violations: [{ quotaId: 'GenerateRequestsPerDayPerProject-FreeTier', quotaDimensions: { location: 'global' } }],
+              },
+            ],
+          },
+        }),
+        { status: 429 },
+      ),
+    );
+
+  it('a quota attempt costs 0: spentCents does not move, reservedCents returns to 0', async () => {
+    const { guard, state, fetchMock } = realSetup([shared], { models: MODELS });
+    await expect(guard.generate(PROMPT)).rejects.toBeInstanceOf(QuotaExhaustedError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(state.spentCents).toBe(0);
+    expect(guard.costCents).toBe(0);
+    expect(state.reservedCents).toBe(0);
+    expect(guard.calls).toBe(1);
+  });
+
+  it('429 on every model of the chain costs 0 in total', async () => {
+    const { guard, state, fetchMock } = realSetup([perModel, perModel, perModel], { models: MODELS });
+    await expect(guard.generate(PROMPT)).rejects.toBeInstanceOf(QuotaExhaustedError);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(state.spentCents).toBe(0);
+    expect(state.reservedCents).toBe(0);
+  });
+
+  it('a quota attempt then a success is charged only the success', async () => {
+    const { guard, state } = realSetup(
+      [perModel, { usage: { prompt: 1000, candidates: 1000 }, modelVersion: 'gemini-3.8-flash' }],
+      { models: MODELS },
+    );
+    await expect(guard.generate(PROMPT)).resolves.toEqual({ ok: true });
+    // 1000 x 1.50 / 10000 + 1000 x 7.50 / 10000
+    expect(state.spentCents).toBeCloseTo(0.9, 12);
+    expect(guard.costCents).toBe(state.spentCents);
+    expect(state.reservedCents).toBe(0);
+    expect(guard.quotaSpent).toBe(false);
+    expect(guard.denied).toBe(false);
+  });
+
+  it('a 404 and any other failure keep the rule: charged their ceiling, only the quota attempt is free', async () => {
+    const notFound = () => Promise.resolve(new Response('{}', { status: 404 }));
+    const { guard, state, client } = realSetup([notFound, perModel, perModel], { models: MODELS });
+    const firstCeiling = attemptCeiling(client.plan(PROMPT)[0].inputTokens, 1.5, 7.5);
+    await expect(guard.generate(PROMPT)).rejects.toBeInstanceOf(QuotaExhaustedError);
+    expect(state.spentCents).toBeCloseTo(firstCeiling, 9);
+
+    const server = () => Promise.resolve(new Response('{}', { status: 500 }));
+    const failing = realSetup([server], { models: MODELS });
+    await expect(failing.guard.generate(PROMPT)).rejects.toThrow('HTTP 500');
+    expect(failing.state.spentCents).toBeCloseTo(attemptCeiling(failing.client.plan(PROMPT)[0].inputTokens, 1.5, 7.5), 9);
+    expect(failing.guard.quotaSpent).toBe(false);
+  });
+
+  it('the reservation of the whole chain is unchanged by quota answers', async () => {
+    let reservedDuring = -1;
+    const setup = realSetup(
+      [
+        () => {
+          reservedDuring = setup.state.reservedCents;
+          return perModel();
+        },
+        perModel,
+        perModel,
+      ],
+      { models: MODELS },
+    );
+    const inputTokens = setup.client.plan(PROMPT)[0].inputTokens;
+    await expect(setup.guard.generate(PROMPT)).rejects.toBeInstanceOf(QuotaExhaustedError);
+    expect(reservedDuring).toBeCloseTo(
+      attemptCeiling(inputTokens, 1.5, 7.5) + attemptCeiling(inputTokens, 1.5, 7.5) + attemptCeiling(inputTokens, 0.3, 2.5),
+      9,
+    );
+    expect(setup.state.reservedCents).toBe(0);
+  });
+
+  it('the guard sets quotaSpent and denied on QuotaExhaustedError, and rethrows it', async () => {
+    const inner = fake({
+      quota: true,
+      answer: async () => {
+        throw new QuotaExhaustedError();
+      },
+    });
+    const state = createGlobalState(0);
+    const guard = guardOf(inner, state);
+    expect(guard.quotaSpent).toBe(false);
+    await expect(guard.generate('p')).rejects.toBeInstanceOf(QuotaExhaustedError);
+    expect(guard.quotaSpent).toBe(true);
+    expect(guard.denied).toBe(true);
+    expect(state.spentCents).toBe(0);
+    expect(state.reservedCents).toBe(0);
+  });
+
+  it('after a quota answer a second generate makes no inner call, reserves nothing and does not even roll the day', async () => {
+    const { client, state, fetchMock } = realSetup([shared], { models: MODELS });
+    let clock = 0;
+    const guard = new BudgetedModelClient(client, state, config(1000), () => clock);
+    await expect(guard.generate(PROMPT)).rejects.toBeInstanceOf(QuotaExhaustedError);
+
+    clock = 2 * DAY_MS; // a day roll would reset the spend to 0
+    state.spentCents = 5;
+    const error = await guard.generate(PROMPT).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(BudgetExhaustedError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(guard.calls).toBe(1);
+    expect(state.reservedCents).toBe(0);
+    expect(state.spentCents).toBe(5);
+    expect(guard.denied).toBe(true);
+  });
+
+  it('a quota answer does not outlive the guard: a new guard on the same state calls the model again', async () => {
+    const first = realSetup([shared], { models: MODELS });
+    await expect(first.guard.generate(PROMPT)).rejects.toBeInstanceOf(QuotaExhaustedError);
+
+    const second = new BudgetedModelClient(first.client, first.state, config(1000), () => 0);
+    const calls = first.fetchMock.mock.calls.length;
+    await expect(second.generate(PROMPT)).rejects.toThrow(); // the stub has no more answers
+    expect(first.fetchMock.mock.calls.length).toBe(calls + 1);
+    expect(second.quotaSpent).toBe(false);
+  });
+
+  it('grantWish: after the quota answer paw-core retries and falls back with no second HTTP call', async () => {
+    const wish: Wish = { id: 'w1', text: 'Only the owner can delete a project', createdAt: 1 };
+    const { guard, state, fetchMock } = realSetup([shared], { models: MODELS });
+    const grant = await grantWish(wish, guard);
+    expect(grant.curses.length).toBeLessThan(3); // paw-core's fallback grant
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(guard.quotaSpent).toBe(true);
+    expect(guard.denied).toBe(true);
+    expect(state.spentCents).toBe(0);
+    expect(state.reservedCents).toBe(0);
+  });
+
+  it('judgeBinding: the same, with the fallback verdict', async () => {
+    const curse: Curse = {
+      id: 'c1',
+      type: 'permissions',
+      story: 'The owner quits.',
+      loophole: 'Only the owner.',
+      status: 'open',
+    };
+    const { guard, state, fetchMock } = realSetup([shared], { models: MODELS });
+    const verdict = await judgeBinding(curse, proposeBinding(curse, 'Owner or deputy.', 'ears-clause'), guard);
+    expect(verdict.closed).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(guard.quotaSpent).toBe(true);
+    expect(guard.denied).toBe(true);
+    expect(state.spentCents).toBe(0);
+  });
+
+  it('a budget refusal does not set quotaSpent, and a later, cheaper call on the same guard still fits', async () => {
+    const inner = new FakeMeteredModel({ usage: null });
+    const state = createGlobalState(0);
+    const guard = new BudgetedModelClient(inner, state, config(4), () => 0);
+
+    // Default fake plan: ceil(chars / 3) input tokens at 1.50 plus 4096 output tokens at 7.50 USD per million.
+    // 30000 chars cost 1.5 + 3.072 cents: above 4. One char costs 3.0722: below 4.
+    await expect(guard.generate('x'.repeat(30_000))).rejects.toBeInstanceOf(BudgetExhaustedError);
+    expect(guard.denied).toBe(true);
+    expect(guard.quotaSpent).toBe(false);
+    expect(inner.calls).toBe(0);
+
+    await expect(guard.generate('x')).resolves.toEqual({ ok: true });
+    expect(inner.calls).toBe(1);
+    expect(guard.quotaSpent).toBe(false);
   });
 });

@@ -22,7 +22,7 @@ Names match [`.env.example`](.env.example). `pnpm start` loads no `.env` file. S
 |------------------------------|----------------------------------------------------------------|--------------------------------------------------------------------------------|
 | `GEMINI_API_KEY`             | empty                                                          | Model key. Empty means examples-only mode.                                     |
 | `GEMINI_MODEL`               | `gemini-3.6-flash`                                             | Primary model name. The retired name `gemini-3.5-flash` routes to it.          |
-| `GEMINI_MODEL_FALLBACKS`     | `gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite` | Comma-separated models to try on 503, 429 or 404.                              |
+| `GEMINI_MODEL_FALLBACKS`     | `gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite` | Comma-separated models to try on 503, 429 or 404. A 429 whose quota is shared by all models stops the chain. |
 | `GEMINI_TIMEOUT_MS`          | `30000`                                                        | Timeout of one model request.                                                  |
 | `PORT`                       | `8787`                                                         | Port to listen on. Railway sets it.                                            |
 | `PRICE_TABLE_JSON`           | the built-in 1.1.2027 table                                    | Optional JSON object `{"<model id>":{"inputUsdPerMTok":n,"outputUsdPerMTok":n}}` that replaces it. Invalid means the default table and one warning line. |
@@ -36,7 +36,18 @@ Names match [`.env.example`](.env.example). `pnpm start` loads no `.env` file. S
 
 ### How the budget guard charges
 
-Every model call goes through the guard. Before the call it reserves a ceiling: for each model of the fallback chain, the estimated input tokens at the input rate plus the output cap (`MAX_OUTPUT_TOKENS`, 4096, thinking included) at the output rate. If the day's spend plus what is already reserved plus this ceiling is above `DAILY_BUDGET_CENTS`, the call is refused and the model is not called. After the call it releases the reservation and charges the real cost from the token counts in the response, at the price of the model that answered. An attempt that reported no token counts (a timeout, a network error, an HTTP error) is charged its ceiling. Cents are fractional and never rounded in the state. The prices are the ones that apply from 1.1.2027 (see `src/budget/prices.ts`). They are higher than today's, so the guard over-counts today and never under-counts. An unknown model is priced at the most expensive row.
+Every model call goes through the guard. Before the call it reserves a ceiling: for each model of the fallback chain, the estimated input tokens at the input rate plus the output cap (`MAX_OUTPUT_TOKENS`, 4096, thinking included) at the output rate. If the day's spend plus what is already reserved plus this ceiling is above `DAILY_BUDGET_CENTS`, the call is refused and the model is not called. After the call it releases the reservation and charges the real cost from the token counts in the response, at the price of the model that answered. An attempt that reported no token counts (a timeout, a network error, an HTTP error) is charged its ceiling, except a quota attempt (HTTP 429, or any error answer with `RESOURCE_EXHAUSTED`), which is charged 0 cents because Google does not bill it. The reservation of the whole chain before the call does not change. Cents are fractional and never rounded in the state. The prices are the ones that apply from 1.1.2027 (see `src/budget/prices.ts`). They are higher than today's, so the guard over-counts today and never under-counts. An unknown model is priced at the most expensive row.
+
+## Running on the free tier
+
+The website runs on Gemini's free tier. No bill is possible if the key comes from a project with no billing account.
+
+1. In [Google AI Studio](https://aistudio.google.com/), create the key in a project that has no billing account.
+2. Set it as `GEMINI_API_KEY`.
+
+When the day's free quota ends, Gemini answers 429 `RESOURCE_EXHAUSTED`. The paw rests: `POST /api/grant` and `POST /api/bind` answer 503 "The paw is resting. Browse the examples until it wakes." and the site serves the ready examples. `/api/health` still says `normal`, and the next request tries the model again. A quota shared by all models stops the chain after one call. A quota of one model tries the next model. Daily free quotas reset at midnight Pacific time.
+
+A quota attempt costs 0 cents. The budget guard still counts paid-tier prices on paper, as a second fence.
 
 ## Cost guard and worst case
 
@@ -153,7 +164,7 @@ docker build -f apps/api/Dockerfile .   # from the repo root
 Nothing is deployed and no account exists yet.
 
 1. Regenerate `apps/api/examples-cache.json` with `pnpm -C apps/api eval --all` (real model calls, about 2 per wish). The committed cache holds only fallback grants, so `/api/examples` answers 503 until then. Commit the new file.
-2. Decide on a Gemini key and on billing, then create the key.
+2. Create the Gemini key as described in "Running on the free tier": in a Google AI Studio project with no billing account.
 3. Create a Railway project from the GitHub repository. Set the root directory to `/`.
 4. Set these service variables:
    - `RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile`

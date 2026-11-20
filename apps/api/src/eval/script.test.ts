@@ -10,6 +10,7 @@ import {
 } from './script';
 import type { CurseType } from 'paw-core';
 import { FakeMeteredModel } from '../budget/fake-metered';
+import { GeminiModelClient } from '../client/gemini';
 
 describe('Eval script (Req 12, Tasks 69-72)', () => {
   let goldenWishes: GoldenWish[];
@@ -197,5 +198,64 @@ describe('Eval script budget guard (iron-rules §5, Req 12.7)', () => {
     expect(writeEvalReport).toHaveBeenCalledTimes(1);
     expect(writeExamplesCache).toHaveBeenCalledTimes(1);
     expect(log.mock.calls[0][0]).toContain('1.5000 cents charged');
+  });
+});
+
+describe('Eval script when the free quota is spent (paw-api task 115, Req 12.12)', () => {
+  /** The real Gemini client over a stubbed fetch that answers 429 to everything. Never the network. */
+  function quotaModel() {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response('{}', { status: 429 }));
+    const model = new GeminiModelClient({
+      apiKey: 'test-key',
+      models: ['model-a', 'model-b'],
+      timeoutMs: 1000,
+      fetch: fetchMock,
+      log: () => {},
+    });
+    return { model, fetchMock };
+  }
+
+  it('stops with one line that says budget exhausted and that the free quota is spent', async () => {
+    const { model, fetchMock } = quotaModel();
+    const error = await runEval(5, { model, delayMs: 0, dailyBudgetCents: 1000 }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(EvalAbortError);
+    const message = (error as Error).message;
+    expect(message).toContain('budget exhausted');
+    expect(message).toContain('free quota');
+    expect(message).toContain('0.0000 cents charged');
+    expect(message).toMatch(/nothing was written\.$/);
+    expect(message).not.toContain('\n');
+    expect(fetchMock).toHaveBeenCalledTimes(2); // both models once; paw-core's retry makes no second round
+  });
+
+  it('a plain budget refusal does not mention the free quota', async () => {
+    const model = new FakeModel({ usage: 'ceiling' });
+    const error = await runEval(5, { model, delayMs: 0, dailyBudgetCents: 0 }).catch((e: unknown) => e);
+    expect((error as Error).message).toContain('budget exhausted');
+    expect((error as Error).message).not.toContain('free quota');
+  });
+
+  it('runEvalCli returns 1, writes neither report nor cache, and prints no pass', async () => {
+    const { model } = quotaModel();
+    const writeEvalReport = vi.fn(async () => undefined);
+    const writeExamplesCache = vi.fn(async () => undefined);
+    const log = vi.fn();
+    const error = vi.fn();
+
+    const code = await runEvalCli(['--limit', '5'], {
+      runEval: (limit) => runEval(limit, { model, delayMs: 0, dailyBudgetCents: 1000 }),
+      writeEvalReport,
+      writeExamplesCache,
+      log,
+      error,
+    });
+
+    expect(code).toBe(1);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls[0][0]).toContain('free quota');
+    expect(writeEvalReport).not.toHaveBeenCalled();
+    expect(writeExamplesCache).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
   });
 });

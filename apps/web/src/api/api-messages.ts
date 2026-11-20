@@ -49,6 +49,13 @@ export const JUDGE_RESTING_MESSAGE = 'The Judge is resting too.';
 /** "Make the wish" with a blank wish line. No request is made (paw-web Req 3.3). */
 export const EMPTY_WISH_MESSAGE = 'The paw waits for a wish. Write one first.';
 
+/**
+ * The note under the wish line (paw-web Req 3.9). The website runs on Gemini's free tier, where Google may use
+ * what it receives, so the page says where a wish goes. Always shown, also in examples-only play.
+ */
+export const WISH_SENT_TO_GEMINI_MESSAGE =
+  "Your wish travels to Google's Gemini, which writes the curses. Keep personal details out of it.";
+
 /** Status text on the wish line while a Grant is on its way. */
 export const PAW_STIRS_MESSAGE = 'The Paw stirs…';
 

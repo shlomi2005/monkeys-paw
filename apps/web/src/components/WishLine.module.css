@@ -13,6 +13,7 @@
   grid-template-areas:
     'prefix'
     'wish'
+    'note'
     'message'
     'context'
     'seal'
@@ -113,6 +114,13 @@
   }
 }
 
+/* Where the wish goes (paw-web Req 3.9): body size, ink colour, its own row under the wish row. */
+.note {
+  grid-area: note;
+  margin: 0;
+  color: var(--ink);
+}
+
 /* One line is always reserved for the notice, so showing it moves nothing. */
 .message {
   grid-area: message;
@@ -175,6 +183,7 @@
     grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-areas:
       'prefix wish seal'
+      'note note note'
       'message message message'
       'context context context'
       'status status status';

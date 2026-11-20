@@ -1,4 +1,5 @@
 import type { ModelClient } from 'paw-core';
+import { QuotaExhaustedError } from '../client/gemini';
 import type { AttemptPlan, AttemptReport } from '../client/gemini';
 import type { BudgetConfig } from './config';
 import { DEFAULT_PRICE_TABLE, attemptCostCents, priceFor } from './prices';
@@ -46,6 +47,16 @@ const IN_FLIGHT = new WeakMap<GlobalState, number>();
  *    is released and the real cost is charged: for each attempt the token usage at
  *    the price of the model that answered, or the attempt's own ceiling when the
  *    attempt reported no usage. When no attempt reported at all, the whole ceiling.
+ *    A quota attempt (`report.quota`: a 429 or `RESOURCE_EXHAUSTED`) is charged 0
+ *    cents, because Google does not bill it (Requirement 13.6). The reservation
+ *    above is not changed by that: it cannot know which attempts will be quota
+ *    answers, so the worst-case numbers stay an upper bound.
+ * 4. When the call threw `QuotaExhaustedError` (the free quota is spent), the guard
+ *    sets `quotaSpent` and `denied`, then rethrows. Every later `generate` on this
+ *    guard throws `BudgetExhaustedError` at once, before the day roll and before any
+ *    reservation, without calling the model, so paw-core's retry spends no more quota.
+ *    `quotaSpent` is separate from `denied` on purpose: a budget refusal does not block
+ *    a later, cheaper call that still fits under the cap, a quota answer blocks all.
  *
  * The real cost is charged even when it is above the ceiling, because it is real
  * money. That happens only when the real prompt has more tokens than the chars/3
@@ -62,6 +73,8 @@ export class BudgetedModelClient implements ModelClient {
   calls = 0;
   /** True once this guard has refused a call. */
   denied = false;
+  /** True once the model answered that the free quota is spent. Blocks every later call of this guard. */
+  quotaSpent = false;
   /** Cents this guard has charged to the shared state (its own spend). */
   costCents = 0;
 
@@ -74,6 +87,11 @@ export class BudgetedModelClient implements ModelClient {
   ) {}
 
   async generate(prompt: string): Promise<unknown> {
+    if (this.quotaSpent) {
+      this.denied = true;
+      throw new BudgetExhaustedError();
+    }
+
     rollDayIfElapsed(this.state, this.now());
 
     if (!this.inner.available) {
@@ -100,6 +118,12 @@ export class BudgetedModelClient implements ModelClient {
     const reports: AttemptReport[] = [];
     try {
       return await this.inner.generateMetered(prompt, (report) => reports.push(report));
+    } catch (error) {
+      if (error instanceof QuotaExhaustedError) {
+        this.quotaSpent = true;
+        this.denied = true;
+      }
+      throw error;
     } finally {
       this.release(ceiling);
       const charge =
@@ -120,8 +144,12 @@ export class BudgetedModelClient implements ModelClient {
     );
   }
 
-  /** What one attempt really cost: its usage at the answering model's price, else its ceiling. */
+  /**
+   * What one attempt really cost: 0 for a quota attempt, else its usage at the answering
+   * model's price, else its ceiling.
+   */
   private chargeOf(report: AttemptReport): number {
+    if (report.quota) return 0;
     if (report.usage) {
       const cost = attemptCostCents(
         priceFor(this.prices, report.modelVersion ?? report.model),

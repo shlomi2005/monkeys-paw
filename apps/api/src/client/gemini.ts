@@ -31,8 +31,118 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  */
 export const MAX_OUTPUT_TOKENS = 4096;
 
-/** HTTP statuses that mean "this model is unavailable right now": try the next one. */
+/**
+ * HTTP statuses that mean "this model is unavailable right now": try the next one.
+ * A 429 is also a quota attempt (the free quota is spent, Requirement 13.1). Whether the
+ * chain goes on after it depends on the quota's scope: a quota shared by all models
+ * (`quotaScopeOf` is `shared`) stops the chain, a per-model quota tries the next model.
+ * Any other status that carries `error.status` `RESOURCE_EXHAUSTED` is a quota attempt too.
+ */
 const NEXT_MODEL_STATUSES = new Set([503, 429, 404]);
+
+/** The most of an error body that is read. The rest is dropped unread. */
+export const MAX_ERROR_BODY_BYTES = 64 * 1024;
+
+/**
+ * Thrown when the chain ended without a success and at least one attempt was a quota
+ * attempt: the free quota is spent. The message is fixed. It holds no body and no key.
+ */
+export class QuotaExhaustedError extends Error {
+  constructor() {
+    super('The free quota of the model is spent');
+    this.name = 'QuotaExhaustedError';
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Whether the quota behind a 429 / `RESOURCE_EXHAUSTED` answer belongs to the whole project.
+ * `shared` only when the `QuotaFailure` entries of `error.details[]` hold at least one
+ * violation and every violation has a `quotaId` with `PerProject` and without `PerModel`,
+ * and a `quotaDimensions` object without a `model` key. Every other case, including a body
+ * that is missing or unparsable, is `per-model`: the next model has its own free quota.
+ * `body` is the parsed JSON (a string is parsed here); nothing of it is kept or logged.
+ */
+export function quotaScopeOf(body: unknown): 'shared' | 'per-model' {
+  let parsed = body;
+  if (typeof body === 'string') {
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      return 'per-model';
+    }
+  }
+  const details = isRecord(parsed) && isRecord(parsed.error) ? parsed.error.details : undefined;
+  if (!Array.isArray(details)) return 'per-model';
+
+  const violations: unknown[] = [];
+  for (const detail of details) {
+    if (!isRecord(detail)) continue;
+    const type = detail['@type'];
+    if (typeof type !== 'string' || !type.endsWith('google.rpc.QuotaFailure')) continue;
+    if (Array.isArray(detail.violations)) violations.push(...detail.violations);
+  }
+  if (violations.length === 0) return 'per-model';
+
+  const everyPerProject = violations.every((violation) => {
+    if (!isRecord(violation)) return false;
+    const { quotaId, quotaDimensions } = violation;
+    return (
+      typeof quotaId === 'string' &&
+      quotaId.includes('PerProject') &&
+      !quotaId.includes('PerModel') &&
+      isRecord(quotaDimensions) &&
+      !('model' in quotaDimensions)
+    );
+  });
+  return everyPerProject ? 'shared' : 'per-model';
+}
+
+/** Whether a parsed error body says `error.status === "RESOURCE_EXHAUSTED"`. */
+function isResourceExhausted(body: unknown): boolean {
+  return isRecord(body) && isRecord(body.error) && body.error.status === 'RESOURCE_EXHAUSTED';
+}
+
+/**
+ * Reads at most `MAX_ERROR_BODY_BYTES` of an error body and parses it as JSON. Stops when
+ * the attempt's signal aborts (timeout) and cancels the rest. Returns `undefined` when the
+ * body is missing, cut, unreadable or not JSON. The text is never kept or logged.
+ */
+async function readErrorBody(response: Response, signal: AbortSignal): Promise<unknown> {
+  const reader = response.body?.getReader();
+  if (!reader) return undefined;
+  const cancel = () => {
+    void reader.cancel().catch(() => undefined);
+  };
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    if (signal.aborted) return undefined;
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (total < MAX_ERROR_BODY_BYTES) {
+      const { done, value } = await reader.read();
+      if (done || !value) break;
+      chunks.push(value);
+      total += value.byteLength;
+    }
+    if (signal.aborted) return undefined;
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return JSON.parse(new TextDecoder().decode(bytes.subarray(0, MAX_ERROR_BODY_BYTES)));
+  } catch {
+    return undefined;
+  } finally {
+    signal.removeEventListener('abort', cancel);
+    cancel();
+  }
+}
 
 /** What one attempt could cost at most: the request as planned, before any call is made. */
 export interface AttemptPlan {
@@ -48,6 +158,8 @@ export interface AttemptReport extends AttemptPlan {
   modelVersion?: string;
   /** Present only when the response carried `usageMetadata` with a valid `promptTokenCount`. */
   usage?: { promptTokens: number; outputTokens: number };
+  /** The attempt was a quota answer (429, or `RESOURCE_EXHAUSTED`). Google does not bill it: 0 cents. */
+  quota?: true;
 }
 
 /** One metadata line per HTTP attempt. Numbers and enums only; never the prompt, the response text or the key. */
@@ -146,6 +258,13 @@ function usageOf(envelope: unknown): AttemptReport['usage'] {
  * client reports `available === false`, and `generate` rejects before any
  * request is made (Req 6.2: examples-only mode).
  *
+ * Free tier (Requirement 13): a 429, or any non-200 answer whose error body says
+ * `RESOURCE_EXHAUSTED`, is a quota attempt. The body of every non-200 answer is read
+ * (at most 64 KB, under the attempt's timeout) only to decide that, then dropped. A quota
+ * shared by all models stops the chain; a per-model quota tries the next model. When the
+ * chain ends without a success and any attempt was a quota attempt, the call throws
+ * `QuotaExhaustedError`.
+ *
  * Besides `generate`, it meters itself for the budget guard: `plan` says what
  * the attempts could cost at most, `generateMetered` reports what each HTTP
  * attempt really used.
@@ -189,7 +308,8 @@ export class GeminiModelClient implements ModelClient {
 
   /**
    * Call Gemini with structured JSON output mode.
-   * Tries each model in sequence on 503/429/404; throws on other errors.
+   * Tries each model in sequence on 503/429/404 and on a per-model quota answer; throws on
+   * other errors. A shared quota answer stops the chain.
    * paw-core retries once then falls back.
    * Error messages carry only the model name and the HTTP status.
    *
@@ -209,6 +329,7 @@ export class GeminiModelClient implements ModelClient {
     const inputTokens = this.inputTokensOf(prompt, responseSchema);
 
     let lastError: Error = new Error('No Gemini model is configured');
+    let sawQuota = false;
 
     for (const modelName of this.models) {
       const outcome = await this.callModel(modelName, prompt, responseSchema, inputTokens, onAttempt);
@@ -216,9 +337,12 @@ export class GeminiModelClient implements ModelClient {
         return outcome.value;
       }
       lastError = outcome.error;
+      if (outcome.quota) sawQuota = true;
+      if (outcome.stop) break;
     }
 
-    // All models exhausted
+    // The chain ended without a success: all models tried, or a shared quota stopped it.
+    if (sawQuota) throw new QuotaExhaustedError();
     throw lastError;
   }
 
@@ -255,7 +379,9 @@ export class GeminiModelClient implements ModelClient {
     responseSchema: unknown,
     inputTokens: number,
     onAttempt: (report: AttemptReport) => void,
-  ): Promise<{ kind: 'ok'; value: unknown } | { kind: 'next'; error: Error }> {
+  ): Promise<
+    { kind: 'ok'; value: unknown } | { kind: 'next'; error: Error; quota: boolean; stop: boolean }
+  > {
     const generationConfig: Record<string, unknown> = {
       responseMimeType: 'application/json',
       // `low` is supported by every model in the chain. Thinking tokens count toward maxOutputTokens.
@@ -298,11 +424,16 @@ export class GeminiModelClient implements ModelClient {
         status = response.status;
 
         if (status !== 200) {
-          // Not read; release the connection.
-          void response.body?.cancel().catch(() => undefined);
+          // Read (capped, under this attempt's signal), reduced to a verdict, dropped.
+          const errorBody = await readErrorBody(response, abortController.signal);
           const error = new Error(`Model call failed (${modelName}: HTTP ${status})`);
+          const quota = status === 429 || isResourceExhausted(errorBody);
+          if (quota) {
+            report.quota = true;
+            return { kind: 'next', error, quota: true, stop: quotaScopeOf(errorBody) === 'shared' };
+          }
           if (NEXT_MODEL_STATUSES.has(status)) {
-            return { kind: 'next', error };
+            return { kind: 'next', error, quota: false, stop: false };
           }
           throw error;
         }

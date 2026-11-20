@@ -6,14 +6,14 @@ You write a software requirement. The Paw follows it to the letter and acts out 
 
 ## Repo map
 
-| Path                     | What it holds                                                              |
-|--------------------------|----------------------------------------------------------------------------|
-| `apps/web`               | The UI: Vite, React and react-three-fiber.                                 |
-| `apps/api`               | The Hono server. The only place that calls the model.                      |
-| `packages/paw-core`      | Pure TypeScript logic shared by web, api and the MCP server.               |
-| `packages/paw-mcp`       | The MCP server with the tools `paw_curse` and `paw_bind`.                  |
-| `powers/monkeys-paw`     | The Kiro power: manifest, skills and the committed MCP bundle.             |
-| `.kiro`                  | Steering files, specs, hooks and agents.                                   |
+| Path                 | What it holds                                                                                                                                                                                       |
+|----------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `apps/web`           | The UI: Vite, React and react-three-fiber.                                                                                                                                                          |
+| `apps/api`           | The Hono server. The only place that calls the model.                                                                                                                                               |
+| `packages/paw-core`  | Pure TypeScript logic shared by web, api and the MCP server.                                                                                                                                        |
+| `packages/paw-mcp`   | The MCP server. It gives your own Kiro agent the Paw's rules and checks (`paw_rules`, `paw_check_curses`, `paw_check_verdict`), and adds `paw_curse` and `paw_bind` only when `PAW_API_URL` is set. |
+| `powers/monkeys-paw` | The Kiro power: manifest, skills and the committed MCP bundle.                                                                                                                                      |
+| `.kiro`              | Steering files, specs, hooks and agents.                                                                                                                                                            |
 
 ## Specs
 

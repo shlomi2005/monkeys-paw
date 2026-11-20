@@ -3,7 +3,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EMPTY_WISH_MESSAGE, PAW_STIRS_MESSAGE } from '../api/api-messages';
+import { EMPTY_WISH_MESSAGE, PAW_STIRS_MESSAGE, WISH_SENT_TO_GEMINI_MESSAGE } from '../api/api-messages';
 import { declarationsFor, parseCss, readText } from '../styles/css-test-support';
 import type { WishLineProps } from './WishLine';
 import { WishLine } from './WishLine';
@@ -27,6 +27,7 @@ function setup(overrides: Partial<WishLineProps> = {}) {
 
 const wishInput = (): HTMLInputElement => screen.getByLabelText('I wish that') as HTMLInputElement;
 const sealButton = (): HTMLButtonElement => screen.getByRole('button', { name: 'Make the wish' }) as HTMLButtonElement;
+const noteElement = (): HTMLElement => screen.getByText(WISH_SENT_TO_GEMINI_MESSAGE);
 const disclosure = (): HTMLButtonElement => screen.getByRole('button', { name: /^for…/ }) as HTMLButtonElement;
 
 describe('structure', () => {
@@ -204,7 +205,7 @@ describe('the notice', () => {
   it('renders an error line as text under the wish and links it to the input', () => {
     setup({ notice: { kind: 'error', text: 'The line to the paw is cut.' } });
     const line = screen.getByText('The line to the paw is cut.');
-    expect(wishInput().getAttribute('aria-describedby')).toBe(line.id);
+    expect(wishInput().getAttribute('aria-describedby')).toBe(`${line.id} ${noteElement().id}`);
   });
 
   it('renders an info line', () => {
@@ -220,9 +221,9 @@ describe('the notice', () => {
     expect(container.querySelector('b')).toBeNull();
   });
 
-  it('shows nothing and describes nothing when there is no notice', () => {
+  it('shows no message and describes the input by the note alone when there is no notice', () => {
     setup();
-    expect(wishInput().getAttribute('aria-describedby')).toBeNull();
+    expect(wishInput().getAttribute('aria-describedby')).toBe(noteElement().id);
   });
 
   it('puts the blank-wish line before a notice', () => {
@@ -230,6 +231,63 @@ describe('the notice', () => {
     fireEvent.click(sealButton());
     expect(screen.getByText(EMPTY_WISH_MESSAGE)).toBeTruthy();
     expect(screen.queryByText('The paw stumbles. Try again in a moment.')).toBeNull();
+  });
+});
+
+describe('the privacy note (Req 3.9)', () => {
+  it('is rendered as a paragraph with the text of the constant', () => {
+    setup();
+    const note = noteElement();
+    expect(note.tagName).toBe('P');
+    expect(note.textContent).toBe(WISH_SENT_TO_GEMINI_MESSAGE);
+    expect(note.id).not.toBe('');
+  });
+
+  it('is rendered while granting, with a context, and with a notice', () => {
+    setup({ granting: true, context: 'x', notice: { kind: 'info', text: 'The Judge is resting too.' } });
+    expect(noteElement().textContent).toBe(WISH_SENT_TO_GEMINI_MESSAGE);
+  });
+
+  it('describes the wish input alone when no message shows', () => {
+    setup();
+    expect(wishInput().getAttribute('aria-describedby')).toBe(noteElement().id);
+  });
+
+  it('describes the wish input after the notice, so the notice is read first', () => {
+    setup({ notice: { kind: 'error', text: 'The line to the paw is cut.' } });
+    const message = screen.getByText('The line to the paw is cut.');
+    expect(wishInput().getAttribute('aria-describedby')).toBe(`${message.id} ${noteElement().id}`);
+  });
+
+  it('describes the wish input after the blank-wish line, so that line is read first', () => {
+    setup({ text: '' });
+    fireEvent.click(sealButton());
+    const message = screen.getByText(EMPTY_WISH_MESSAGE);
+    expect(wishInput().getAttribute('aria-describedby')).toBe(`${message.id} ${noteElement().id}`);
+  });
+
+  it('points at ids that exist and are different', () => {
+    setup({ notice: { kind: 'info', text: 'The Judge is resting too.' } });
+    const ids = (wishInput().getAttribute('aria-describedby') ?? '').split(' ');
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+    for (const id of ids) expect(document.getElementById(id)).not.toBeNull();
+  });
+
+  it('is not focusable and changes the tab order by nothing', () => {
+    const { container } = setup();
+    const note = noteElement();
+    expect(note.hasAttribute('tabindex')).toBe(false);
+    expect(note.querySelector('a, button, input')).toBeNull();
+    const form = container.querySelector('form') as HTMLFormElement;
+    expect(Array.from(form.querySelectorAll('input, button, a, [tabindex]'))).toEqual([wishInput(), disclosure(), sealButton()]);
+  });
+
+  it('sits in the DOM right after the wish input, before the context row and the seal', () => {
+    const { container } = setup();
+    const form = container.querySelector('form') as HTMLFormElement;
+    const children = Array.from(form.children);
+    expect(children.indexOf(noteElement())).toBe(children.indexOf(wishInput()) + 1);
   });
 });
 
@@ -260,6 +318,22 @@ describe('stylesheet', () => {
     const hover = css.filter((rule) => rule.selector.includes(':hover'));
     expect(hover.length).toBeGreaterThan(0);
     for (const rule of hover) expect(rule.media).toBe('(hover: hover)');
+  });
+
+  it('gives the note its own grid row under the wish row, in both layouts, and nothing else', () => {
+    const areas = [...raw.matchAll(/grid-template-areas:\s*([^;]+);/g)].map((match) =>
+      (match[1] ?? '').replace(/\s+/g, ' ').trim(),
+    );
+    expect(areas).toEqual([
+      "'prefix' 'wish' 'note' 'message' 'context' 'seal' 'status'",
+      "'prefix wish seal' 'note note note' 'message message message' 'context context context' 'status status status'",
+    ]);
+    const note = declarationsFor(css, '.note', null);
+    expect(note['grid-area']).toBe('note');
+    expect(note['color']).toBe('var(--ink)');
+    expect(note['font-size']).toBeUndefined(); // inherits the band's 1rem
+    expect(Object.keys(note).sort()).toEqual(['color', 'grid-area', 'margin']);
+    expect(declarationsFor(css, '.band', null)['font-size']).toBe('1rem');
   });
 
   it('never sets text below 1rem', () => {

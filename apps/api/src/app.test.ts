@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { DAY_MS } from 'paw-core';
 import { createApp } from './app';
+import { GeminiModelClient } from './client/gemini';
 import { FakeMeteredModel } from './budget/fake-metered';
 import type { FakeMeteredOptions } from './budget/fake-metered';
 import type { MeteredModelClient } from './budget/guarded-client';
@@ -285,6 +286,91 @@ describe('createApp', () => {
       expect(after.mode).toBe('examples-only');
       expect(after.budget).toMatchObject({ spentCents: 7.5, remainingCents: 0 });
       expect(model.calls).toBe(1);
+    });
+  });
+
+  describe('the free quota is spent (paw-api task 115, Req 1.9, 2.9, 8.6)', () => {
+    const MODELS = ['model-a', 'model-b', 'model-c'];
+    const quotaAnswer = (code: number, body: unknown = {}) => () =>
+      new Response(JSON.stringify(body), { status: code });
+
+    /** The real Gemini client over a stubbed fetch: every call answers with `answer`. Never the network. */
+    function quotaApp(answer: () => Response) {
+      const fetchMock = vi.fn<typeof fetch>(async () => answer());
+      const client = new GeminiModelClient({
+        apiKey: 'test-key',
+        models: MODELS,
+        timeoutMs: 1000,
+        fetch: fetchMock,
+        log: () => {},
+      });
+      return { app: makeApp(client), fetchMock };
+    }
+
+    const bindBody = { grant: sampleGrant, curseId: 'c1', kind: 'rewrite', clause: 'Owner or deputy.' };
+
+    it('429 on every model gives 503 with RESTING_MESSAGE on /api/grant, with no fallback grant and no retry round', async () => {
+      const { app, fetchMock } = quotaApp(quotaAnswer(429));
+      const res = await post(app, '/api/grant', grantBody);
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ message: RESTING });
+      expect(fetchMock).toHaveBeenCalledTimes(MODELS.length); // paw-core's retry makes no second round
+    });
+
+    it('429 on every model gives 503 with RESTING_MESSAGE on /api/bind, not the fallback verdict', async () => {
+      const { app, fetchMock } = quotaApp(quotaAnswer(429));
+      const res = await post(app, '/api/bind', bindBody);
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ message: RESTING });
+      expect(fetchMock).toHaveBeenCalledTimes(MODELS.length);
+    });
+
+    it('RESOURCE_EXHAUSTED in the body of another status gives the same 503', async () => {
+      const body = { error: { code: 403, status: 'RESOURCE_EXHAUSTED', message: 'quota' } };
+      for (const code of [403, 503, 400]) {
+        const { app } = quotaApp(quotaAnswer(code, body));
+        const grant = await post(app, '/api/grant', grantBody);
+        expect(grant.status, `grant ${code}`).toBe(503);
+        expect(await grant.json()).toEqual({ message: RESTING });
+        const bind = await post(app, '/api/bind', bindBody);
+        expect(bind.status, `bind ${code}`).toBe(503);
+        expect(await bind.json()).toEqual({ message: RESTING });
+      }
+    });
+
+    it('a quota shared by all models stops after one HTTP call', async () => {
+      const shared = {
+        error: {
+          status: 'RESOURCE_EXHAUSTED',
+          details: [
+            {
+              '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+              violations: [{ quotaId: 'GenerateRequestsPerDayPerProject-FreeTier', quotaDimensions: { location: 'global' } }],
+            },
+          ],
+        },
+      };
+      const { app, fetchMock } = quotaApp(quotaAnswer(429, shared));
+      expect((await post(app, '/api/grant', grantBody)).status).toBe(503);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('health still says normal, and nothing was charged', async () => {
+      const { app } = quotaApp(quotaAnswer(429));
+      expect((await post(app, '/api/grant', grantBody)).status).toBe(503);
+      expect(await health(app)).toMatchObject({
+        status: 'ok',
+        mode: 'normal',
+        budget: { spentCents: 0, remainingCents: 500 },
+      });
+    });
+
+    it('keeps nothing for the next request: the model is tried again', async () => {
+      const { app, fetchMock } = quotaApp(quotaAnswer(429));
+      await post(app, '/api/grant', grantBody, '203.0.113.1');
+      expect(fetchMock).toHaveBeenCalledTimes(MODELS.length);
+      await post(app, '/api/grant', grantBody, '203.0.113.2');
+      expect(fetchMock).toHaveBeenCalledTimes(2 * MODELS.length);
     });
   });
 

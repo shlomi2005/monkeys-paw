@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { DEFAULT_MODEL, GeminiModelClient, MAX_OUTPUT_TOKENS } from './gemini';
+import {
+  DEFAULT_MODEL,
+  GeminiModelClient,
+  MAX_ERROR_BODY_BYTES,
+  MAX_OUTPUT_TOKENS,
+  QuotaExhaustedError,
+  quotaScopeOf,
+} from './gemini';
 import type { AttemptReport, ModelCallLogEntry } from './gemini';
 
 const FAKE_KEY = 'test-key-not-real';
@@ -196,9 +203,9 @@ describe('GeminiModelClient', () => {
     ]);
   });
 
-  it('throws the last status when every model is unavailable', async () => {
-    const { client, fetchMock } = setup([status(503), status(429), status(404)]);
-    await expect(client.generate('x')).rejects.toThrow('model-c: HTTP 404');
+  it('throws the last status when every model is unavailable (no quota answer among them)', async () => {
+    const { client, fetchMock } = setup([status(503), status(404), status(503)]);
+    await expect(client.generate('x')).rejects.toThrow('model-c: HTTP 503');
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -723,5 +730,282 @@ describe('the model_call log line (paw-api task 103)', () => {
     const { client, logs } = setup([geminiWithUsage('{}', { finishReason: `free text ${RESPONSE_SECRET}` })]);
     await client.generate('x');
     expect('finishReason' in logs[0]).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Free tier: quota answers (paw-api task 113, Requirement 13)
+// ---------------------------------------------------------------------------
+
+const BODY_SECRET = 'error-body-words-that-must-not-leak';
+
+/** One `google.rpc.QuotaFailure` violation. */
+const violation = (quotaId: string, quotaDimensions?: Record<string, unknown>) => ({
+  quotaMetric: 'generativelanguage.googleapis.com/generate_content_free_tier_requests',
+  quotaId,
+  ...(quotaDimensions ? { quotaDimensions } : {}),
+});
+
+const PER_MODEL = violation('GenerateRequestsPerDayPerProjectPerModel-FreeTier', {
+  location: 'global',
+  model: 'model-a',
+});
+const PER_PROJECT = violation('GenerateRequestsPerDayPerProject-FreeTier', { location: 'global' });
+
+/** The error body of a quota answer, field names as in `google.rpc.QuotaFailure`. */
+function quotaBody(violations: unknown[], errorStatus = 'RESOURCE_EXHAUSTED'): unknown {
+  return {
+    error: {
+      code: 429,
+      status: errorStatus,
+      message: BODY_SECRET,
+      details: [{ '@type': 'type.googleapis.com/google.rpc.QuotaFailure', violations }],
+    },
+  };
+}
+
+function answer(code: number, body: unknown): Response {
+  return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status: code });
+}
+
+describe('quotaScopeOf (paw-api task 113, Req 13.3)', () => {
+  const failure = (violations: unknown[]) => ({
+    '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+    violations,
+  });
+  const bodyOf = (...details: unknown[]) => ({ error: { status: 'RESOURCE_EXHAUSTED', details } });
+
+  it('is shared for a per-project quota with no model dimension', () => {
+    expect(quotaScopeOf(bodyOf(failure([PER_PROJECT])))).toBe('shared');
+  });
+
+  it('is shared when every violation of every QuotaFailure entry is per-project', () => {
+    const second = violation('GenerateContentInputTokensPerMinutePerProject-FreeTier', { location: 'global' });
+    expect(quotaScopeOf(bodyOf(failure([PER_PROJECT]), { '@type': 'other' }, failure([second])))).toBe('shared');
+  });
+
+  it('accepts the body as a JSON string too', () => {
+    expect(quotaScopeOf(JSON.stringify(bodyOf(failure([PER_PROJECT]))))).toBe('shared');
+    expect(quotaScopeOf('not json')).toBe('per-model');
+  });
+
+  it.each([
+    ['a per-model quota that names the model', bodyOf(failure([PER_MODEL]))],
+    ['PerProject and PerModel in one id', bodyOf(failure([violation('PerProjectPerModel', { location: 'global' })]))],
+    ['a per-project id with a model dimension', bodyOf(failure([violation('GenerateRequestsPerDayPerProject', { model: 'm' })]))],
+    ['a violation with no quotaDimensions', bodyOf(failure([violation('GenerateRequestsPerDayPerProject')]))],
+    ['a violation with no quotaId', bodyOf(failure([{ quotaDimensions: { location: 'global' } }]))],
+    ['a quotaId that is not per-project', bodyOf(failure([violation('GenerateRequestsPerMinute', { location: 'global' })]))],
+    ['one shared and one per-model violation', bodyOf(failure([PER_PROJECT, PER_MODEL]))],
+    ['a violation that is not an object', bodyOf(failure(['PerProject']))],
+    ['no violation', bodyOf(failure([]))],
+    ['a detail that is not a QuotaFailure', bodyOf({ '@type': 'type.googleapis.com/google.rpc.Help', violations: [PER_PROJECT] })],
+    ['no details', { error: { status: 'RESOURCE_EXHAUSTED' } }],
+    ['details that is not an array', { error: { details: 'x' } }],
+    ['an error that is not an object', { error: 'x' }],
+    ['null', null],
+    ['undefined', undefined],
+    ['a number', 429],
+  ])('is per-model for %s', (_label, body) => {
+    expect(quotaScopeOf(body)).toBe('per-model');
+  });
+});
+
+describe('GeminiModelClient quota answers (paw-api task 113, Req 13.1-13.4)', () => {
+  it('a per-model 429 on the primary tries the next model: two calls, and a success succeeds', async () => {
+    const { client, fetchMock, logs } = setup([answer(429, quotaBody([PER_MODEL])), geminiOk('{"from":"b"}')]);
+    const reports: AttemptReport[] = [];
+    await expect(client.generateMetered('x', (r) => reports.push(r))).resolves.toEqual({ from: 'b' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(requestOf(fetchMock, 1).url).toContain('/models/model-b:');
+    expect(reports.map((r) => [r.model, r.quota])).toEqual([
+      ['model-a', true],
+      ['model-b', undefined],
+    ]);
+    expect(logs.map((l) => [l.status, l.ok])).toEqual([[429, false], [200, true]]);
+  });
+
+  it('a per-project 429 stops the chain after one attempt and throws QuotaExhaustedError', async () => {
+    const { client, fetchMock } = setup([answer(429, quotaBody([PER_PROJECT]))]);
+    const reports: AttemptReport[] = [];
+    const error = await client.generateMetered('x', (r) => reports.push(r)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(QuotaExhaustedError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(reports).toHaveLength(1);
+    expect(reports[0].quota).toBe(true);
+  });
+
+  it('a per-project quota ends the chain after a first attempt that was not a quota answer too', async () => {
+    const { client, fetchMock } = setup([status(503), answer(429, quotaBody([PER_PROJECT]))]);
+    await expect(client.generate('x')).rejects.toBeInstanceOf(QuotaExhaustedError);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // model-c is never tried
+  });
+
+  it('429 on every model throws QuotaExhaustedError with a fixed message, after trying them all', async () => {
+    const { client, fetchMock } = setup(MODELS.map(() => answer(429, quotaBody([PER_MODEL]))));
+    const reports: AttemptReport[] = [];
+    const error = await client.generateMetered('x', (r) => reports.push(r)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(QuotaExhaustedError);
+    expect((error as Error).name).toBe('QuotaExhaustedError');
+    expect((error as Error).message).toBe(new QuotaExhaustedError().message);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(reports.every((r) => r.quota === true)).toBe(true);
+  });
+
+  it('a 429 on one model and another failure on the rest still ends as a quota answer', async () => {
+    const { client } = setup([answer(429, quotaBody([PER_MODEL])), status(503), status(404)]);
+    await expect(client.generate('x')).rejects.toBeInstanceOf(QuotaExhaustedError);
+  });
+
+  it.each([
+    ['an unreadable body', 'this is not json'],
+    ['an empty body', ''],
+    ['no violation', quotaBody([])],
+    ['a body with no error', {}],
+  ])('a 429 with %s tries the next model and counts as a quota attempt', async (_label, body) => {
+    const { client, fetchMock } = setup([answer(429, body), geminiOk('{"from":"b"}')]);
+    const reports: AttemptReport[] = [];
+    await expect(client.generateMetered('x', (r) => reports.push(r))).resolves.toEqual({ from: 'b' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(reports[0].quota).toBe(true);
+  });
+
+  it.each([403, 503, 400, 500])(
+    'RESOURCE_EXHAUSTED in the body of an HTTP %i is a quota attempt',
+    async (code) => {
+      const { client, fetchMock } = setup([answer(code, quotaBody([PER_MODEL])), geminiOk('{"from":"b"}')]);
+      const reports: AttemptReport[] = [];
+      await expect(client.generateMetered('x', (r) => reports.push(r))).resolves.toEqual({ from: 'b' });
+      expect(fetchMock).toHaveBeenCalledTimes(2); // even a 400, 403 or 500 moves on: it is a per-model quota
+      expect(reports[0].quota).toBe(true);
+    },
+  );
+
+  it('RESOURCE_EXHAUSTED with status 403 on every model throws QuotaExhaustedError', async () => {
+    const { client } = setup(MODELS.map(() => answer(403, quotaBody([PER_MODEL]))));
+    await expect(client.generate('x')).rejects.toBeInstanceOf(QuotaExhaustedError);
+  });
+
+  it('a shared quota in the body of a 403 stops the chain too', async () => {
+    const { client, fetchMock } = setup([answer(403, quotaBody([PER_PROJECT]))]);
+    await expect(client.generate('x')).rejects.toBeInstanceOf(QuotaExhaustedError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a 403 without RESOURCE_EXHAUSTED still throws at once with its own error', async () => {
+    const { client, fetchMock } = setup([answer(403, { error: { status: 'PERMISSION_DENIED', message: BODY_SECRET } })]);
+    const reports: AttemptReport[] = [];
+    const error = await client.generateMetered('x', (r) => reports.push(r)).catch((e: unknown) => e);
+    expect(error).not.toBeInstanceOf(QuotaExhaustedError);
+    expect((error as Error).message).toBe('Model call failed (model-a: HTTP 403)');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(reports[0].quota).toBeUndefined();
+  });
+
+  it('a 500 still throws its own error, even when the body is large, and is no quota attempt', async () => {
+    const { client, fetchMock } = setup([answer(500, 'x'.repeat(200_000))]);
+    const reports: AttemptReport[] = [];
+    await expect(client.generateMetered('x', (r) => reports.push(r))).rejects.toThrow('Model call failed (model-a: HTTP 500)');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(reports[0].quota).toBeUndefined();
+  });
+
+  it('503 and 404 without a quota body are not quota attempts', async () => {
+    const { client } = setup([status(503), status(404), status(503)]);
+    const reports: AttemptReport[] = [];
+    await expect(client.generateMetered('x', (r) => reports.push(r))).rejects.toThrow('HTTP 503');
+    expect(reports.map((r) => r.quota)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it('a body over 64 KB is cut at 64 KB and does not hang', async () => {
+    let pulled = 0;
+    let cancelled = false;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(new Uint8Array(16 * 1024).fill(32));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const { client, fetchMock } = setup([new Response(endless, { status: 429 }), geminiOk('{"from":"b"}')]);
+    await expect(client.generate('x')).resolves.toEqual({ from: 'b' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(cancelled).toBe(true);
+    expect(pulled * 16 * 1024).toBeLessThanOrEqual(MAX_ERROR_BODY_BYTES + 3 * 16 * 1024);
+  });
+
+  it('reads no more than 64 KB: a quota verdict that sits after the cut is not seen', async () => {
+    const padding = ' '.repeat(MAX_ERROR_BODY_BYTES + 10);
+    const { client, fetchMock } = setup([answer(403, `${padding}${JSON.stringify(quotaBody([PER_MODEL]))}`)]);
+    // The body is cut, so the RESOURCE_EXHAUSTED is not seen and the 403 keeps its own error.
+    await expect(client.generate('x')).rejects.toThrow('HTTP 403');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a body that never arrives is given up on at the timeout: the 429 tries the next model', async () => {
+    const hanging = new ReadableStream<Uint8Array>({ start() {} });
+    const queue: Array<Response> = [new Response(hanging, { status: 429 }), geminiOk('{"from":"b"}')];
+    const fetchMock = vi.fn<typeof fetch>(async () => queue.shift()!);
+    const client = new GeminiModelClient({
+      apiKey: FAKE_KEY,
+      models: MODELS,
+      timeoutMs: 30,
+      fetch: fetchMock,
+      log: () => {},
+    });
+    await expect(client.generate('x')).resolves.toEqual({ from: 'b' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('a body that fails while it is read is an unreadable body', async () => {
+    const failing = new ReadableStream<Uint8Array>({ start: (c) => c.error(new Error(BODY_SECRET)) });
+    const { client } = setup([new Response(failing, { status: 429 }), geminiOk('{"from":"b"}')]);
+    await expect(client.generate('x')).resolves.toEqual({ from: 'b' });
+  });
+
+  it('the key and the error body never reach a log line, a report or an error message', async () => {
+    const scenarios: Array<Array<Response | (() => Promise<Response>)>> = [
+      [answer(429, quotaBody([PER_PROJECT]))],
+      MODELS.map(() => answer(429, quotaBody([PER_MODEL]))),
+      [answer(403, quotaBody([PER_MODEL])), answer(500, `${BODY_SECRET} ${FAKE_KEY}`)],
+      [answer(500, `${BODY_SECRET} ${FAKE_KEY}`)],
+      [answer(429, `${BODY_SECRET} ${FAKE_KEY}`), status(503), status(404)],
+    ];
+    const texts: string[] = [];
+    for (const responses of scenarios) {
+      const { client, logs } = setup(responses);
+      const reports: AttemptReport[] = [];
+      try {
+        await client.generateMetered('x', (r) => reports.push(r));
+      } catch (err) {
+        texts.push(String((err as Error).message), String((err as Error).stack ?? ''));
+      }
+      texts.push(JSON.stringify(logs), JSON.stringify(reports));
+    }
+    expect(texts.length).toBeGreaterThan(0);
+    for (const text of texts) {
+      expect(text).not.toContain(FAKE_KEY);
+      expect(text).not.toContain(BODY_SECRET);
+    }
+  });
+
+  it('the default log writes no body either', async () => {
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write);
+    try {
+      const fetchMock = vi.fn<typeof fetch>(async () => answer(429, quotaBody([PER_PROJECT])));
+      const client = new GeminiModelClient({ apiKey: FAKE_KEY, models: MODELS, fetch: fetchMock });
+      await expect(client.generate('x')).rejects.toBeInstanceOf(QuotaExhaustedError);
+    } finally {
+      vi.restoreAllMocks();
+    }
+    expect(writes.join('')).toContain('"event":"model_call"');
+    expect(writes.join('')).not.toContain(BODY_SECRET);
+    expect(writes.join('')).not.toContain(FAKE_KEY);
   });
 });

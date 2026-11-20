@@ -169,8 +169,10 @@ export async function runEval(
 
     // The guard refused a call: the grant is paw-core's fallback, so stop here.
     if (modelClient.denied) {
+      // A spent free quota (Req 12.12) stops the eval as a refusal does, and the message says so.
+      const quotaNote = modelClient.quotaSpent ? '; the free quota of the model is spent' : '';
       throw new EvalAbortError(
-        `Eval failed: budget exhausted after ${modelClient.calls} model calls (${wishes.length} of ${wishesToEval.length} wishes done, ${modelClient.costCents.toFixed(4)} cents charged); nothing was written.`,
+        `Eval failed: budget exhausted after ${modelClient.calls} model calls (${wishes.length} of ${wishesToEval.length} wishes done, ${modelClient.costCents.toFixed(4)} cents charged)${quotaNote}; nothing was written.`,
       );
     }
 

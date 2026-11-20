@@ -30,6 +30,8 @@ export interface FakeMeteredOptions {
   modelVersion?: string;
   /** Report nothing, as a client that dies before any attempt would. */
   silent?: boolean;
+  /** Report the one attempt as a quota attempt (`quota: true`, no usage). */
+  quota?: boolean;
 }
 
 export class FakeMeteredModel implements MeteredModelClient {
@@ -85,6 +87,10 @@ export class FakeMeteredModel implements MeteredModelClient {
       report.usage = usage;
     }
     if (this.options.modelVersion) report.modelVersion = this.options.modelVersion;
+    if (this.options.quota) {
+      delete report.usage;
+      report.quota = true;
+    }
     return report;
   }
 }

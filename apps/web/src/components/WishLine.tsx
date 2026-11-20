@@ -3,7 +3,7 @@
 
 import { useId, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { EMPTY_WISH_MESSAGE, PAW_STIRS_MESSAGE } from '../api/api-messages';
+import { EMPTY_WISH_MESSAGE, PAW_STIRS_MESSAGE, WISH_SENT_TO_GEMINI_MESSAGE } from '../api/api-messages';
 import type { Notice } from '../state/use-paw-session';
 import { cx } from './class-names';
 import styles from './WishLine.module.css';
@@ -38,6 +38,7 @@ export function WishLine({
   const wishId = `${ids}-wish`;
   const contextId = `${ids}-context`;
   const messageId = `${ids}-message`;
+  const noteId = `${ids}-note`;
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [blankTried, setBlankTried] = useState(false);
@@ -80,13 +81,18 @@ export function WishLine({
         type="text"
         aria-label="I wish that"
         aria-invalid={showBlank ? true : undefined}
-        aria-describedby={message === null ? undefined : messageId}
+        aria-describedby={message === null ? noteId : `${messageId} ${noteId}`}
         autoComplete="off"
         maxLength={WISH_MAX_LENGTH}
         value={text}
         disabled={granting}
         onChange={(event) => onTextChange(event.target.value)}
       />
+
+      {/* Where the wish goes (Req 3.9). Not focusable. The wish input is described by it, after the message. */}
+      <p id={noteId} className={styles.note}>
+        {WISH_SENT_TO_GEMINI_MESSAGE}
+      </p>
 
       <div className={styles.contextRow}>
         <button

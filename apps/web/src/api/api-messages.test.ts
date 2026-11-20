@@ -27,6 +27,15 @@ describe('api-messages lines', () => {
     expect(messages.EMPTY_CLAUSE_MESSAGE).toBe('The Judge cannot weigh a blank clause. Write one first.');
   });
 
+  it('says where the wish goes, short and in the page\'s voice (Req 3.9, tone.md)', () => {
+    const line = messages.WISH_SENT_TO_GEMINI_MESSAGE;
+    expect(line).toBe("Your wish travels to Google's Gemini, which writes the curses. Keep personal details out of it.");
+    expect(line).toContain('Gemini');
+    expect(line.split(/(?<=\.)\s+/)).toHaveLength(2); // two short sentences
+    expect(line).not.toMatch(/[!]|\p{Extended_Pictographic}/u);
+    expect(line).not.toMatch(/\b(awesome|oops|unfortunately|successfully|AI|model|prompt)\b/i);
+  });
+
   it('keeps every line within the 200 character limit', () => {
     for (const value of Object.values(messages)) {
       if (typeof value === 'string') expect(value.length).toBeLessThanOrEqual(200);

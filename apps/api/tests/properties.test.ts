@@ -3,11 +3,13 @@ import * as fc from 'fast-check';
 import { canCall, recordCall, DAY_MS } from 'paw-core';
 import type { BudgetState } from 'paw-core';
 import type { BudgetConfig } from '../src/budget/config';
-import { BudgetedModelClient } from '../src/budget/guarded-client';
+import { BudgetedModelClient, BudgetExhaustedError } from '../src/budget/guarded-client';
+import type { MeteredModelClient } from '../src/budget/guarded-client';
 import { createGlobalState } from '../src/budget/state';
-import { DEFAULT_PRICE_TABLE, loadPriceTable, priceFor } from '../src/budget/prices';
+import { DEFAULT_PRICE_TABLE, attemptCostCents, loadPriceTable, priceFor } from '../src/budget/prices';
 import type { ModelPrice } from '../src/budget/prices';
-import { GeminiModelClient, MAX_OUTPUT_TOKENS } from '../src/client/gemini';
+import { GeminiModelClient, MAX_OUTPUT_TOKENS, QuotaExhaustedError } from '../src/client/gemini';
+import type { AttemptPlan, AttemptReport } from '../src/client/gemini';
 
 /**
  * Property-based tests for the Paw API using fast-check (Req design.md)
@@ -407,6 +409,144 @@ describe('Property 8: the price table (paw-api task 106)', () => {
         const longest = keys.filter((k) => `${key}-${suffix}`.startsWith(`${k}-`)).sort((a, b) => b.length - a.length)[0];
         expect(priceFor(DEFAULT_PRICE_TABLE, `${key}-${suffix}`)).toEqual(DEFAULT_PRICE_TABLE[longest]);
       }),
+    );
+  });
+});
+
+/** Every model of the default price table, so a generated chain is priced from real rows. */
+const CHAIN_MODELS = Object.keys(DEFAULT_PRICE_TABLE);
+
+/** A client that reports the given attempts, then returns or throws. No HTTP. */
+class ScriptedClient implements MeteredModelClient {
+  readonly available = true;
+  calls = 0;
+  constructor(
+    private readonly chain: AttemptPlan[],
+    private readonly script: () => { reports: AttemptReport[]; error?: Error },
+  ) {}
+  plan(): AttemptPlan[] {
+    return this.chain;
+  }
+  async generateMetered(_prompt: string, onAttempt: (report: AttemptReport) => void): Promise<unknown> {
+    this.calls += 1;
+    const { reports, error } = this.script();
+    for (const report of reports) onAttempt(report);
+    if (error) throw error;
+    return { ok: true };
+  }
+  generate(prompt: string): Promise<unknown> {
+    return this.generateMetered(prompt, () => {});
+  }
+}
+
+describe('Property 9: a quota attempt costs nothing (paw-api task 114)', () => {
+  const planArb = fc.record({
+    model: fc.constantFrom(...CHAIN_MODELS),
+    inputTokens: fc.integer({ min: 1, max: 20_000 }),
+    maxOutputTokens: fc.constant(MAX_OUTPUT_TOKENS),
+  });
+  // What one attempt of the chain turned out to be.
+  const kindArb = fc.oneof(
+    fc.constant({ kind: 'quota' as const }),
+    fc.constant({ kind: 'none' as const }),
+    fc.record({
+      kind: fc.constant('usage' as const),
+      promptTokens: fc.integer({ min: 0, max: 20_000 }),
+      outputTokens: fc.integer({ min: 0, max: 8192 }),
+    }),
+  );
+
+  it('P9: the charge is the sum over the non-quota reports; an all-quota call leaves the spend unchanged', () => {
+    return fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.tuple(planArb, kindArb), { minLength: 1, maxLength: 4 }),
+        fc.boolean(), // the call ends in an error or in a success
+        fc.double({ min: 0, max: 50, noNaN: true }), // the spend before the call
+        async (attempts, fails, before) => {
+          const chain = attempts.map(([plan]) => plan);
+          const reports: AttemptReport[] = attempts.map(([plan, kind]) => {
+            const report: AttemptReport = { ...plan };
+            if (kind.kind === 'quota') report.quota = true;
+            if (kind.kind === 'usage') report.usage = { promptTokens: kind.promptTokens, outputTokens: kind.outputTokens };
+            return report;
+          });
+          const allQuota = attempts.every(([, kind]) => kind.kind === 'quota');
+          const inner = new ScriptedClient(chain, () => ({
+            reports,
+            error: allQuota ? new QuotaExhaustedError() : fails ? new Error('failed') : undefined,
+          }));
+
+          const state = createGlobalState(0);
+          state.spentCents = before;
+          const config: BudgetConfig = { perIpLimit: 10, windowMs: 60_000, dailyBudgetCents: 1e9 };
+          const guard = new BudgetedModelClient(inner, state, config, () => 0);
+          await guard.generate('p').catch(() => undefined);
+
+          const expected = attempts.reduce((sum, [plan, kind]) => {
+            if (kind.kind === 'quota') return sum;
+            const price = priceFor(DEFAULT_PRICE_TABLE, plan.model);
+            return (
+              sum +
+              (kind.kind === 'usage'
+                ? attemptCostCents(price, kind.promptTokens, kind.outputTokens)
+                : attemptCostCents(price, plan.inputTokens, plan.maxOutputTokens))
+            );
+          }, 0);
+
+          expect(guard.costCents).toBeCloseTo(expected, 9);
+          expect(state.spentCents).toBeCloseTo(before + expected, 9);
+          expect(state.reservedCents).toBe(0);
+          if (allQuota) {
+            expect(guard.costCents).toBe(0);
+            expect(state.spentCents).toBe(before);
+          }
+        },
+      ),
+      { numRuns: 200 },
+    );
+  });
+});
+
+describe('Property 10: a quota answer stops the guard (paw-api task 114)', () => {
+  const stepArb = fc.constantFrom('ok' as const, 'fail' as const, 'quota' as const);
+
+  it('P10: once a generate has thrown QuotaExhaustedError, the inner client gets no further call from that guard', () => {
+    return fc.assert(
+      fc.asyncProperty(fc.array(stepArb, { minLength: 1, maxLength: 12 }), async (steps) => {
+        let step = 0;
+        const plan: AttemptPlan = { model: 'gemini-3.6-flash', inputTokens: 100, maxOutputTokens: MAX_OUTPUT_TOKENS };
+        const inner = new ScriptedClient([plan], () => {
+          const kind = steps[step++];
+          if (kind === 'quota') return { reports: [{ ...plan, quota: true }], error: new QuotaExhaustedError() };
+          if (kind === 'fail') return { reports: [{ ...plan }], error: new Error('failed') };
+          return { reports: [{ ...plan, usage: { promptTokens: 100, outputTokens: 100 } }] };
+        });
+        const state = createGlobalState(0);
+        const config: BudgetConfig = { perIpLimit: 10, windowMs: 60_000, dailyBudgetCents: 1e9 };
+        const guard = new BudgetedModelClient(inner, state, config, () => 0);
+
+        let seenQuota = false;
+        let callsAtQuota = 0;
+        for (let i = 0; i < steps.length; i++) {
+          const error = await guard.generate('p').then(
+            () => undefined,
+            (e: unknown) => e,
+          );
+          if (seenQuota) {
+            expect(error).toBeInstanceOf(BudgetExhaustedError);
+            expect(inner.calls).toBe(callsAtQuota);
+          } else if (error instanceof QuotaExhaustedError) {
+            seenQuota = true;
+            callsAtQuota = inner.calls;
+            expect(guard.quotaSpent).toBe(true);
+            expect(guard.denied).toBe(true);
+          } else {
+            expect(guard.quotaSpent).toBe(false);
+          }
+          expect(state.reservedCents).toBe(0);
+        }
+      }),
+      { numRuns: 200 },
     );
   });
 });
