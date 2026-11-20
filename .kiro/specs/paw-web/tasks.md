@@ -311,3 +311,12 @@ and are expected to fail until the matching implementation task lands. Property 
   install (CLI or `@lhci/cli`) and a local Chrome, run against `vite preview` with no upload to any service.
 - [x] 52. Write `apps/web/README.md`: scripts, the `VITE_API_BASE_URL` variable (name only), the asset copy step, how to
   run unit, property and e2e tests, and the single storage item. (Req 11.1, 12.6)
+- [ ] 53. Wish privacy line. Add `WISH_SENT_TO_GEMINI_MESSAGE` to `apps/web/src/api/api-messages.ts` (the proposed text of
+  design "Wish privacy line", in the page's voice). In `WishLine.tsx` render it as a `<p>` in its own grid row under the wish
+  row (`WishLine.module.css`: a new area, body size, at least 1rem, ink colour, no other layout change), and set the wish
+  input's `aria-describedby` to the note's id, or to `"<messageId> <noteId>"` when a message shows. Update
+  `WishLine.test.tsx` (the two `aria-describedby` expectations now include the note's id; new tests: the note is rendered,
+  its text is the constant, the input is described by it alone and by the message and it, and it is not focusable) and the
+  contrast test only if it lists the band. Search `apps/web/e2e` for the old `aria-describedby` value or the band's text;
+  change an e2e test or a receipt only if this line changes it. Do not run Playwright in an agent run (the owner runs the
+  e2e suite). Run `pnpm -C apps/web exec vitest run` (one process) and `pnpm -C apps/web typecheck`. (Req 3.9, 8.3, 8.5)

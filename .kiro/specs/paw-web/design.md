@@ -191,6 +191,16 @@ only for things CSS cannot do (GLB choice, dialog variant).
 visible, fed by `GET /api/examples`. Each `ExampleCard` shows a wish snippet (~50 characters with ellipsis), a
 context snippet and an "Example" label. Typing in the wish input dims the row and clears the highlighted card.
 
+**Wish privacy line (Req 3.9).** The website runs on Gemini's free tier, where Google may use what it receives, so the
+wish line says where wishes go. `api-messages.ts` exports `WISH_SENT_TO_GEMINI_MESSAGE`, proposed text: "Your wish
+travels to Google's Gemini, which writes the curses. Keep personal details out of it." (short, no exclamation mark,
+none of the words tone.md avoids; the task may reword it inside tone.md). `WishLine` renders it as a `<p id={noteId}>`
+in its own grid row under the wish row, always (also in examples-only play, where it is harmless). The wish input's
+`aria-describedby` becomes the note's id alone, or `"<messageId> <noteId>"` when a message shows, so the error is read
+first. The row uses the band's body size (at least 1rem) and its ink colour, which already meet AA on the ruled
+parchment (design section 7), and adds no other layout change: the seal, the context row and the tab order stay as
+they are, and the note is not focusable.
+
 ### 2. React component tree
 
 ```

@@ -113,6 +113,11 @@ curl/open animations.
 6. **CLICK EXAMPLE:** populate input, highlight card (border glow). Modify text → highlight clears.
 7. **EXAMPLES NOT READY (503):** show placeholder, allow user wish, no block.
 8. **KEYBOARD:** example cards focusable, Enter to select.
+9. **WISH PRIVACY LINE:** near the wish input, one short line says that wishes are sent to Google's Gemini to write the
+   curses, so the user should not type personal details. It is in the page's voice (tone.md: dry, eerie, short), its
+   text is a constant in `api-messages.ts`, and it is tied to the wish input with `aria-describedby` (together with the
+   message's id when a message shows). Its text is at least 1rem and meets AA contrast. It changes no layout beyond its
+   own line.
 
 ### Requirement 4: Curse circles and binding card
 

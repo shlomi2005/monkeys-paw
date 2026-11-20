@@ -5,19 +5,24 @@
 The Paw API is the server side of The Monkey's Paw. It is a Hono server running on Node 24, deployed to Railway.
 It is the **only** place that calls the model (iron-rules.md §1): it holds the Gemini API key in an environment
 variable, never ships it to the client, and implements `paw-core`'s `ModelClient` interface. The web client
-calls these endpoints via fetch; the Kiro power (`packages/paw-power`) imports `paw-core` directly and is
-covered by a separate spec.
+calls these endpoints via fetch. The Kiro power (`packages/paw-mcp`, `powers/monkeys-paw`) runs on the user's own
+Kiro agent and calls these endpoints only in its opt-in remote mode; it is covered by the paw-power spec.
+
+**Free tier (owner's decision, 20.11).** The product that stays on the market is the Kiro power, not the website. The
+website is a shop window for judges and visitors. It runs on Gemini's free tier with no billing account, so no bill is
+possible. When the day's free quota ends, the round falls back to the ready examples (Requirement 13).
 
 Scope of this spec: the HTTP server in `apps/api`, the `GeminiModelClient`, budget and per-IP rate-limit
 enforcement, the cached examples endpoint, CORS, the golden-wish eval script, and the schema changes for
-wish-engine task 25 (Genie returns `userStory`, Judge returns `property`).
+wish-engine task 25 (Genie returns `userStory`, Judge returns `property`), and running on Gemini's free tier
+(Requirement 13).
 
 ### Out of scope
 
 - The UI/3D scene (`apps/web`) — separate spec.
 - The pure wish-engine logic (`packages/paw-core`) — covered by the wish-engine spec, except the task 25
   schema and type changes documented here.
-- The Kiro power MCP server and hook (`packages/paw-power`) — separate spec.
+- The Kiro power MCP server and hook (`packages/paw-mcp`, `powers/monkeys-paw`) — the paw-power spec.
 - Prompt content — lives in `paw-core/src/prompts.ts`; this spec covers the transport, eval, and task 25
   schema changes, not prompt text.
 
@@ -63,6 +68,8 @@ runtime entry should be amended to Node 24 when convenient.
    budget at its real token cost (Requirement 7), so the daily budget counter stays accurate.
 8. **IF** `wish.text` is longer than 500 characters after trimming, or `wish.context` is longer than 200
    characters, **THE SYSTEM SHALL** return HTTP 400 with an in-character error and no model call.
+9. **WHEN** the model's free quota is spent (Requirement 13.5) **THE SYSTEM SHALL** return HTTP 503 with the same
+   in-character message as for an exhausted budget (`RESTING_MESSAGE`), and no Grant.
 
 ### Requirement 2: Bind a loophole (POST /api/bind)
 
@@ -91,6 +98,8 @@ accepts it, so I can close loopholes one at a time.
 8. **IF** the `loophole` of the curse being judged is longer than 1000 characters **THE SYSTEM SHALL** return
    HTTP 400 with an in-character error and no model call. (`story` is already limited to 360 characters by
    `GrantSchema`.)
+9. **WHEN** the model's free quota is spent (Requirement 13.5) **THE SYSTEM SHALL** return HTTP 503 with
+   `RESTING_MESSAGE`, not the fallback verdict.
 
 ### Requirement 3: Export the spec (POST /api/export)
 
@@ -162,7 +171,7 @@ so the Paw gets high-quality, schema-valid results at low cost.
    performs zod validation.
 7. **THE SYSTEM SHALL** use `gemini-3.6-flash` as the default model (`DEFAULT_MODEL`), with the default
    fallbacks `gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite` tried in order on HTTP 503, 429 and
-   404. The name `gemini-3.5-flash` is retired and routes to `gemini-3.6-flash`; it may still be set by the
+   404, except that a 429 whose quota is shared by all models stops the chain (Requirement 13.3). The name `gemini-3.5-flash` is retired and routes to `gemini-3.6-flash`; it may still be set by the
    operator.
 8. **WHEN** `generate` sends a request **THE SYSTEM SHALL** set `generationConfig.thinkingConfig.thinkingLevel`
    to `low` on every attempt, for every model in the chain.
@@ -174,7 +183,7 @@ so the Paw gets high-quality, schema-valid results at low cost.
 10. **IF** the first candidate has `finishReason: "MAX_TOKENS"`, or its text is not complete JSON, **THE SYSTEM
     SHALL** treat the attempt as failed: it throws, paw-core retries once then falls back (iron-rules.md §6),
     and the attempt is still charged by its usage (Requirement 7). It does not move on to the next model; only
-    HTTP 503, 429 and 404 do.
+    HTTP 503, 429 and 404 do (and a 429 or `RESOURCE_EXHAUSTED` answer can stop the chain, Requirement 13.3).
 11. **THE SYSTEM SHALL** expose `plan(prompt)` on `GeminiModelClient`: a pure function with no I/O that returns
     one entry `{ model, inputTokens, maxOutputTokens }` per model of the chain, in order. `inputTokens` is
     `ceil((prompt.length + length of the JSON of the response schema) / 3)`, with schema length 0 when the
@@ -230,7 +239,9 @@ so costs are capped and the service stays up (iron-rules.md §5).
     `reservedCents` and add its charge to `spentCents`. The charge is the sum over its attempt reports: an
     attempt with usage costs `promptTokens × inputRate + outputTokens × outputRate` at the price of the model
     that answered (`modelVersion` when present, else the requested model); an attempt without usage costs its
-    own ceiling. **IF** no report arrived at all **THE SYSTEM SHALL** charge the whole ceiling.
+    own ceiling, except a quota attempt (Requirement 13.1), which costs 0 cents because Google does not bill it.
+    **IF** no report arrived at all **THE SYSTEM SHALL** charge the whole ceiling. The reservation of 7.8 and 7.9 is
+    unchanged.
 11. **IF** the real charge is above the ceiling **THE SYSTEM SHALL** still charge it, because it is real money.
     The spend can then pass `dailyBudgetCents` only by that excess (real prompt tokens above the chars/3
     estimate, or an answering model pricier than the one requested), and every later call is refused.
@@ -272,6 +283,9 @@ exhausted, so the app is never fully down.
    model call.
 5. **WHEN** the daily budget resets (new day boundary) **THE SYSTEM SHALL** automatically exit examples-only
    mode and resume normal operation.
+6. **WHEN** a request ends because the model's free quota is spent (Requirement 13.5) **THE SYSTEM SHALL** answer
+   that request as in 8.3 (503, `RESTING_MESSAGE`). It does not change `mode` in the health response and keeps no
+   state for the next request: the next request tries the model again.
 
 ### Requirement 9: Privacy and safe logging
 
@@ -288,6 +302,8 @@ requirements stay private (iron-rules.md §2).
    code, duration, and whether a model call was made. Never wish text, never the IP in combination with any
    wish content.
 5. **THE SYSTEM SHALL NOT** set cookies or track users across requests.
+6. **THE SYSTEM SHALL NOT** log, in any stream, the body of a Gemini error answer, or any part of it (Requirement
+   13.2). Only numbers and enums are logged (Requirement 6.5).
 
 ### Requirement 10: CORS
 
@@ -363,3 +379,51 @@ results so prompt changes are gated by quality and the examples cache is kept fr
 11. **THE SYSTEM SHALL** set `DAILY_BUDGET_CENTS` in the CI eval step of `.github/workflows/prompt-eval.yml`
     to `ceil(5 × worst case per grant)`, the cap for one default eval (5 golden wishes, no binds) with every
     call at its worst case, and document the value and its arithmetic in `apps/api/README.md`.
+12. **IF** the guard marks itself denied because the free quota is spent (Requirement 13.5) **THE SYSTEM SHALL** stop
+    the eval as on a refusal (12.10): exit 1, write neither `docs/eval/latest.md` nor the examples cache, never
+    print a pass, and say in the message that the free quota is spent.
+
+### Requirement 13: Running on Gemini's free tier
+
+**User story:** As the operator, I want the website to run on Gemini's free tier with no billing, so that no bill is
+possible and, when the day's free quota ends, visitors get the ready examples.
+
+**Acceptance criteria:**
+
+1. **WHEN** Gemini answers an attempt with HTTP 429, or with any non-200 answer whose JSON error body has
+   `error.status` `"RESOURCE_EXHAUSTED"`, **THE SYSTEM SHALL** treat the attempt as a **quota attempt**: the free
+   quota is spent.
+2. **WHEN** an attempt gets a non-200 answer **THE SYSTEM SHALL** read its body, at most 64 KB and inside the attempt's
+   timeout, to look for `error.status` and for the `QuotaFailure` violations in `error.details[]`. **THE SYSTEM
+   SHALL NOT** log the body or any part of it, put it in an error message, or keep it after the attempt.
+3. **WHEN** an attempt is a quota attempt **THE SYSTEM SHALL** decide whether the quota is shared by all models. It is
+   shared **IF** `error.details[]` has at least one violation and every violation names a per-project quota that is not
+   per model: its `quotaId` contains `PerProject` and not `PerModel`, and its `quotaDimensions` have no `model`. **IF**
+   it is shared, **THEN THE SYSTEM SHALL** stop the chain and not try the remaining fallback models. **OTHERWISE** (a
+   per-model quota, any other violation, no violation, or a body that cannot be read or parsed) **THE SYSTEM SHALL** try
+   the next model as today, because each model has its own free quota.
+4. **WHEN** the chain ends without a success, whether every model was tried or the chain was stopped by 13.3, and at
+   least one attempt was a quota attempt, **THE SYSTEM SHALL** make `generateMetered` throw a distinct
+   `QuotaExhaustedError`, with a fixed message that holds no body and no key. **WHEN** no attempt was a quota attempt,
+   it throws as before.
+5. **WHEN** the guard (`BudgetedModelClient`) catches `QuotaExhaustedError` **THE SYSTEM SHALL** mark itself denied, so
+   that the routes answer 503 with `RESTING_MESSAGE` (Requirements 1.9, 2.9, 8.6) and the eval stops as on a refusal
+   (Requirement 12.12), and **THE SYSTEM SHALL** refuse every later `generate` on the same guard without calling the
+   model and without reserving anything, so that paw-core's retry spends no more quota. No new state outlives the
+   request.
+6. **WHEN** an attempt is a quota attempt **THE SYSTEM SHALL** charge it 0 cents, because Google does not bill it. The
+   reservation of the whole chain before the call is unchanged (7.8, 7.9), so the worst-case numbers do not change. A
+   404 and every other failure keep the rule of 7.10.
+7. **THE SYSTEM SHALL** update every note that says otherwise: the design's "Cost accounting" (step 5 and "Why the whole
+   chain is reserved") and the sentence of `apps/api/README.md` that says "An attempt that reported no token counts (a
+   timeout, a network error, an HTTP error) is charged its ceiling."
+8. **THE SYSTEM SHALL** give `apps/api/README.md` a section on running on the free tier: create the key in a Google AI
+   Studio project with no billing account, so no bill is possible; when the day's free quota ends Gemini answers 429
+   `RESOURCE_EXHAUSTED`, the paw rests (grant and bind answer 503 "The paw is resting..." and the site serves the ready
+   examples), and daily free quotas reset at midnight Pacific time; the budget guard still counts paid-tier prices on
+   paper, as a second fence.
+9. **THE SYSTEM SHALL** test, with a stubbed `fetch` only and never the network: a 429 on the primary with a per-model
+   `QuotaFailure` tries the next model; a per-project `QuotaFailure` stops the chain after one attempt; a 429 on every
+   model gives 503 with `RESTING_MESSAGE` on `/api/grant` and on `/api/bind`; `RESOURCE_EXHAUSTED` in a body with
+   another status counts too; a quota attempt costs 0 cents and `spentCents` does not move; after a quota answer
+   paw-core's retry makes no second HTTP call; the key and the body never reach a log.
