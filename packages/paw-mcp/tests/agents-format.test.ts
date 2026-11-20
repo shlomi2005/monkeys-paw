@@ -26,9 +26,17 @@ const text = (name: string): string => readFileSync(join(AGENTS, `${name}.json`)
 const load = (name: string): Agent => JSON.parse(text(name)) as Agent;
 
 const EXPECTED: Record<string, { tools: string[]; mcp: boolean; resources: string[] }> = {
-  paw: { tools: ['read', '@monkeys-paw/paw_curse'], mcp: true, resources: ['curse-taxonomy.md', 'tone.md', 'product.md'] },
+  paw: {
+    tools: ['read', '@monkeys-paw/paw_rules', '@monkeys-paw/paw_check_curses'],
+    mcp: true,
+    resources: ['curse-taxonomy.md', 'tone.md', 'product.md'],
+  },
   genie: { tools: ['read'], mcp: false, resources: ['tone.md', 'product.md'] },
-  judge: { tools: ['read', '@monkeys-paw/paw_bind'], mcp: true, resources: ['curse-taxonomy.md', 'tone.md', 'iron-rules.md'] },
+  judge: {
+    tools: ['read', '@monkeys-paw/paw_rules', '@monkeys-paw/paw_check_verdict'],
+    mcp: true,
+    resources: ['curse-taxonomy.md', 'tone.md', 'iron-rules.md'],
+  },
   qa: { tools: ['read', 'shell'], mcp: false, resources: ['tech.md', 'structure.md', 'iron-rules.md'] },
   legal: { tools: ['read'], mcp: false, resources: ['iron-rules.md', 'product.md', 'tone.md'] },
 };
@@ -122,6 +130,33 @@ describe('.kiro/agents', () => {
     expect(judge).toContain('"property"');
     expect(judge).toContain('"specific"');
     expect(load('genie').prompt).toContain('at most 25 words');
-    expect(load('paw').prompt).toContain('paw_curse');
+  });
+
+  it('paw follows the local flow: paw_rules curse, write the curses, paw_check_curses, one fix, and no remote tool', () => {
+    const { prompt, tools } = load('paw');
+    expect(prompt.split('\n')[0]).toContain('paw_rules and paw_check_curses');
+    expect(prompt).toContain('Call paw_rules with kind "curse" once');
+    expect(prompt).toContain('Write 3 to 5 curses yourself');
+    expect(prompt).toContain('Call paw_check_curses with the requirement and your curses');
+    expect(prompt).toContain('fix the curses and call it once more');
+    expect(prompt).toContain('at most 500 characters');
+    expect(prompt).toContain('If the paw tools are missing, say so in one line and stop');
+    expect(prompt).not.toContain('paw_curse');
+    expect(prompt).not.toContain('paw_bind');
+    expect(tools.some((t) => /paw_curse|paw_bind/.test(t))).toBe(false);
+  });
+
+  it('judge follows the local flow: paw_rules bind, strict verdict, paw_check_verdict, one fix, and no remote tool', () => {
+    const { prompt, tools } = load('judge');
+    expect(prompt.split('\n')[0]).toContain('paw_rules and paw_check_verdict');
+    expect(prompt).toContain('call paw_rules with kind "bind" once');
+    expect(prompt).toContain('Judge strictly: if in doubt, closed is false');
+    expect(prompt).toContain('call paw_check_verdict with the curse, the amendment, its kind and your verdict');
+    expect(prompt).toContain('fix the verdict and call paw_check_verdict once more');
+    expect(prompt).toContain('{"closed": false, "reason": "The verdict did not pass its check."}');
+    expect(prompt).toContain('This mode needs no tool');
+    expect(prompt).not.toContain('paw_curse');
+    expect(prompt).not.toContain('paw_bind');
+    expect(tools.some((t) => /paw_curse|paw_bind/.test(t))).toBe(false);
   });
 });

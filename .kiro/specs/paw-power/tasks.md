@@ -177,7 +177,7 @@ or `packages/paw-mcp/src` ends with `pnpm -C packages/paw-core build` (so `paw-m
     five tools, `mode=remote api=<origin>`, `paw_curse` reaches the stub); both check JSON-RPC-only stdout and no
     requirement on stderr. Final counts: `paw-core` 123, `paw-mcp` 246 (19 files, run again after the last bundle
     rebuild, `bundle-fresh` green), `apps/api` 328.
-- [ ] 12. Wiring, agents, skills, docs and their format tests. (Req 8.2, 8.3, 8.6, 9, 11, 14.4, 14.6, 15.3, 17.1–17.3, 17.7)
+- [x] 12. Wiring, agents, skills, docs and their format tests. (Req 8.2, 8.3, 8.6, 9, 11, 14.4, 14.6, 15.3, 17.1–17.3, 17.7)
   1. `.kiro/hooks/paw-reviews-requirements.json`: the local-mode hook of design "Hooks (a)", prompt and description as
      written there; trigger and matcher unchanged. Copy it byte for byte to
      `powers/monkeys-paw/skills/spec-loophole-hook/references/paw-reviews-requirements.json`.
@@ -196,6 +196,19 @@ or `packages/paw-mcp/src` ends with `pnpm -C packages/paw-core build` (so `paw-m
      `repo-wiring.test.ts` as in design "Testing strategy" (new hook prompt and description, the `paw` and `judge` tool
      lists, version `0.2.0`, README wording, steering names, the copy check, no absolute path or secret-shaped string).
   7. Run the whole `paw-mcp` suite (one process) and `pnpm -C packages/paw-mcp typecheck`. Do not run `kiro-cli`.
+  - Done (20.11.2026): the hook `.kiro/hooks/paw-reviews-requirements.json` is the local-mode hook of design "Hooks (a)"
+    (prompt and description as written there, trigger and matcher unchanged), and `cp` made the reference copy under
+    `spec-loophole-hook/references/` byte-identical (`cmp` clean). `paw.json` (`read`, `paw_rules`, `paw_check_curses`) and
+    `judge.json` (`read`, `paw_rules`, `paw_check_verdict`) have the local-flow prompts (8 lines each, no `paw_curse` or
+    `paw_bind`); their read-only rules and `genie`, `qa`, `legal` are unchanged. `curse-a-spec` is the local flow with the
+    strict-Judge note, `spec-loophole-hook` says one agent loop of your credits, no Paw API call, no `PAW_API_URL`. The
+    README (43 lines) and the `plugin.json` description say the three things first and drop the placeholder-URL paragraph;
+    both `mcp.json` files are unchanged. `tech.md` and `structure.md` name the two modes and the three local tools. Extra
+    fix from the task 10 review: `instructions.ts` has one `FLOW_INSTRUCTIONS` constant; the local text starts "Local mode."
+    and the remote text "Remote mode.", and the remote text says only the three local tools call no model and no server.
+    Format tests updated in `hooks-format`, `agents-format`, `power-format`, `repo-wiring` and `tools` (instructions); the
+    bundle was rebuilt (793,432 bytes, `minify: false`). `paw-mcp`: 257 tests pass (was 246), typecheck clean,
+    `bundle-fresh` green after the rebuild. `kiro-cli` was not run.
 - [ ] 13. Reviewer task, not an agent task: a real MCP check over stdio, in both modes. Build nothing new; use the
   committed bundle. (a) Local: no `PAW_API_URL` (also try the literal `${PAW_API_URL}` and an empty value). Run
   `initialize`, `tools/list` (exactly `paw_rules`, `paw_check_curses`, `paw_check_verdict`), `paw_rules` with `curse` and

@@ -84,6 +84,16 @@ describe('tech.md and structure.md', () => {
     }
   });
 
+  it('name the two modes and the three local tools, and no longer call paw-mcp only a thin client of apps/api', () => {
+    for (const text of [tech, structure]) {
+      for (const part of ['paw_rules', 'paw_check_curses', 'paw_check_verdict', 'Local (the default)', 'Remote (`PAW_API_URL` is a usable URL)']) {
+        expect(text, part).toContain(part);
+      }
+      expect(text).not.toMatch(/A thin client of `apps\/api`/);
+      expect(text).toMatch(/no longer only a thin client of `apps\/api`/i);
+    }
+  });
+
   it('structure.md lets paw-mcp import paw-core, the SDK, zod and Node, and never the apps', () => {
     expect(structure).toMatch(/- `packages\/paw-mcp` imports `paw-core`, `@modelcontextprotocol\/sdk`, `zod` and Node APIs\. Never imports from `apps\/web` or `apps\/api`\./);
   });

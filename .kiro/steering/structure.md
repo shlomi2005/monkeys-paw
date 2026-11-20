@@ -18,7 +18,7 @@ MonkeysPaw/
 │   └── api/               # Hono server — the only model caller
 ├── packages/
 │   ├── paw-core/          # pure logic shared by web, api, paw-mcp
-│   └── paw-mcp/           # MCP server (stdio): paw_curse, paw_bind
+│   └── paw-mcp/           # MCP server (stdio): local tools; paw_curse, paw_bind in remote mode
 ├── powers/
 │   └── monkeys-paw/       # Kiro power: manifest, skills, committed bundle (server/paw-mcp.mjs)
 ├── docs/                  # product brief, art, write-up
@@ -57,7 +57,7 @@ packages/paw-core/
 
 ### `packages/paw-mcp` — the MCP server
 
-Depends on `paw-core`, `@modelcontextprotocol/sdk` and `zod`. Exposes the tools `paw_curse` and `paw_bind` over stdio and calls `apps/api`. `pnpm bundle` builds it with esbuild into `powers/monkeys-paw/server/paw-mcp.mjs`, which is committed. Separate spec (`paw-power`).
+Depends on `paw-core`, `@modelcontextprotocol/sdk` and `zod`. Works in two modes over stdio. Local (the default) exposes `paw_rules`, `paw_check_curses` and `paw_check_verdict`, which call no model and no network. Remote (`PAW_API_URL` is a usable URL) adds `paw_curse` and `paw_bind`, which call `apps/api`. It is no longer only a thin client of `apps/api`. `pnpm bundle` builds it with esbuild into `powers/monkeys-paw/server/paw-mcp.mjs`, which is committed. Separate spec (`paw-power`).
 
 ### `powers/monkeys-paw` — the Kiro power
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { LOCAL_INSTRUCTIONS, REMOTE_INSTRUCTIONS } from '../src/instructions';
+import { FLOW_INSTRUCTIONS, LOCAL_INSTRUCTIONS, REMOTE_INSTRUCTIONS } from '../src/instructions';
 import { connectPaw, startStub, textOf, type Connected, type Stub } from './stub-api';
 
 let connected: Connected | undefined;
@@ -92,13 +92,30 @@ describe('instructions (Req 21.5)', () => {
     expect(text).not.toContain('paw_bind');
   });
 
-  it('remote initialize carries the local text and the two remote tools', async () => {
+  it('remote initialize carries the remote text: the shared flow, the three local tools, and the two remote tools', async () => {
     connected = await connectPaw({ mode: 'remote', baseUrl: 'http://127.0.0.1:9' });
     const text = connected.client.getInstructions();
     expect(text).toBe(REMOTE_INSTRUCTIONS);
-    expect(text?.startsWith(LOCAL_INSTRUCTIONS)).toBe(true);
     expect(text).toContain('paw_curse and paw_bind');
     expect(text).toContain('PAW_API_URL');
+  });
+
+  it('local text starts "Local mode.", remote text starts "Remote mode.", and both hold the shared flow', () => {
+    expect(LOCAL_INSTRUCTIONS.startsWith('Local mode. ')).toBe(true);
+    expect(REMOTE_INSTRUCTIONS.startsWith('Remote mode. ')).toBe(true);
+    expect(LOCAL_INSTRUCTIONS).toContain(FLOW_INSTRUCTIONS);
+    expect(REMOTE_INSTRUCTIONS).toContain(FLOW_INSTRUCTIONS);
+    expect(LOCAL_INSTRUCTIONS).not.toContain('Remote mode');
+    expect(REMOTE_INSTRUCTIONS).not.toContain('Local mode');
+  });
+
+  it('remote text limits "no model and no server" to the three local tools and names the API for the other two', () => {
+    expect(REMOTE_INSTRUCTIONS).toContain('paw_rules, paw_check_curses and paw_check_verdict call no model and no server.');
+    // The only "no server" claim in the remote text is the one that names the three local tools.
+    expect(REMOTE_INSTRUCTIONS.match(/no server/g)).toHaveLength(1);
+    expect(REMOTE_INSTRUCTIONS).not.toContain('These tools call no');
+    expect(REMOTE_INSTRUCTIONS.endsWith('paw_curse and paw_bind call the Paw API at the origin in PAW_API_URL.')).toBe(true);
+    expect(LOCAL_INSTRUCTIONS.endsWith('These tools call no model and no server.')).toBe(true);
   });
 
   it('remote mode without a baseUrl is refused at creation', async () => {

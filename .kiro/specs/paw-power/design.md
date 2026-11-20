@@ -403,6 +403,9 @@ packages) and the new tools. Every task that changes `packages/paw-mcp/src` or `
 **Version 0.2.0 (task 11): 793,239 bytes, `minify: false`** (under 1 MB, so the size rule keeps it unminified; still
 eight third-party packages, `NOTICE.md` unchanged; esbuild 0.28.2).
 
+**After the instructions fix (task 12): 793,432 bytes, `minify: false`** (the local and remote instruction texts now
+share one flow constant and start with "Local mode." and "Remote mode."; same eight packages).
+
 ---
 
 ## Power layout

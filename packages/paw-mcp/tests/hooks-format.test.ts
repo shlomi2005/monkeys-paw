@@ -108,15 +108,32 @@ describe('.kiro/hooks', () => {
     });
   }
 
-  it('paw-reviews-requirements asks for at most 3 requirements and calls, forbids edits, and handles a missing tool', () => {
+  it('paw-reviews-requirements runs in local mode: limits 3, 1 and 6, one retry, no file changes, a missing tool stops it', () => {
     const hook = load('paw-reviews-requirements.json').json.hooks[0]!;
     const prompt = hook.action.prompt!;
     expect(hook.action.type).toBe('agent');
+    expect(prompt).toContain('the tool paw_rules once, with kind "curse"');
+    expect(prompt).toContain('the tool paw_check_curses');
     expect(prompt).toContain('at most 3 requirements');
-    expect(prompt).toContain('paw_curse once');
+    expect(prompt).toContain('condensed to at most 500 characters');
+    expect(prompt).toContain('call paw_check_curses once more');
+    expect(prompt).toContain('If it fails again, skip that requirement and say so in one line');
     expect(prompt).toContain('Never edit, create or delete any file');
-    expect(prompt).toContain('missing or returns an error, say so in one line and stop');
+    expect(prompt).toContain('If the paw tools are missing, say so in one line and stop');
+    expect(prompt).not.toContain('paw_curse');
+    expect(prompt).not.toContain('paw_bind');
+    expect(prompt).not.toContain('PAW_API_URL');
+    // 1 paw_rules call, and 3 requirements x (1 check + 1 retry) = 6 paw_check_curses calls at most.
+    expect(prompt.match(/paw_rules/g)).toHaveLength(1);
     expect(hook.timeout).toBeUndefined();
+  });
+
+  it('paw-reviews-requirements description says your own Kiro agent and no server of ours, and never mentions API calls', () => {
+    const { description } = load('paw-reviews-requirements.json').json.hooks[0]!;
+    expect(description).toContain('Runs on your own Kiro agent');
+    expect(description).toContain('one agent loop per save, on your credits');
+    expect(description).toContain('Sends nothing to any server of ours');
+    expect(description).not.toMatch(/API call|Paw API/i);
   });
 
   it('paw-reviews-requirements is byte-identical to the power reference copy', () => {

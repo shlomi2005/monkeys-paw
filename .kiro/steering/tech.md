@@ -34,7 +34,7 @@ The API is the **only** place that calls the model. The client never sees the AP
 | Package           | Role                                                                 |
 |-------------------|----------------------------------------------------------------------|
 | `packages/paw-core` | Pure TypeScript: types, zod schemas, prompt builders, curse/binding/judge/export logic. Zero DOM or Node-framework imports. Consumed by web, api, and `paw-mcp`. |
-| `packages/paw-mcp` | The MCP server (stdio) with the tools `paw_curse` and `paw_bind`, built on `@modelcontextprotocol/sdk` and `zod`. A thin client of `apps/api`. Depends on `paw-core`. |
+| `packages/paw-mcp` | The MCP server (stdio), built on `@modelcontextprotocol/sdk` and `zod`. Two modes. Local (the default) has three tools, `paw_rules`, `paw_check_curses` and `paw_check_verdict`, that call no model and no network. Remote (`PAW_API_URL` is a usable URL) adds `paw_curse` and `paw_bind`, which call `apps/api`. No longer only a thin client of `apps/api`. Depends on `paw-core`. |
 | `powers/monkeys-paw` | The Kiro power: `plugin.json`, `mcp.json`, three skills, and the committed bundle `server/paw-mcp.mjs` (esbuild output of `paw-mcp`, with `NOTICE.md`). |
 
 ## Testing
