@@ -69,3 +69,9 @@ component has a pure interface. All work happens in `packages/paw-core` unless n
   one member can still delete it") with every `closed` verdict; `exportSpec` assembles those and keeps the
   template only as a fallback. Criterion 1 becomes the original wish rewritten in EARS. (Req 6, P1, P2)
   Done: `Grant.wishCriterion` (Genie-written EARS, kept by `grantWish` only if it starts with an EARS keyword and has SHALL); `exportSpec` uses it as criterion 1 (EARS fallback otherwise), all criteria are plain EARS, and every property line is `- *For any* … [`type`] (Requirement 1.k)`.
+
+## Real cost accounting
+
+- [ ] **26. Real cost accounting** — each model call is charged by its real tokens at the model's price, a ceiling is
+  reserved before the call so the daily budget is not passed (except by the documented excess), and the fixed
+  per-call estimate is removed. Done in `apps/api`; see paw-api tasks 102-109. (Req 7.5, 7.6, 7.7)

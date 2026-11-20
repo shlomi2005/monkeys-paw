@@ -134,3 +134,11 @@ are capped and the service stays up.
 3. **IF** the daily budget is exceeded **THE SYSTEM SHALL NOT** call the model under any circumstances.
 4. **WHILE** in examples-only mode **THE SYSTEM SHALL** return pre-computed grants for the 25 example wishes without a
    model call.
+5. **WHEN** a model call ends **THE SYSTEM SHALL** charge the daily budget its real cost: the tokens the model
+   reported, at that model's price, summed over every attempt of the call. A fixed per-call estimate is not
+   used anywhere.
+6. **WHEN** a model call is requested **THE SYSTEM SHALL** reserve a ceiling for it first (the largest cost the
+   call can reach, over its whole fallback chain) and refuse the call if the spend plus the reservations plus
+   that ceiling would pass the daily budget, so parallel calls cannot pass the budget.
+7. **IF** the real cost of a call turns out to be above its ceiling **THE SYSTEM SHALL** still charge it, and
+   refuse every later call. The daily spend can pass the budget only by that excess.

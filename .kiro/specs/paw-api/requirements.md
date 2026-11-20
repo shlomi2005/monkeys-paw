@@ -45,7 +45,13 @@ runtime entry should be amended to Node 24 when convenient.
 2. **IF** `wish.text` is empty or whitespace-only **THE SYSTEM SHALL** return HTTP 400 with an in-character
    error message and no model call.
 3. **IF** the wish concerns harming real people, hate, or gore **THE SYSTEM SHALL** refuse it with HTTP 400
-   and a short in-character line (iron-rules.md §3), making no model call.
+   and a short in-character line (iron-rules.md §3), making no model call. Game roles are not real people:
+   **WHEN** a combat verb (kill, attack, shoot, stab, hurt, harm, injure, poison, assault, with their
+   inflections) is aimed only at a game-role word (player, character, NPC, avatar, enemy, monster, opponent,
+   mob, in singular or plural) **THE SYSTEM SHALL** let the wish pass, so "Players can attack other players"
+   is granted. A social-harm verb (harass, bully, threaten, stalk, abuse, hate, torture, murder) aimed at a game
+   role, and any harm verb aimed at a real-person word (users, people, a named person or group), **THE SYSTEM
+   SHALL** still refuse.
 4. **WHEN** the budget or rate limit is exceeded **THE SYSTEM SHALL** return HTTP 503 with an in-character
    message directing the user to the examples (Requirement 8), making no model call.
 5. **WHEN** the model call succeeds **THE SYSTEM SHALL** return HTTP 200 with the validated `Grant` as JSON,
@@ -53,8 +59,10 @@ runtime entry should be amended to Node 24 when convenient.
 6. **IF** the model output fails zod validation after retry (iron-rules.md §6) **THE SYSTEM SHALL** return
    the fallback `Grant` from `paw-core` (single generic curse) with HTTP 200, so the client always gets a
    usable response.
-7. **WHEN** a Grant is returned **THE SYSTEM SHALL** record the model call cost via `recordCall` (Requirement 7)
-   so the daily budget counter stays accurate.
+7. **WHEN** a Grant is returned **THE SYSTEM SHALL** have charged every model call of the request to the daily
+   budget at its real token cost (Requirement 7), so the daily budget counter stays accurate.
+8. **IF** `wish.text` is longer than 500 characters after trimming, or `wish.context` is longer than 200
+   characters, **THE SYSTEM SHALL** return HTTP 400 with an in-character error and no model call.
 
 ### Requirement 2: Bind a loophole (POST /api/bind)
 
@@ -76,8 +84,13 @@ accepts it, so I can close loopholes one at a time.
    attached) and `verdict` is the Judge's `Verdict` including (after task 25) `property` when closed.
 5. **IF** the model output fails zod validation after retry **THE SYSTEM SHALL** fall back to
    `closed: false` (iron-rules.md §6) and return HTTP 200 with the fallback verdict.
-6. **WHEN** the bind endpoint completes a model call **THE SYSTEM SHALL** record the cost via `recordCall`
-   (Requirement 7).
+6. **WHEN** the bind endpoint makes model calls **THE SYSTEM SHALL** have charged each of them to the daily
+   budget at its real token cost (Requirement 7).
+7. **IF** `clause` is longer than 1000 characters after trimming **THE SYSTEM SHALL** return HTTP 400 with an
+   in-character error and no model call.
+8. **IF** the `loophole` of the curse being judged is longer than 1000 characters **THE SYSTEM SHALL** return
+   HTTP 400 with an in-character error and no model call. (`story` is already limited to 360 characters by
+   `GrantSchema`.)
 
 ### Requirement 3: Export the spec (POST /api/export)
 
@@ -143,9 +156,38 @@ so the Paw gets high-quality, schema-valid results at low cost.
    if the model does not respond in time, the call throws and the caller (paw-core) retries once then falls
    back (iron-rules.md §6).
 5. **THE SYSTEM SHALL NOT** log the full prompt text or the model's raw response in production logs; only
-   metadata (model name, duration, cost estimate, success/failure) is logged.
+   metadata (model name, duration, token counts, finish reason, success/failure) is logged. Token counts are
+   numbers and the finish reason is an enum. Never the prompt, the response text or the key.
 6. **WHEN** a model call completes **THE SYSTEM SHALL** return the raw text or parsed JSON to paw-core, which
    performs zod validation.
+7. **THE SYSTEM SHALL** use `gemini-3.6-flash` as the default model (`DEFAULT_MODEL`), with the default
+   fallbacks `gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite` tried in order on HTTP 503, 429 and
+   404. The name `gemini-3.5-flash` is retired and routes to `gemini-3.6-flash`; it may still be set by the
+   operator.
+8. **WHEN** `generate` sends a request **THE SYSTEM SHALL** set `generationConfig.thinkingConfig.thinkingLevel`
+   to `low` on every attempt, for every model in the chain.
+9. **WHEN** `generate` sends a request **THE SYSTEM SHALL** set `generationConfig.maxOutputTokens` to
+   `MAX_OUTPUT_TOKENS`, one exported constant that is the same for every task. It is a hard cap on thinking
+   tokens plus response tokens together. Its value covers the largest valid grant (5 curses at their schema
+   limits) with headroom for low-level thinking, is derived in a comment next to the constant, and is not
+   above 8192 unless the comment says why.
+10. **IF** the first candidate has `finishReason: "MAX_TOKENS"`, or its text is not complete JSON, **THE SYSTEM
+    SHALL** treat the attempt as failed: it throws, paw-core retries once then falls back (iron-rules.md §6),
+    and the attempt is still charged by its usage (Requirement 7). It does not move on to the next model; only
+    HTTP 503, 429 and 404 do.
+11. **THE SYSTEM SHALL** expose `plan(prompt)` on `GeminiModelClient`: a pure function with no I/O that returns
+    one entry `{ model, inputTokens, maxOutputTokens }` per model of the chain, in order. `inputTokens` is
+    `ceil((prompt.length + length of the JSON of the response schema) / 3)`, with schema length 0 when the
+    prompt has no schema.
+12. **THE SYSTEM SHALL** expose `generateMetered(prompt, onAttempt)` on `GeminiModelClient`. It behaves as
+    `generate` does and calls `onAttempt(report)` exactly once per HTTP attempt, whatever happened (success,
+    timeout, network error, any HTTP status, unreadable body, MAX_TOKENS, bad JSON), before the next attempt
+    starts and before the returned promise settles. The report is `{ model, inputTokens, maxOutputTokens,
+    modelVersion?, usage? }`. `usage` is `{ promptTokens, outputTokens }`, where `outputTokens` is
+    `candidatesTokenCount + thoughtsTokenCount` (a missing count is 0). It is present only when the response
+    carried `usageMetadata` with a finite, non-negative `promptTokenCount`.
+13. **THE SYSTEM SHALL** keep `generate(prompt)` as `generateMetered(prompt, () => {})` and leave `paw-core`'s
+    `ModelClient` interface unchanged.
 
 ### Requirement 7: Budget and per-IP rate-limit enforcement
 
@@ -154,21 +196,64 @@ so costs are capped and the service stays up (iron-rules.md §5).
 
 **Acceptance criteria:**
 
-1. **WHEN** any endpoint is about to make a model call **THE SYSTEM SHALL** call `canCall(state, config, now)`
-   from `paw-core/src/budget.ts` first; if it returns `false`, the call is refused and the endpoint returns
-   HTTP 503 (grant/bind) or enters examples-only mode.
-2. **WHEN** a model call succeeds **THE SYSTEM SHALL** call `recordCall(state, costCents, now)` to update the
-   in-memory budget state so subsequent calls see the updated counters.
+1. **WHEN** `POST /api/grant` or `POST /api/bind` is about to make model calls **THE SYSTEM SHALL** call
+   `canCall(state, config, now)` from `paw-core/src/budget.ts` first (per-IP limit and daily budget); if it
+   returns `false`, the request is refused with HTTP 503 or the server enters examples-only mode. Each
+   `generate` call is then gated again by the reservation rule (7.8).
+2. **WHEN** a `generate` call ends, whatever the outcome, **THE SYSTEM SHALL** release its reservation and
+   charge its real cost to the in-memory daily spend (7.10). No fixed per-call cost is charged.
 3. **THE SYSTEM SHALL** hold all budget state in memory (per-IP counters and daily spend); no persistent
    storage (iron-rules.md §2). Counters reset on server restart.
-4. **THE SYSTEM SHALL** use the client IP (from the `x-forwarded-for` header or the Hono request) as the
-   rate-limit key, never storing any identity or wish text with it.
+4. **THE SYSTEM SHALL** key the per-IP rate limit on the client address chosen by `TRUSTED_PROXY_HOPS`
+   (default 1; an integer of 0 or more, anything else means 1), never storing any identity or wish text with it.
+   Split `x-forwarded-for` into trimmed, non-empty entries. **WHEN** hops is at least 1 and the header has at
+   least `hops` entries **THE SYSTEM SHALL** use `entries[entries.length - hops]`, the address the outermost
+   trusted proxy saw. **WHEN** hops is 0, the header is absent, or it has fewer entries than hops **THE SYSTEM
+   SHALL** use the socket address. A client that fakes entries at the left of the header does not change its
+   key.
 5. **WHEN** the per-IP window has elapsed **THE SYSTEM SHALL** reset that IP's counter, as modeled by
    `canCall` returning `true` for the first call in a new window.
 6. **WHEN** the daily budget is exhausted **THE SYSTEM SHALL** enter examples-only mode (Requirement 8) and
    never call the model under any circumstances.
 7. **WHILE** the server runs **THE SYSTEM SHALL** expose the current budget state via `GET /api/health` so the
-   operator can monitor spend.
+   operator can monitor spend. `remainingCents` is `max(0, dailyBudgetCents - spentCents - reservedCents)`.
+   The cents in the health response are fractional, non-negative numbers.
+8. **WHEN** `generate` is called **THE SYSTEM SHALL** reserve a ceiling before the inner call. If
+   `spentCents + reservedCents + ceiling` is above `dailyBudgetCents`, **THE SYSTEM SHALL** refuse the call
+   with `BudgetExhaustedError`, mark the guard as denied and make no inner call. The check and the
+   reservation happen in the same synchronous tick, with no `await` between them, so parallel calls cannot
+   all pass the check. A refusal is treated as an exhausted budget (Requirements 1.4, 8.3).
+9. **THE SYSTEM SHALL** compute the ceiling as the sum, over every model of the fallback chain given by
+   `plan(prompt)`, of `inputTokens × inputRate + maxOutputTokens × outputRate` at that model's price. The whole
+   chain is reserved because settling may charge every attempt of a fallback chain.
+10. **WHEN** a `generate` call ends **THE SYSTEM SHALL**, in a `finally`, subtract its ceiling from
+    `reservedCents` and add its charge to `spentCents`. The charge is the sum over its attempt reports: an
+    attempt with usage costs `promptTokens × inputRate + outputTokens × outputRate` at the price of the model
+    that answered (`modelVersion` when present, else the requested model); an attempt without usage costs its
+    own ceiling. **IF** no report arrived at all **THE SYSTEM SHALL** charge the whole ceiling.
+11. **IF** the real charge is above the ceiling **THE SYSTEM SHALL** still charge it, because it is real money.
+    The spend can then pass `dailyBudgetCents` only by that excess (real prompt tokens above the chars/3
+    estimate, or an answering model pricier than the one requested), and every later call is refused.
+12. **THE SYSTEM SHALL** price tokens from a table in `apps/api/src/budget/prices.ts`, in USD per million
+    tokens, at the rates in force from 1 January 2027 (higher than today's, so the guard over-counts and never
+    under-counts). Cents are `tokens × usdPerMTok / 10_000`. `priceFor(table, modelId)` strips a leading
+    `models/`, then uses the exact match, else the longest key K such that the id starts with `K-`, else the most
+    expensive row (the highest input rate and the highest output rate in the table).
+13. **WHERE** `PRICE_TABLE_JSON` is set to a non-empty JSON object of `{ "<model id>": { "inputUsdPerMTok": n,
+    "outputUsdPerMTok": n } }` with every rate finite and 0 or more **THE SYSTEM SHALL** use it instead of the
+    default table. **IF** it is set but invalid **THE SYSTEM SHALL** use the default table and log one line,
+    `{"event":"price_table_invalid"}`, containing no part of the value.
+14. **THE SYSTEM SHALL** keep cents as fractional numbers everywhere in the state and never round them. Only the
+    health output may round, for display.
+15. **THE SYSTEM SHALL** default `DAILY_BUDGET_CENTS` to 200 (two dollars a day). It is parsed with `Number`
+    and may be fractional; a missing, non-finite or negative value means 200.
+16. **WHEN** the day rolls over **THE SYSTEM SHALL** reset `spentCents` only. `reservedCents` is never reset,
+    because calls started before the roll are still in flight.
+17. **THE SYSTEM SHALL NOT** charge a fixed per-call cost anywhere. `MODEL_CALL_COST_CENTS`,
+    `DEFAULT_MODEL_CALL_COST_CENTS` and every `costPerCallCents` option are removed.
+18. **THE SYSTEM SHALL** state in `apps/api/README.md` the worst-case cost of one grant and of one bind, with
+    the arithmetic, and a unit test **SHALL** recompute both from the real prompt builders, `plan()` and the
+    price table and check that the README states them.
 
 ### Requirement 8: Examples-only degraded mode
 
@@ -269,3 +354,12 @@ results so prompt changes are gated by quality and the examples cache is kept fr
    with an error and no model calls.
 8. **THE SYSTEM SHALL** make this script the release gate for prompt changes: a pull request that modifies
    `paw-core/src/prompts.ts` must pass the eval (non-zero exit) before merge.
+9. **WHEN** the eval script runs **THE SYSTEM SHALL** make every model call through the same budget guard as the
+   server (reserve, refuse, settle; Requirement 7), with the same price table and a `DAILY_BUDGET_CENTS`
+   from the environment.
+10. **IF** the guard refuses a call during the eval **THE SYSTEM SHALL** exit with status 1 and a message that
+    contains "budget exhausted", write neither `docs/eval/latest.md` nor the examples cache, and never print or
+    record a pass.
+11. **THE SYSTEM SHALL** set `DAILY_BUDGET_CENTS` in the CI eval step of `.github/workflows/prompt-eval.yml`
+    to `ceil(5 × worst case per grant)`, the cap for one default eval (5 golden wishes, no binds) with every
+    call at its worst case, and document the value and its arithmetic in `apps/api/README.md`.

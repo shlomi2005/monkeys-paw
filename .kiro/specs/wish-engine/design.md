@@ -300,6 +300,15 @@ The API layer holds the mutable counters (in-memory, short-lived — iron-rules 
 model invocation. Over budget → examples-only mode: the API returns pre-computed grants for the 25 example wishes
 without calling the model.
 
+**Real cost accounting (paw-api tasks 102-109).** `canCall` and `recordCall` model the per-request check and the
+day boundary. The cost of each model call is not an estimate. The API guard reserves a ceiling before every
+`generate` (the sum, over the whole fallback chain, of input tokens × input price + output cap × output price),
+refuses the call if spent + reserved + ceiling would pass `dailyBudgetCents`, and afterwards settles to the real
+cost from the reported tokens, at the price of the model that answered, summed over every attempt. If the real
+cost passes the ceiling it is still charged and every later call is refused, so the spend can pass the cap only
+by that excess. Cents are fractional. The fixed per-call estimate is gone. Details: paw-api design,
+"Cost accounting".
+
 ## Correctness Properties
 
 These properties are verified with fast-check in `tests/properties.test.ts`. Each is a property-based test that
