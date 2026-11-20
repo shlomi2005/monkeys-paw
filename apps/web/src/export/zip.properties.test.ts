@@ -68,13 +68,15 @@ function crc32Of(data: Uint8Array): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Non-empty Unicode names that do not end with `/` (fflate reads those as folders) and are not
+ * Non-empty Unicode names that do not end with `/` (fflate reads those as folders), are not
  * `__proto__` (fflate returns a plain object, where that key sets the prototype instead of an entry;
- * the writer is fine, see the `__proto__` example test below).
+ * the writer is fine, see the `__proto__` example test below) and do not start with U+FEFF (fflate
+ * decodes names with a `TextDecoder` that strips a leading byte order mark, so the oracle returns the
+ * name without it; the writer is fine, see the BOM example test below).
  */
 const arbName = fc
   .fullUnicodeString({ minLength: 1, maxLength: 40 })
-  .filter((name) => !name.endsWith('/') && name !== '__proto__');
+  .filter((name) => !name.endsWith('/') && name !== '__proto__' && !name.startsWith('\uFEFF'));
 
 const arbFiles: fc.Arbitrary<ZipEntry[]> = fc.uniqueArray(
   fc.record({ name: arbName, content: fc.fullUnicodeString({ maxLength: 300 }) }),
@@ -92,18 +94,23 @@ const arbText = fc.oneof(
 // P17
 // ---------------------------------------------------------------------------
 
+/** The round trip of P17: fflate returns the same names and the same bytes. */
+function unzipReturnsSameFiles(files: ZipEntry[]): void {
+  const unzipped = unzipSync(buildZip(files, FIXED_CLOCK));
+  expect(Object.keys(unzipped).sort()).toEqual(files.map((f) => f.name).sort());
+  for (const file of files) {
+    expect(unzipped[file.name]).toEqual(ENCODER.encode(file.content));
+  }
+}
+
 describe('P17: zip round trip', () => {
   it('unzipping the output with fflate returns the same files', () => {
-    fc.assert(
-      fc.property(arbFiles, (files) => {
-        const unzipped = unzipSync(buildZip(files, FIXED_CLOCK));
-        expect(Object.keys(unzipped).sort()).toEqual(files.map((f) => f.name).sort());
-        for (const file of files) {
-          expect(unzipped[file.name]).toEqual(ENCODER.encode(file.content));
-        }
-      }),
-      { numRuns: numRuns() },
-    );
+    fc.assert(fc.property(arbFiles, unzipReturnsSameFiles), { numRuns: numRuns() });
+  });
+
+  // Seed 1540874629 once failed on a name that started with U+FEFF (shrunk to "\uFEFF "). Kept as a fixed run.
+  it('unzipping the output with fflate returns the same files (seed 1540874629)', () => {
+    fc.assert(fc.property(arbFiles, unzipReturnsSameFiles), { seed: 1540874629, numRuns: 300 });
   });
 
   it('writes a valid CRC-32, stored sizes, method 0 and UTF-8 names for every file', () => {
@@ -232,6 +239,23 @@ describe('zip.ts examples', () => {
   it('stores a file named __proto__ like any other (read back from the central directory)', () => {
     const bytes = buildZip([{ name: '__proto__', content: 'x' }], FIXED_CLOCK);
     expect(readCentralDirectory(bytes).map((e) => e.name)).toEqual(['__proto__']);
+  });
+
+  it('writes a name that starts with U+FEFF byte-exact, BOM included (the shrunk case of seed 1540874629)', () => {
+    const name = '\uFEFF '; // the counterexample fast-check shrank to: a byte order mark, then a space
+    const bytes = buildZip([{ name, content: '' }], FIXED_CLOCK);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const expected = [0xef, 0xbb, 0xbf, 0x20]; // UTF-8 of U+FEFF, then of the space
+    // Local header: flag bit 11 at offset 6, name length at 26, name at 30.
+    expect(view.getUint16(6, true) & 0x0800).toBe(0x0800);
+    expect(view.getUint16(26, true)).toBe(expected.length);
+    expect([...bytes.subarray(30, 30 + expected.length)]).toEqual(expected);
+    // Central directory, read by the test's own reader (it keeps the BOM).
+    const [entry] = readCentralDirectory(bytes);
+    expect(entry?.name).toBe(name);
+    expect(entry?.flags & 0x0800).toBe(0x0800);
+    // The reader limit: fflate's TextDecoder drops the leading BOM, so its key differs from the name written.
+    expect(Object.keys(unzipSync(bytes))).toEqual([' ']);
   });
 
   it('round-trips emoji and right-to-left names and content', () => {

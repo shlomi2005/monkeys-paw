@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // The whole page in poster mode (no scene attached), inside StrictMode, against a fake ApiClient. No network.
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -18,6 +18,8 @@ import { readText } from './styles/css-test-support';
 import { SessionProvider } from './state/SessionProvider';
 import { fakeApi, ok, RESTING } from './state/paw-session-test-support';
 import type { FakeApi } from './state/paw-session-test-support';
+import { LIVE_REPEAT_MARK } from './components/LiveRegion';
+import type { Scheduler } from './state/use-paw-session';
 
 // jsdom has no WebGL: the page runs in poster mode, and the probe must not print jsdom's "not implemented" error.
 vi.mock('./scene/webgl-support', () => ({ hasWebGL: () => false }));
@@ -27,10 +29,10 @@ const EXAMPLE_TEXT = 'Users can reset their password by email';
 const EXAMPLE_NAME = `Example. ${EXAMPLE_TEXT}. A small web shop`;
 const exampleEntry = { wish: { ...sampleWish(EXAMPLE_TEXT), id: 'ex-1', context: 'A small web shop' }, grant: sampleGrant() };
 
-function renderApp(api: FakeApi) {
+function renderApp(api: FakeApi, scheduler?: Scheduler) {
   return render(
     <StrictMode>
-      <SessionProvider api={api}>
+      <SessionProvider api={api} {...(scheduler === undefined ? {} : { scheduler })}>
         <App />
       </SessionProvider>
     </StrictMode>,
@@ -49,6 +51,34 @@ const circle = (name: RegExp | string): HTMLElement => screen.getByRole('button'
 const fingerText = (): string => document.querySelector('[data-paw-state-text]')?.textContent ?? '';
 const dialog = (): HTMLElement => document.querySelector('dialog') as HTMLElement;
 const dialogOpen = (): boolean => dialog().hasAttribute('open');
+const liveText = (): string =>
+  (document.querySelector('[data-live-region]')?.textContent ?? '').replaceAll(LIVE_REPEAT_MARK, '');
+
+/**
+ * A scheduler whose live-region gap timers (LIVE_GAP_MS) fire only when the test says so. A live message then stays on
+ * screen until `fireNext`, so a read cannot miss it however slow the machine is. Microtasks run as usual.
+ */
+function manualGapScheduler(): { scheduler: Scheduler; fireNext(): boolean } {
+  const timers: Array<() => void> = [];
+  return {
+    scheduler: {
+      after(fn) {
+        timers.push(fn);
+        return () => {
+          const at = timers.indexOf(fn);
+          if (at >= 0) timers.splice(at, 1);
+        };
+      },
+      microtask: (fn) => queueMicrotask(fn),
+    },
+    fireNext() {
+      const next = timers.shift();
+      if (next === undefined) return false;
+      act(next);
+      return true;
+    },
+  };
+}
 
 async function typeWish(text: string): Promise<void> {
   fireEvent.change(wishInput(), { target: { value: text } });
@@ -80,7 +110,8 @@ describe('App: a round from wish to stop', () => {
 
   it('grants a wish: stamp, narration, curls in poster mode, open circles', async () => {
     const api = newApi();
-    renderApp(api);
+    const gaps = manualGapScheduler();
+    renderApp(api, gaps.scheduler);
     await makeWish();
 
     expect(api.postGrant).toHaveBeenCalledWith({ text: SAMPLE_WISH_TEXT }, expect.anything());
@@ -96,9 +127,17 @@ describe('App: a round from wish to stop', () => {
     }
     expect(await screen.findByRole('button', { name: 'Stop and take the scroll' })).toBeTruthy();
     // The wish line is free again for the next round only after a rewrite; the live region said "Granted.".
-    await waitFor(() =>
-      expect(document.querySelector('[data-live-region]')?.textContent).toContain('Granted. 3 curses arrive.'),
-    );
+    // The gap timer is manual, so the live region still shows its first message however long the waits above took.
+    expect(liveText()).toContain('Granted. 3 curses arrive.');
+
+    // Let the queue play out. "Granted." came first, then one announcement per curse, in order.
+    const announced = [liveText()];
+    while (gaps.fireNext()) if (liveText() !== announced[announced.length - 1]) announced.push(liveText());
+    expect(announced).toHaveLength(4);
+    expect(announced[0]).toContain('Granted. 3 curses arrive.');
+    expect(announced[1]).toMatch(/^Curse 1, Permissions/);
+    expect(announced[2]).toMatch(/^Curse 2, Abuse/);
+    expect(announced[3]).toMatch(/^Curse 3, Data loss/);
   });
 
   it('opens the card with a pre-filled clause; a closed verdict closes it and one finger opens', async () => {
