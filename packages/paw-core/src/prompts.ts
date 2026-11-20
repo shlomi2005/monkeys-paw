@@ -5,25 +5,23 @@
 
 import type { Binding, Curse, JudgeMode, Wish } from './types';
 
-function contextLine(wish: Wish): string {
-  return wish.context ? `\nApp context: ${wish.context}` : '';
-}
+// Rule sections. Plain strings with no interpolation: each one is a contiguous
+// piece of the prompt it belongs to, so the builders below are composed from them
+// and paw-mcp's `paw_rules` can hand the same text to a Kiro agent (paw-power D17).
+// Do not reword them without running the golden-wish eval.
 
-/** Paw (adversary) — finds loopholes for a wish. */
-export function buildPawPrompt(wish: Wish): string {
-  return `Task: GRANT_WISH
+/** The Paw's role (buildPawPrompt, first paragraph). */
+export const PAW_ROLE = `You are the Paw, an adversary that finds loopholes in software requirements. The user made a wish; you grant it literally and expose every way it can be followed to the letter and go wrong.`;
 
-You are the Paw, an adversary that finds loopholes in software requirements. The user made a wish; you grant it literally and expose every way it can be followed to the letter and go wrong.
-
-Wish: ${wish.text}${contextLine(wish)}
-
-Produce 3 to 5 curses. Each curse is a short story (max 2 sentences, max 30 words). Each curse MUST be:
+/** The curse rules: how many curses, and the four things each one MUST be. */
+export const CURSE_RULES = `Produce 3 to 5 curses. Each curse is a short story (max 2 sentences, max 30 words). Each curse MUST be:
 - Specific to THIS wish: quote or point to the exact words in the wish that create the loophole (put them in the "loophole" field).
 - Plausible: something a real implementation could do while passing a literal reading.
 - Different from the other curses in this grant: each curse uses a different curse type (tag) or targets a different stakeholder.
-- Bindable: there is a clear clause that would close the loophole.
+- Bindable: there is a clear clause that would close the loophole.`;
 
-Curse taxonomy (use the tag EXACTLY as one of these, never abbreviate or invent):
+/** The curse taxonomy: the ten tags with their one-line meanings. */
+export const CURSE_TAXONOMY = `Curse taxonomy (use the tag EXACTLY as one of these, never abbreviate or invent):
 - permissions — who may do what; owners leaving, roles, delegation, admins.
 - time — deadlines, time zones, daylight saving, expiry, ordering of events.
 - money — rounding, currency, refunds, double charges, free loopholes.
@@ -33,24 +31,65 @@ Curse taxonomy (use the tag EXACTLY as one of these, never abbreviate or invent)
 - accessibility — people with disabilities, slow networks, small screens, other languages.
 - data-loss — deletion, overwrite, undo, backups.
 - concurrency — two users at once, retries, duplicates, race conditions.
-- edge-input — empty, unicode, emoji, right-to-left text, negative numbers, null.
+- edge-input — empty, unicode, emoji, right-to-left text, negative numbers, null.`;
 
-Guardrails (iron rules): PG-13 only. No gore. No real people. No hate. Refuse wishes about harming people with a short in-character line. Do not use film, game, or brand IP.
+/** The guardrails (iron rules) line. */
+export const GUARDRAILS = `Guardrails (iron rules): PG-13 only. No gore. No real people. No hate. Refuse wishes about harming people with a short in-character line. Do not use film, game, or brand IP.`;
+
+/** The "curses" part of the JSON shape that the Paw returns. */
+export const CURSES_JSON_SHAPE = `  "curses": [
+    {
+      "type": "<one of the tags above>",
+      "story": "<max 2 sentences, max 30 words>",
+      "loophole": "<the exact words in the wish that create the loophole>"
+    }
+  ]`;
+
+/** The closing rule about the size, distinct types and ids of the curses array. */
+export const CURSES_ARRAY_RULE = `The "curses" array MUST contain between 3 and 5 items, each with a distinct "type". Do not include ids; the system assigns them.`;
+
+/** The Judge's role (buildJudgePrompt, verdict mode, first paragraph). */
+export const JUDGE_ROLE = `You are the Judge. Decide whether the proposed binding really CLOSES the loophole in the curse. The Judge is strict: the binding only closes the curse if, after applying it, the literal-compliance disaster in the story can no longer happen.`;
+
+/** The JSON shape of a verdict. */
+export const VERDICT_JSON_SHAPE = `{
+  "closed": boolean,
+  "reason": string,
+  "property": string
+}`;
+
+/** The Judge's verdict rules: when closed is true, what the property is, JSON only. */
+export const VERDICT_RULES = `Set "closed" to true only if the binding closes the loophole; otherwise false. The "reason" must explain the ruling.
+If closed is true, "property" is ONE universally quantified, testable sentence about the system's behaviour that the binding guarantees. It starts with "For any" and is at most 40 words (e.g. "For any project whose owner has left, at least one member can still delete it.").
+If closed is false, "property" is the empty string.
+Emit JSON only — no prose outside the object.`;
+
+function contextLine(wish: Wish): string {
+  return wish.context ? `\nApp context: ${wish.context}` : '';
+}
+
+/** Paw (adversary) — finds loopholes for a wish. */
+export function buildPawPrompt(wish: Wish): string {
+  return `Task: GRANT_WISH
+
+${PAW_ROLE}
+
+Wish: ${wish.text}${contextLine(wish)}
+
+${CURSE_RULES}
+
+${CURSE_TAXONOMY}
+
+${GUARDRAILS}
 
 Return STRICT JSON ONLY — no prose, no markdown fences — matching this shape:
 {
   "narration": "<1–2 sentence dry comedy-horror, max 25 words>",
   "userStory": "As a <role>, I want <capability>, so that <benefit>.",
   "wishCriterion": "<the wish restated as ONE EARS criterion, max 40 words>",
-  "curses": [
-    {
-      "type": "<one of the tags above>",
-      "story": "<max 2 sentences, max 30 words>",
-      "loophole": "<the exact words in the wish that create the loophole>"
-    }
-  ]
+${CURSES_JSON_SHAPE}
 }
-The "curses" array MUST contain between 3 and 5 items, each with a distinct "type". Do not include ids; the system assigns them.`;
+${CURSES_ARRAY_RULE}`;
 }
 
 /** Genie (narrator) — tells the literal grant in 1–2 sentences, dry comedy-horror. */
@@ -120,7 +159,7 @@ Return STRICT JSON ONLY matching: { "specific": boolean, "reason": string }`;
 
   return `Task: JUDGE_VERDICT
 
-You are the Judge. Decide whether the proposed binding really CLOSES the loophole in the curse. The Judge is strict: the binding only closes the curse if, after applying it, the literal-compliance disaster in the story can no longer happen.
+${JUDGE_ROLE}
 
 Curse:
 - type: ${curse.type}
@@ -132,16 +171,9 @@ Binding:
 - clause: ${binding ? binding.clause : 'none'}
 
 Return STRICT JSON ONLY matching this shape:
-{
-  "closed": boolean,
-  "reason": string,
-  "property": string
-}
+${VERDICT_JSON_SHAPE}
 
-Set "closed" to true only if the binding closes the loophole; otherwise false. The "reason" must explain the ruling.
-If closed is true, "property" is ONE universally quantified, testable sentence about the system's behaviour that the binding guarantees. It starts with "For any" and is at most 40 words (e.g. "For any project whose owner has left, at least one member can still delete it.").
-If closed is false, "property" is the empty string.
-Emit JSON only — no prose outside the object.`;
+${VERDICT_RULES}`;
 }
 
 /** Replacement helper: regenerate one specific curse to replace a generic one. */

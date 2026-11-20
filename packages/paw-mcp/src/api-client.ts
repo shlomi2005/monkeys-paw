@@ -1,12 +1,10 @@
 import type { z } from 'zod';
-import { originOf } from './base-url';
+import type { CallLogger } from './call-log';
+import { originOf } from './mode';
 
 export const REQUEST_TIMEOUT_MS = 30_000;
 
 export const MSG_BAD_SHAPE = 'The Paw API answered in a shape this tool does not understand.';
-
-/** Logs the tool name, the HTTP status (0 when none) and the duration. Nothing else can reach it. */
-export type CallLogger = (tool: string, status: number, ms: number) => void;
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; message: string };
 

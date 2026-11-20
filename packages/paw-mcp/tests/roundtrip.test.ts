@@ -9,7 +9,7 @@ const REQUIREMENT = 'Only the owner can delete a project.';
 let stub: Stub;
 let connected: Connected;
 let verdictClosed = true;
-const logged: [string, number, number][] = [];
+const logged: [string, number | string, number][] = [];
 
 function closeCurse(grant: Grant, curseId: string): Grant {
   return {
@@ -44,7 +44,11 @@ beforeEach(async () => {
       sendJson(res, 404, { message: 'nope' });
     }
   });
-  connected = await connectPaw({ baseUrl: stub.url, log: (tool, status, ms) => logged.push([tool, status, ms]) });
+  connected = await connectPaw({
+    mode: 'remote',
+    baseUrl: stub.url,
+    log: (tool, status, ms) => logged.push([tool, status, ms]),
+  });
 });
 
 afterEach(async () => {

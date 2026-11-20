@@ -78,7 +78,7 @@ or `packages/paw-mcp/src` ends with `pnpm -C packages/paw-core build` (so `paw-m
   - The hook no longer needs `PAW_API_URL` (it runs in local mode, see task 14), so the first check above is now whether it calls
     `paw_rules` and `paw_check_curses`, not `paw_curse`.
 
-- [ ] 9. `paw-core`: rule constants, the EARS format line, the exports, and the frozen prompt fixture. (Req 22, 16.10)
+- [x] 9. `paw-core`: rule constants, the EARS format line, the exports, and the frozen prompt fixture. (Req 22, 16.10)
   1. **Before any refactor**, write `packages/paw-core/tests/fixtures/prompts.frozen.json` by calling the unchanged
      builders (a throwaway test or script that writes the file, deleted afterwards; do not type the strings by hand):
      `buildPawPrompt` and `buildGeniePrompt` (each with and without `context`), `buildBatchQualityPrompt` (3 curses),
@@ -99,7 +99,18 @@ or `packages/paw-mcp/src` ends with `pnpm -C packages/paw-core build` (so `paw-m
   5. Run `pnpm -C packages/paw-core vitest run`, `pnpm -C packages/paw-core typecheck`, then
      `pnpm -C packages/paw-core build` and `pnpm -C packages/paw-mcp bundle`; if `bundle-fresh.test.ts` fails, the bundle
      was rebuilt by the step before it and must be committed as rebuilt. Do not touch `apps/*`.
-- [ ] 10. `paw-mcp`: modes, the three local tools, the server by mode, instructions, logging, and their tests.
+  - Done (20.11.2026): the fixture `tests/fixtures/prompts.frozen.json` was written by a throwaway test from the
+    unchanged builders (9 strings: Paw and Genie with and without context, batch quality, Judge verdict with and without
+    a binding, Judge quality, replacement) and deleted afterwards. `tests/prompts-frozen.test.ts` compares with `toBe`
+    and passed on the unchanged code (105 tests) and again after the refactor with the fixture untouched. `prompts.ts`
+    now exports nine constants (`PAW_ROLE`, `CURSE_RULES`, `CURSE_TAXONOMY`, `GUARDRAILS`, `CURSES_JSON_SHAPE`,
+    `CURSES_ARRAY_RULE`, `JUDGE_ROLE`, `VERDICT_JSON_SHAPE`, `VERDICT_RULES`) and `buildPawPrompt` and the verdict mode of
+    `buildJudgePrompt` are composed from them; no wording changed. `ears.ts` exports `EARS_CLAUSE_FORMAT` ("An EARS
+    clause must start with WHEN, IF, WHILE, WHERE or THE SYSTEM SHALL and contain SHALL."), and `index.ts` exports it,
+    `isEarsCriterion` and the nine constants. New tests: `prompts-frozen.test.ts` (22 with the substring, order and
+    taxonomy checks), `ears-format.test.ts` (4), `index-exports.test.ts` (2). `paw-core`: 123 tests pass (was 95),
+    typecheck and build clean. The bundle was rebuilt and did not change, because `paw-mcp` imports no prompt builder.
+- [x] 10. `paw-mcp`: modes, the three local tools, the server by mode, instructions, logging, and their tests.
   (Req 1.2–1.6, 5, 6.1, 6.7, 7.2–7.3, 16.2, 16.4, 16.8, 16.9, 19, 20, 21, 23, 24, 25)
   1. Add `zod-to-json-schema` as a direct dependency, exact version `3.25.2`, with `pnpm --offline` (it is already in
      the lockfile; if the offline install fails, stop and report, do not go online).
@@ -127,7 +138,25 @@ or `packages/paw-mcp/src` ends with `pnpm -C packages/paw-core build` (so `paw-m
   6. Run `pnpm -C packages/paw-mcp vitest run` (one process), `pnpm -C packages/paw-mcp typecheck`, then
      `pnpm -C packages/paw-mcp bundle`. Check that nothing in `packages/paw-mcp/src` imports `apps/*`, and that no
      rule sentence is copied into `paw-mcp` outside the two footers (the drift test is the proof).
-- [ ] 11. Version `0.2.0`, the bundle, and `stdio.test.ts` in both modes. (Req 8.2, 8.4, 8.5, 8.7, 8.8, 16.6, 17.5)
+  - Done (20.11.2026): `zod-to-json-schema` 3.25.2 added to `paw-mcp` with `pnpm --offline` (lockfile: that one importer
+    entry). New: `mode.ts` (replaces `base-url.ts`; `resolveMode`, `originOf`, `startupLine`, `ignoredLine`; no
+    placeholder URL), `call-log.ts` (`CallLogger` takes `(tool, outcome, ms)`), `json-arg.ts`, `issue.ts` (zod issue
+    to one line; `describeInputError` moved here), `limits.ts` (3 and 5 and 360 read from `paw-core`; 1000 and 40 are
+    the API's cap and the Judge's word limit), `rules.ts`, `check-curses.ts`, `check-verdict.ts`, `tool-rules.ts`,
+    `tool-check-curses.ts`, `tool-check-verdict.ts`, `instructions.ts`, `render.ts` (+3 renderers). `server.ts`
+    takes `{ mode, baseUrl?, fetchFn?, timeoutMs?, log?, now? }`: local registers three tools and creates no API client
+    and no grant memory (a test proves both); remote registers five; `instructions` per mode; local handlers log `ok`
+    or `invalid`. `index.ts` reads `PAW_API_URL` once and writes the start-up and ignored lines. Choices the design left
+    open: section names in `paw_rules` are `role`, `curse-rules`, `taxonomy`, `guardrails`, `json-shape`,
+    `array-rule` (curse) and `role`, `json-shape`, `verdict-rules`, `ears-format` (bind); the `paw_check_verdict` error for a
+    bad clause is `amendment is not an EARS clause.` plus `EARS_CLAUSE_FORMAT`, so no rule sentence is copied;
+    `originOf` of an unparseable string is `an unusable URL`. Tests: `mode.test.ts` (20, replaces `base-url.test.ts`),
+    `no-network.test.ts` (3, both modes), `local-mode.test.ts` (5: no client or memory in local, logging),
+    `tools.test.ts` (16, exact names by mode, name regex, limits, instructions, `.describe()` texts), `rules.test.ts`
+    (11), `rules-drift.test.ts` (13, includes a scan that no rule line is copied into `src/`), `check-curses.test.ts`
+    (25), `check-verdict.test.ts` (21). `roundtrip.test.ts` and `errors.test.ts` keep every assertion, now in remote
+    mode (the placeholder-host test uses a closed `127.0.0.1` port with a path). Nothing in `src/` imports `apps/*`.
+- [x] 11. Version `0.2.0`, the bundle, and `stdio.test.ts` in both modes. (Req 8.2, 8.4, 8.5, 8.7, 8.8, 16.6, 17.5)
   1. `src/version.ts` `PAW_MCP_VERSION = '0.2.0'` and the `version` field of `powers/monkeys-paw/plugin.json` (only that
      field here; the description is task 12). Update the `0.1.0` expectations in the tests.
   2. `pnpm -C packages/paw-mcp bundle` rebuilds `powers/monkeys-paw/server/paw-mcp.mjs`. Confirm that `NOTICE.md` still
@@ -139,6 +168,15 @@ or `packages/paw-mcp/src` ends with `pnpm -C packages/paw-core build` (so `paw-m
      Remote: `PAW_API_URL` set to the stub on `127.0.0.1`; `tools/list` returns the five tools. In both, stdout holds
      only JSON-RPC and stderr never has the requirement. Close the child and the stub.
   4. `bundle-fresh.test.ts` and the whole `paw-mcp` suite pass (one process).
+  - Done (20.11.2026): `PAW_MCP_VERSION` and `plugin.json` `version` (that field only) are `0.2.0` (no test held a
+    literal `0.1.0`; `power-format.test.ts` compares the two, and `stdio.test.ts` now asserts the `0.2.0` start-up
+    line). `pnpm -C packages/paw-mcp bundle` rebuilt the bundle: 793,239 bytes, `minify: false`, the same eight
+    third-party packages, all named in `NOTICE.md` (unchanged); `git check-ignore` reports no new file ignored.
+    `stdio.test.ts` spawns the bundle twice: local (no `PAW_API_URL`: local instructions, exactly three tools,
+    `mode=local`, `paw_check_curses` result, no request reaches the stub) and remote (stub URL: remote instructions,
+    five tools, `mode=remote api=<origin>`, `paw_curse` reaches the stub); both check JSON-RPC-only stdout and no
+    requirement on stderr. Final counts: `paw-core` 123, `paw-mcp` 246 (19 files, run again after the last bundle
+    rebuild, `bundle-fresh` green), `apps/api` 328.
 - [ ] 12. Wiring, agents, skills, docs and their format tests. (Req 8.2, 8.3, 8.6, 9, 11, 14.4, 14.6, 15.3, 17.1–17.3, 17.7)
   1. `.kiro/hooks/paw-reviews-requirements.json`: the local-mode hook of design "Hooks (a)", prompt and description as
      written there; trigger and matcher unchanged. Copy it byte for byte to

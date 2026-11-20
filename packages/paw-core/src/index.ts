@@ -48,7 +48,18 @@ export {
   buildJudgePrompt,
   buildPawPrompt,
   buildReplacementPrompt,
+  CURSE_RULES,
+  CURSE_TAXONOMY,
+  CURSES_ARRAY_RULE,
+  CURSES_JSON_SHAPE,
+  GUARDRAILS,
+  JUDGE_ROLE,
+  PAW_ROLE,
+  VERDICT_JSON_SHAPE,
+  VERDICT_RULES,
 } from './prompts';
+
+export { EARS_CLAUSE_FORMAT, isEarsCriterion } from './ears';
 
 export { grantWish } from './grant';
 

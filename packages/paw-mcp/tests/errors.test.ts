@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { PLACEHOLDER_API_URL } from '../src/base-url';
 import { makeGrant } from './fixtures';
 import { connectPaw, sendJson, startStub, textOf, type Connected, type Stub } from './stub-api';
 
@@ -20,7 +19,7 @@ async function callCurse(
   extra: { timeoutMs?: number } = {},
 ): Promise<{ text: string; isError: boolean | undefined }> {
   stub = await startStub(handler);
-  connected = await connectPaw({ baseUrl: stub.url, ...extra });
+  connected = await connectPaw({ mode: 'remote', baseUrl: stub.url, ...extra });
   const result = await connected.client.callTool({ name: 'paw_curse', arguments: { requirement: 'A secret requirement.' } });
   return { text: textOf(result), isError: result.isError as boolean | undefined };
 }
@@ -59,16 +58,19 @@ describe('API failures are tool results', () => {
     const closed = await startStub(() => undefined);
     const url = closed.url;
     await closed.close();
-    connected = await connectPaw({ baseUrl: url });
+    connected = await connectPaw({ mode: 'remote', baseUrl: url });
     const result = await connected.client.callTool({ name: 'paw_curse', arguments: { requirement: 'R' } });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toBe(`Cannot reach the Paw API at ${url}; set PAW_API_URL.`);
   });
 
-  it('the placeholder host cannot be reached and the message hides any path', async () => {
-    connected = await connectPaw({ baseUrl: `${PLACEHOLDER_API_URL}/deep/path` });
+  it('the unreachable-host message hides any path', async () => {
+    const closed = await startStub(() => undefined);
+    const url = closed.url;
+    await closed.close();
+    connected = await connectPaw({ mode: 'remote', baseUrl: `${url}/deep/path` });
     const result = await connected.client.callTool({ name: 'paw_curse', arguments: { requirement: 'R' } });
-    expect(textOf(result)).toBe(`Cannot reach the Paw API at ${PLACEHOLDER_API_URL}; set PAW_API_URL.`);
+    expect(textOf(result)).toBe(`Cannot reach the Paw API at ${url}; set PAW_API_URL.`);
   });
 
   it('timeout (injected, short)', async () => {
@@ -107,7 +109,7 @@ describe('API failures are tool results', () => {
         ? sendJson(res, 200, { wish: { id: 'w', text: 't', createdAt: 1 }, grant: makeGrant(WISH_ID) })
         : sendJson(res, 200, { verdict: 'closed' }),
     );
-    connected = await connectPaw({ baseUrl: stub.url });
+    connected = await connectPaw({ mode: 'remote', baseUrl: stub.url });
     await connected.client.callTool({ name: 'paw_curse', arguments: { requirement: 'R' } });
     const result = await connected.client.callTool({
       name: 'paw_bind',
@@ -121,6 +123,7 @@ describe('API failures are tool results', () => {
     stub = await startStub((_q, res) => sendJson(res, 400, { message: 'x' }));
     let calls = 0;
     connected = await connectPaw({
+      mode: 'remote',
       baseUrl: stub.url,
       log: () => {
         if (calls++ === 0) throw new Error('secret detail');
@@ -137,7 +140,7 @@ describe('API failures are tool results', () => {
 describe('paw_bind with an unknown curse', () => {
   it.each(['curse-0', '3f2a9c1e:curse-0'])('%s with an empty memory: error, no API call', async (curse) => {
     stub = await startStub((_q, res) => sendJson(res, 200, {}));
-    connected = await connectPaw({ baseUrl: stub.url });
+    connected = await connectPaw({ mode: 'remote', baseUrl: stub.url });
     const result = await connected.client.callTool({ name: 'paw_bind', arguments: { curse, amendment: 'A.' } });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toBe(
@@ -150,7 +153,7 @@ describe('paw_bind with an unknown curse', () => {
     stub = await startStub((req, res) =>
       sendJson(res, 200, { wish: { id: 'w', text: 't', createdAt: 1 }, grant: makeGrant(WISH_ID) }),
     );
-    connected = await connectPaw({ baseUrl: stub.url });
+    connected = await connectPaw({ mode: 'remote', baseUrl: stub.url });
     await connected.client.callTool({ name: 'paw_curse', arguments: { requirement: 'R' } });
     const long = 'z'.repeat(90);
     const result = await connected.client.callTool({ name: 'paw_bind', arguments: { curse: long, amendment: 'A.' } });
@@ -172,7 +175,7 @@ describe('input limits: error names the field and the limit, no API call', () =>
   ];
   it.each(cases)('%s: %s', async (name, _label, args, expected) => {
     stub = await startStub((_q, res) => sendJson(res, 200, {}));
-    connected = await connectPaw({ baseUrl: stub.url });
+    connected = await connectPaw({ mode: 'remote', baseUrl: stub.url });
     const result = await connected.client.callTool({ name, arguments: args });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain(expected);

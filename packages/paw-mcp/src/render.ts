@@ -1,4 +1,5 @@
 import type { Grant, Verdict } from 'paw-core';
+import type { CheckedCurse } from './check-curses';
 import { openHandles } from './grant-memory';
 import { toHandle } from './handle';
 
@@ -54,6 +55,32 @@ export function renderVerdict(verdict: Verdict, grant: Grant): string {
   const open = openHandles(grant);
   lines.push(`Still open: ${open.length > 0 ? open.map((h) => `[${h}]`).join(', ') : 'none'}`);
   return lines.join('\n');
+}
+
+/** Plain text for `paw_check_curses`: one line per curse, then the warnings. */
+export function renderCheckedCurses(curses: CheckedCurse[], warnings: string[]): string {
+  const lines = [`The curses pass. ${curses.length} loopholes:`];
+  for (const c of curses) {
+    lines.push(`[${c.id}] ${c.type}: ${c.story}`);
+    lines.push(`  Loophole: ${c.loophole}`);
+  }
+  if (warnings.length > 0) lines.push('Warnings:', ...warnings.map((w) => `  ${w}`));
+  return lines.join('\n');
+}
+
+/** Plain text for `paw_check_verdict`, in `paw_bind`'s form but with nothing stored, so no "Still open" line. */
+export function renderLocalVerdict(verdict: Verdict): string {
+  if (!verdict.closed) {
+    return `OPEN: ${sentence(verdict.reason)} The loophole remains. Rewrite the amendment, judge it again, and call paw_check_verdict again.`;
+  }
+  const lines = [`CLOSED: ${verdict.reason.trim()}`];
+  if (verdict.property) lines.push(`Property: ${verdict.property}`);
+  return lines.join('\n');
+}
+
+/** A failed local check: the heading, then one problem per line. */
+export function renderProblems(heading: string, problems: string[]): string {
+  return [heading, ...problems].join('\n');
 }
 
 export interface ToolResult {

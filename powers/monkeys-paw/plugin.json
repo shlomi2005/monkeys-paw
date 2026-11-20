@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "monkeys-paw",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Curse a software requirement: the Paw follows it to the letter and shows the loopholes, then judges your fix.",
   "author": { "name": "Shlomicom" },
   "keywords": ["requirements", "specs", "loopholes", "EARS", "acceptance criteria", "monkey's paw", "spec review"],

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { CurseTypeSchema, GrantResponseSchema } from 'paw-core';
 import type { ApiClient } from './api-client';
 import type { GrantMemory } from './grant-memory';
+import { describeInputError } from './issue';
 import { curseViews, errorResult, renderCurses, textResult, type ToolResult } from './render';
 
 export const inputShape = {
@@ -41,15 +42,6 @@ export const DESCRIPTION =
 export interface ToolDeps {
   api: ApiClient;
   memory: GrantMemory;
-}
-
-/** First problem of a failed input parse, as one sentence that names the field. */
-export function describeInputError(error: z.ZodError): string {
-  const issue = error.issues[0];
-  if (!issue) return 'Invalid input.';
-  const field = issue.path.join('.');
-  const text = field !== '' && !issue.message.includes(field) ? `${field}: ${issue.message}` : issue.message;
-  return `Invalid input: ${text.replace(/\.$/, '')}.`;
 }
 
 export async function handleCurse(deps: ToolDeps, args: unknown): Promise<ToolResult> {

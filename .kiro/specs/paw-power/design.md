@@ -400,6 +400,9 @@ Version 0.2.0 changes the sources, so the bundle is rebuilt (task 11) and the si
 packages) and the new tools. Every task that changes `packages/paw-mcp/src` or `packages/paw-core/src` ends with
 `pnpm -C packages/paw-mcp bundle`, so `bundle-fresh.test.ts` stays green.
 
+**Version 0.2.0 (task 11): 793,239 bytes, `minify: false`** (under 1 MB, so the size rule keeps it unminified; still
+eight third-party packages, `NOTICE.md` unchanged; esbuild 0.28.2).
+
 ---
 
 ## Power layout

@@ -1208,11 +1208,11 @@ var require_util = __commonJS({
       return jsPropertySyntax ? (0, codegen_1.getProperty)(dataProp).toString() : "/" + escapeJsonPointer(dataProp);
     }
     exports.getErrorPath = getErrorPath;
-    function checkStrictMode(it, msg, mode = it.opts.strictSchema) {
-      if (!mode)
+    function checkStrictMode(it, msg, mode2 = it.opts.strictSchema) {
+      if (!mode2)
         return;
       msg = `strict mode: ${msg}`;
-      if (mode === true)
+      if (mode2 === true)
         throw new Error(msg);
       it.self.logger.warn(msg);
     }
@@ -4771,11 +4771,11 @@ var require_core = __commonJS({
     Ajv2.ValidationError = validation_error_1.default;
     Ajv2.MissingRefError = ref_error_1.default;
     exports.default = Ajv2;
-    function checkOptions(checkOpts, options, msg, log = "error") {
+    function checkOptions(checkOpts, options, msg, log2 = "error") {
       for (const key in checkOpts) {
         const opt = key;
         if (opt in options)
-          this.logger[log](`${msg}: option ${key}. ${checkOpts[opt]}`);
+          this.logger[log2](`${msg}: option ${key}. ${checkOpts[opt]}`);
       }
     }
     function getSchEnv(keyRef) {
@@ -7236,8 +7236,8 @@ var require_dist = __commonJS({
         (0, limit_1.default)(ajv);
       return ajv;
     };
-    formatsPlugin.get = (name, mode = "full") => {
-      const formats = mode === "fast" ? formats_1.fastFormats : formats_1.fullFormats;
+    formatsPlugin.get = (name, mode2 = "full") => {
+      const formats = mode2 === "fast" ? formats_1.fastFormats : formats_1.fullFormats;
       const f = formats[name];
       if (!f)
         throw new Error(`Unknown format "${name}"`);
@@ -9068,7 +9068,7 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
     return (payload, ctx) => fn(shape, payload, ctx);
   };
   let fastpass;
-  const isObject2 = isObject;
+  const isObject3 = isObject;
   const jit = !globalConfig.jitless;
   const allowsEval2 = allowsEval;
   const fastEnabled = jit && allowsEval2.value;
@@ -9077,7 +9077,7 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
   inst._zod.parse = (payload, ctx) => {
     value ?? (value = _normalized.value);
     const input = payload.value;
-    if (!isObject2(input)) {
+    if (!isObject3(input)) {
       payload.issues.push({
         expected: "object",
         code: "invalid_type",
@@ -13392,28 +13392,35 @@ var StdioServerTransport = class {
   }
 };
 
-// src/base-url.ts
-var PLACEHOLDER_API_URL = "https://paw-api.invalid";
-function resolveBaseUrl(raw) {
-  if (raw === void 0) return PLACEHOLDER_API_URL;
+// src/mode.ts
+var LOCAL = { mode: { kind: "local" }, ignored: false };
+var LOCAL_IGNORED = { mode: { kind: "local" }, ignored: true };
+function resolveMode(raw) {
+  if (raw === void 0) return LOCAL;
   const text = raw.trim();
-  if (text === "" || text.includes("${")) return PLACEHOLDER_API_URL;
+  if (text === "" || text.includes("${")) return LOCAL;
   let url;
   try {
     url = new URL(text);
   } catch {
-    return PLACEHOLDER_API_URL;
+    return LOCAL_IGNORED;
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return PLACEHOLDER_API_URL;
-  if (url.username !== "" || url.password !== "") return PLACEHOLDER_API_URL;
-  return text.replace(/\/+$/, "");
+  if (url.protocol !== "http:" && url.protocol !== "https:") return LOCAL_IGNORED;
+  if (url.username !== "" || url.password !== "") return LOCAL_IGNORED;
+  return { mode: { kind: "remote", baseUrl: text.replace(/\/+$/, "") }, ignored: false };
 }
 function originOf(url) {
   try {
     return new URL(url).origin;
   } catch {
-    return PLACEHOLDER_API_URL;
+    return "an unusable URL";
   }
+}
+function startupLine(version2, mode2) {
+  return mode2.kind === "local" ? `paw-mcp ${version2} mode=local` : `paw-mcp ${version2} mode=remote api=${originOf(mode2.baseUrl)}`;
+}
+function ignoredLine(version2) {
+  return `paw-mcp ${version2} ignored PAW_API_URL: not a usable http(s) URL without credentials; using local mode`;
 }
 
 // ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/external.js
@@ -20181,8 +20188,8 @@ var ExperimentalServerTasks = class {
    */
   elicitInputStream(params, options) {
     const clientCapabilities = this._server.getClientCapabilities();
-    const mode = params.mode ?? "form";
-    switch (mode) {
+    const mode2 = params.mode ?? "form";
+    switch (mode2) {
       case "url": {
         if (!clientCapabilities?.elicitation?.url) {
           throw new Error("Client does not support url elicitation.");
@@ -20196,7 +20203,7 @@ var ExperimentalServerTasks = class {
         break;
       }
     }
-    const normalizedParams = mode === "form" && params.mode === void 0 ? { ...params, mode: "form" } : params;
+    const normalizedParams = mode2 === "form" && params.mode === void 0 ? { ...params, mode: "form" } : params;
     return this.requestStream({
       method: "elicitation/create",
       params: normalizedParams
@@ -20570,8 +20577,8 @@ var Server = class extends Protocol {
    * @returns The result of the elicitation request.
    */
   async elicitInput(params, options) {
-    const mode = params.mode ?? "form";
-    switch (mode) {
+    const mode2 = params.mode ?? "form";
+    switch (mode2) {
       case "url": {
         if (!this._clientCapabilities?.elicitation?.url) {
           throw new Error("Client does not support url elicitation.");
@@ -21603,7 +21610,7 @@ function messageOf(text) {
 function createApiClient(options) {
   const fetchFn = options.fetchFn ?? fetch;
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
-  const log = options.log ?? (() => void 0);
+  const log2 = options.log ?? (() => void 0);
   const origin = originOf(options.baseUrl);
   const unreachable = `Cannot reach the Paw API at ${origin}; set PAW_API_URL.`;
   return {
@@ -21634,7 +21641,7 @@ function createApiClient(options) {
       } catch {
         return { ok: false, message: unreachable };
       } finally {
-        log(tool, status, Date.now() - started);
+        log2(tool, status, Date.now() - started);
       }
     }
   };
@@ -21696,6 +21703,10 @@ function createGrantMemory(max = MAX_REMEMBERED_GRANTS) {
   };
 }
 
+// src/instructions.ts
+var LOCAL_INSTRUCTIONS = "Local mode. To find loopholes: call paw_rules with kind curse, write 3 to 5 curses yourself, call paw_check_curses with the requirement and the curses, and fix what it reports once. To judge an amendment: call paw_rules with kind bind, judge it yourself and strictly, call paw_check_verdict, and fix what it reports once. These tools call no model and no server.";
+var REMOTE_INSTRUCTIONS = `${LOCAL_INSTRUCTIONS} paw_curse and paw_bind call the Paw API at the origin in PAW_API_URL.`;
+
 // src/render.ts
 function curseViews(grant) {
   return grant.curses.map((c) => ({
@@ -21735,6 +21746,26 @@ function renderVerdict(verdict, grant) {
   const open = openHandles(grant);
   lines.push(`Still open: ${open.length > 0 ? open.map((h) => `[${h}]`).join(", ") : "none"}`);
   return lines.join("\n");
+}
+function renderCheckedCurses(curses, warnings) {
+  const lines = [`The curses pass. ${curses.length} loopholes:`];
+  for (const c of curses) {
+    lines.push(`[${c.id}] ${c.type}: ${c.story}`);
+    lines.push(`  Loophole: ${c.loophole}`);
+  }
+  if (warnings.length > 0) lines.push("Warnings:", ...warnings.map((w) => `  ${w}`));
+  return lines.join("\n");
+}
+function renderLocalVerdict(verdict) {
+  if (!verdict.closed) {
+    return `OPEN: ${sentence(verdict.reason)} The loophole remains. Rewrite the amendment, judge it again, and call paw_check_verdict again.`;
+  }
+  const lines = [`CLOSED: ${verdict.reason.trim()}`];
+  if (verdict.property) lines.push(`Property: ${verdict.property}`);
+  return lines.join("\n");
+}
+function renderProblems(heading, problems) {
+  return [heading, ...problems].join("\n");
 }
 function textResult(text, structuredContent) {
   return structuredContent ? { content: [{ type: "text", text }], structuredContent } : { content: [{ type: "text", text }] };
@@ -21835,26 +21866,83 @@ var ExamplesResponseSchema = external_exports.array(
   })
 );
 
-// src/tool-curse.ts
-var inputShape = {
-  requirement: external_exports.string().trim().min(1, "requirement must not be empty").max(500, "requirement must be at most 500 characters").describe("One software requirement, with its key acceptance criteria. At most 500 characters."),
-  context: external_exports.string().trim().max(200, "context must be at most 200 characters").optional().describe("Optional: one line about the app or feature. At most 200 characters.")
-};
-var outputShape = {
-  wishId: external_exports.string(),
-  narration: external_exports.string(),
-  curses: external_exports.array(
-    external_exports.object({
-      handle: external_exports.string(),
-      id: external_exports.string(),
-      type: CurseTypeSchema,
-      status: external_exports.enum(["open", "closed"]),
-      story: external_exports.string(),
-      loophole: external_exports.string()
-    })
-  )
-};
-var DESCRIPTION = "Curse a software requirement. The Paw follows it to the letter and returns up to five loopholes, each with a handle you can pass to paw_bind.";
+// ../paw-core/src/prompts.ts
+var PAW_ROLE = `You are the Paw, an adversary that finds loopholes in software requirements. The user made a wish; you grant it literally and expose every way it can be followed to the letter and go wrong.`;
+var CURSE_RULES = `Produce 3 to 5 curses. Each curse is a short story (max 2 sentences, max 30 words). Each curse MUST be:
+- Specific to THIS wish: quote or point to the exact words in the wish that create the loophole (put them in the "loophole" field).
+- Plausible: something a real implementation could do while passing a literal reading.
+- Different from the other curses in this grant: each curse uses a different curse type (tag) or targets a different stakeholder.
+- Bindable: there is a clear clause that would close the loophole.`;
+var CURSE_TAXONOMY = `Curse taxonomy (use the tag EXACTLY as one of these, never abbreviate or invent):
+- permissions \u2014 who may do what; owners leaving, roles, delegation, admins.
+- time \u2014 deadlines, time zones, daylight saving, expiry, ordering of events.
+- money \u2014 rounding, currency, refunds, double charges, free loopholes.
+- scale \u2014 zero items, one item, millions of items, very long input.
+- abuse \u2014 a hostile user follows the rule to harm others or the system.
+- privacy \u2014 exposing or keeping data nobody meant to expose or keep.
+- accessibility \u2014 people with disabilities, slow networks, small screens, other languages.
+- data-loss \u2014 deletion, overwrite, undo, backups.
+- concurrency \u2014 two users at once, retries, duplicates, race conditions.
+- edge-input \u2014 empty, unicode, emoji, right-to-left text, negative numbers, null.`;
+var GUARDRAILS = `Guardrails (iron rules): PG-13 only. No gore. No real people. No hate. Refuse wishes about harming people with a short in-character line. Do not use film, game, or brand IP.`;
+var CURSES_JSON_SHAPE = `  "curses": [
+    {
+      "type": "<one of the tags above>",
+      "story": "<max 2 sentences, max 30 words>",
+      "loophole": "<the exact words in the wish that create the loophole>"
+    }
+  ]`;
+var CURSES_ARRAY_RULE = `The "curses" array MUST contain between 3 and 5 items, each with a distinct "type". Do not include ids; the system assigns them.`;
+var JUDGE_ROLE = `You are the Judge. Decide whether the proposed binding really CLOSES the loophole in the curse. The Judge is strict: the binding only closes the curse if, after applying it, the literal-compliance disaster in the story can no longer happen.`;
+var VERDICT_JSON_SHAPE = `{
+  "closed": boolean,
+  "reason": string,
+  "property": string
+}`;
+var VERDICT_RULES = `Set "closed" to true only if the binding closes the loophole; otherwise false. The "reason" must explain the ruling.
+If closed is true, "property" is ONE universally quantified, testable sentence about the system's behaviour that the binding guarantees. It starts with "For any" and is at most 40 words (e.g. "For any project whose owner has left, at least one member can still delete it.").
+If closed is false, "property" is the empty string.
+Emit JSON only \u2014 no prose outside the object.`;
+
+// ../paw-core/src/ears.ts
+var EARS_START = /^(WHEN|IF|WHILE|WHERE|THE SYSTEM SHALL)\b/;
+var HAS_SHALL = /\bSHALL\b/;
+var EARS_CLAUSE_FORMAT = "An EARS clause must start with WHEN, IF, WHILE, WHERE or THE SYSTEM SHALL and contain SHALL.";
+function isEarsCriterion(text) {
+  const trimmed = text.trim();
+  return EARS_START.test(trimmed) && HAS_SHALL.test(trimmed);
+}
+
+// ../paw-core/src/bind.ts
+function proposeBinding(curse, clause, kind) {
+  const trimmed = clause.trim();
+  if (!trimmed) {
+    throw new Error("Binding clause cannot be empty");
+  }
+  return {
+    curseId: curse.id,
+    kind,
+    clause: trimmed,
+    proposedAt: Date.now()
+  };
+}
+
+// src/issue.ts
+function describeIssue(prefix, issue2) {
+  const path = [prefix, ...issue2.path.map((part) => typeof part === "number" ? `[${part}]` : `.${part}`)].join("").replace(/^\./, "");
+  switch (issue2.code) {
+    case "invalid_enum_value":
+      return `${path} must be one of: ${issue2.options.join(", ")}.`;
+    case "invalid_type":
+      return issue2.received === "undefined" ? `${path} is required.` : `${path} must be a ${issue2.expected}.`;
+    case "too_small":
+      return issue2.type === "string" ? `${path} must not be empty.` : `${path}: ${issue2.message}.`;
+    case "too_big":
+      return issue2.type === "string" ? `${path} must be at most ${String(issue2.maximum)} characters.` : `${path}: ${issue2.message}.`;
+    default:
+      return `${path}: ${issue2.message.replace(/\.$/, "")}.`;
+  }
+}
 function describeInputError(error2) {
   const issue2 = error2.issues[0];
   if (!issue2) return "Invalid input.";
@@ -21862,40 +21950,25 @@ function describeInputError(error2) {
   const text = field !== "" && !issue2.message.includes(field) ? `${field}: ${issue2.message}` : issue2.message;
   return `Invalid input: ${text.replace(/\.$/, "")}.`;
 }
-async function handleCurse(deps, args) {
-  const input = external_exports.object(inputShape).safeParse(args);
-  if (!input.success) return errorResult(describeInputError(input.error));
-  const { requirement, context } = input.data;
-  const wish = context ? { text: requirement, context } : { text: requirement };
-  const res = await deps.api.postJson("paw_curse", "/api/grant", { wish }, GrantResponseSchema);
-  if (!res.ok) return errorResult(res.message);
-  const { grant } = res.data;
-  deps.memory.remember(grant);
-  return textResult(renderCurses(grant), {
-    wishId: grant.wishId,
-    narration: grant.narration,
-    curses: curseViews(grant)
-  });
-}
 
 // src/tool-bind.ts
-var inputShape2 = {
+var inputShape = {
   curse: external_exports.string().trim().min(1, "curse must not be empty").max(100, "curse must be at most 100 characters").describe("A handle from paw_curse such as 3f2a9c1e:curse-2, or a bare id such as curse-2 for the newest grant."),
   amendment: external_exports.string().trim().min(1, "amendment must not be empty").max(500, "amendment must be at most 500 characters").describe("The EARS clause or the rewritten requirement that should close the loophole. At most 500 characters."),
   kind: BindingKindSchema.default("ears-clause").describe(
     "'ears-clause' (default) adds a clause; 'rewrite' replaces the requirement."
   )
 };
-var outputShape2 = {
+var outputShape = {
   handle: external_exports.string(),
   closed: external_exports.boolean(),
   reason: external_exports.string(),
   property: external_exports.string().optional(),
   openHandles: external_exports.array(external_exports.string())
 };
-var DESCRIPTION2 = "Test whether an amendment closes one loophole. The Judge answers CLOSED or OPEN. Call paw_curse first; handles last only while this server runs.";
+var DESCRIPTION = "Test whether an amendment closes one loophole. The Judge answers CLOSED or OPEN. Call paw_curse first; handles last only while this server runs.";
 async function handleBind(deps, args) {
-  const input = external_exports.object(inputShape2).safeParse(args);
+  const input = external_exports.object(inputShape).safeParse(args);
   if (!input.success) return errorResult(describeInputError(input.error));
   const { curse: ref, amendment, kind } = input.data;
   const found = deps.memory.resolve(ref);
@@ -21918,8 +21991,365 @@ async function handleBind(deps, args) {
   });
 }
 
+// src/json-arg.ts
+function isObject2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parseJsonArg(value, path, shape) {
+  const noun = shape === "array" ? "an array" : "an object";
+  const problem = `${path} must be ${noun}, or a JSON string of ${noun}.`;
+  let candidate = value;
+  if (typeof value === "string") {
+    try {
+      candidate = JSON.parse(value);
+    } catch {
+      return { ok: false, problem };
+    }
+  }
+  const fits = shape === "array" ? Array.isArray(candidate) : isObject2(candidate);
+  return fits ? { ok: true, value: candidate } : { ok: false, problem };
+}
+
+// src/limits.ts
+var cursesDef = GrantSchema.shape.curses._def;
+var MIN_CURSES = cursesDef.minLength?.value ?? 0;
+var MAX_CURSES = cursesDef.maxLength?.value ?? Number.POSITIVE_INFINITY;
+var STORY_MAX = CurseSchema.shape.story._def.checks.reduce(
+  (max, check2) => check2.kind === "max" ? check2.value : max,
+  Number.POSITIVE_INFINITY
+);
+var LOOPHOLE_MAX = 1e3;
+var PROPERTY_MAX_WORDS = 40;
+
+// src/check-curses.ts
+var MAX_PROBLEMS = 10;
+function wordsOf(text) {
+  const words = /* @__PURE__ */ new Set();
+  for (const match of text.matchAll(new RegExp("\\p{L}+", "gu"))) {
+    if ([...match[0]].length >= 4) words.add(match[0].toLowerCase());
+  }
+  return words;
+}
+function textField(item, name, path, max, problems) {
+  const raw = item[name];
+  if (raw === void 0 || raw === null) {
+    problems.push(`${path}.${name} must not be empty.`);
+    return null;
+  }
+  if (typeof raw !== "string") {
+    problems.push(`${path}.${name} must be a string.`);
+    return null;
+  }
+  const text = raw.trim();
+  if (text === "") {
+    problems.push(`${path}.${name} must not be empty.`);
+    return null;
+  }
+  const length = [...text].length;
+  if (length > max) {
+    problems.push(`${path}.${name} must be at most ${max} characters (got ${length}).`);
+    return null;
+  }
+  return text;
+}
+function checkCurses(requirement, curses) {
+  const parsed = parseJsonArg(curses, "curses", "array");
+  if (!parsed.ok) return { ok: false, problems: [parsed.problem] };
+  const items = parsed.value;
+  if (items.length < MIN_CURSES || items.length > MAX_CURSES) {
+    return { ok: false, problems: [`curses must have ${MIN_CURSES} to ${MAX_CURSES} items (got ${items.length}).`] };
+  }
+  const problems = [];
+  const repeats = [];
+  const checked = [];
+  const firstWithType = /* @__PURE__ */ new Map();
+  items.forEach((item, i) => {
+    const path = `curses[${i}]`;
+    if (!isObject2(item)) {
+      problems.push(`${path} must be an object.`);
+      return;
+    }
+    const before = problems.length;
+    const type = CurseTypeSchema.safeParse(item.type);
+    if (!type.success) problems.push(`${path}.type must be one of: ${CurseTypeSchema.options.join(", ")}.`);
+    const story = textField(item, "story", path, STORY_MAX, problems);
+    const loophole = textField(item, "loophole", path, LOOPHOLE_MAX, problems);
+    if (type.success) {
+      const seen = firstWithType.get(type.data);
+      if (seen === void 0) firstWithType.set(type.data, i);
+      else {
+        repeats.push(`${path}.type repeats "${type.data}" (curses[${seen}] has it); every curse needs its own type.`);
+      }
+    }
+    if (problems.length > before || !type.success || story === null || loophole === null) return;
+    const candidate = { id: `curse-${i}`, type: type.data, story, loophole, status: "open" };
+    const guard = CurseSchema.safeParse(candidate);
+    if (!guard.success) {
+      for (const issue2 of guard.error.issues) problems.push(describeIssue(path, issue2));
+      return;
+    }
+    checked.push(candidate);
+  });
+  problems.push(...repeats);
+  if (problems.length > 0) return { ok: false, problems: problems.slice(0, MAX_PROBLEMS) };
+  const requirementWords = wordsOf(requirement);
+  const warnings = [];
+  for (const curse of checked) {
+    const quotes = [...wordsOf(curse.loophole)].some((word) => requirementWords.has(word));
+    if (!quotes) {
+      warnings.push(`${curse.id}: the loophole does not quote the requirement; point to its exact words.`);
+    }
+  }
+  return { ok: true, curses: checked, warnings };
+}
+
+// src/tool-check-curses.ts
+var inputShape2 = {
+  requirement: external_exports.string().trim().min(1, "requirement must not be empty").max(500, "requirement must be at most 500 characters").describe("The requirement the curses are about: one software requirement with its key acceptance criteria. At most 500 characters."),
+  curses: external_exports.union([external_exports.array(external_exports.unknown()), external_exports.string()], {
+    errorMap: () => ({ message: "curses must be an array, or a JSON string of an array" })
+  }).describe(
+    "3 to 5 curses, each {type, story, loophole}, no ids; or a JSON string of that array. Get the rules from paw_rules first."
+  )
+};
+var outputShape2 = {
+  curses: external_exports.array(
+    external_exports.object({
+      id: external_exports.string(),
+      type: CurseTypeSchema,
+      status: external_exports.literal("open"),
+      story: external_exports.string(),
+      loophole: external_exports.string()
+    })
+  ),
+  warnings: external_exports.array(external_exports.string())
+};
+var DESCRIPTION2 = "Check the curses you wrote for a requirement against the Paw's rules. On success it returns them with ids (curse-0...) and any warnings; on failure it lists every problem, one per line. It calls no model and no server.";
+var FAILURE_HEADING = "The curses do not pass yet:";
+async function handleCheckCurses(args) {
+  const input = external_exports.object(inputShape2).safeParse(args);
+  if (!input.success) return errorResult(describeInputError(input.error));
+  const result = checkCurses(input.data.requirement, input.data.curses);
+  if (!result.ok) return errorResult(renderProblems(FAILURE_HEADING, result.problems));
+  return textResult(renderCheckedCurses(result.curses, result.warnings), {
+    curses: result.curses,
+    warnings: result.warnings
+  });
+}
+
+// src/check-verdict.ts
+function parseCurse(value, problems) {
+  const parsed = parseJsonArg(value, "curse", "object");
+  if (!parsed.ok) {
+    problems.push(parsed.problem);
+    return null;
+  }
+  const raw = parsed.value;
+  const candidate = {
+    id: raw.id ?? "curse-0",
+    type: raw.type,
+    story: raw.story,
+    loophole: raw.loophole,
+    status: raw.status ?? "open"
+  };
+  const result = CurseSchema.safeParse(candidate);
+  if (!result.success) {
+    for (const issue2 of result.error.issues) problems.push(describeIssue("curse", issue2));
+    return null;
+  }
+  return result.data;
+}
+function parseVerdictFields(value, problems) {
+  const parsed = parseJsonArg(value, "verdict", "object");
+  if (!parsed.ok) {
+    problems.push(parsed.problem);
+    return null;
+  }
+  const raw = parsed.value;
+  const before = problems.length;
+  const closed = raw.closed;
+  if (typeof closed !== "boolean") problems.push("verdict.closed must be true or false.");
+  let reason = "";
+  if (raw.reason === void 0 || raw.reason === null) problems.push("verdict.reason must not be empty.");
+  else if (typeof raw.reason !== "string") problems.push("verdict.reason must be a string.");
+  else if (raw.reason.trim() === "") problems.push("verdict.reason must not be empty.");
+  else reason = raw.reason.trim();
+  let property;
+  if (closed === true) {
+    const p = raw.property;
+    if (p === void 0 || p === null || typeof p === "string" && p.trim() === "") {
+      problems.push("verdict.property is required when closed is true.");
+    } else if (typeof p !== "string") {
+      problems.push("verdict.property must be a string.");
+    } else {
+      const text = p.trim();
+      if (!text.startsWith("For any")) problems.push('verdict.property must start with "For any".');
+      const words = text.split(/\s+/).length;
+      if (words > PROPERTY_MAX_WORDS) {
+        problems.push(`verdict.property must be at most ${PROPERTY_MAX_WORDS} words (got ${words}).`);
+      }
+      property = text;
+    }
+  }
+  if (problems.length > before || typeof closed !== "boolean") return null;
+  return property === void 0 ? { closed, reason } : { closed, reason, property };
+}
+function checkVerdict(input, now) {
+  const problems = [];
+  const curse = parseCurse(input.curse, problems);
+  if (input.kind === "ears-clause" && !isEarsCriterion(input.amendment)) {
+    problems.push(`amendment is not an EARS clause. ${EARS_CLAUSE_FORMAT}`);
+  }
+  const fields = parseVerdictFields(input.verdict, problems);
+  if (problems.length > 0 || !curse || !fields) {
+    return { ok: false, problems: problems.slice(0, MAX_PROBLEMS) };
+  }
+  const verdict = VerdictSchema.safeParse({ ...fields, curseId: curse.id, judgedAt: now() });
+  if (!verdict.success) {
+    return {
+      ok: false,
+      problems: verdict.error.issues.map((issue2) => describeIssue("verdict", issue2)).slice(0, MAX_PROBLEMS)
+    };
+  }
+  return { ok: true, curse, verdict: verdict.data, binding: proposeBinding(curse, input.amendment, input.kind) };
+}
+
+// src/tool-check-verdict.ts
+var inputShape3 = {
+  curse: external_exports.union([external_exports.record(external_exports.unknown()), external_exports.string()], {
+    errorMap: () => ({ message: "curse must be an object, or a JSON string of an object" })
+  }).describe(
+    "The curse being closed, {type, story, loophole} with an optional id (default curse-0), as paw_check_curses returns it; or a JSON string of that object."
+  ),
+  amendment: external_exports.string().trim().min(1, "amendment must not be empty").max(500, "amendment must be at most 500 characters").describe("The EARS clause or the rewritten requirement that should close the loophole. At most 500 characters."),
+  kind: BindingKindSchema.default("ears-clause").describe(
+    "'ears-clause' (default) adds a clause; 'rewrite' replaces the requirement."
+  ),
+  verdict: external_exports.union([external_exports.record(external_exports.unknown()), external_exports.string()], {
+    errorMap: () => ({ message: "verdict must be an object, or a JSON string of an object" })
+  }).describe(
+    "Your verdict as the Judge: {closed, reason, property?}, or a JSON string of that object. property is required when closed is true. Get the rules from paw_rules (kind bind) first."
+  )
+};
+var outputShape3 = {
+  verdict: external_exports.object({
+    curseId: external_exports.string(),
+    closed: external_exports.boolean(),
+    reason: external_exports.string(),
+    property: external_exports.string().optional(),
+    judgedAt: external_exports.number()
+  }),
+  binding: external_exports.object({
+    curseId: external_exports.string(),
+    kind: BindingKindSchema,
+    clause: external_exports.string(),
+    proposedAt: external_exports.number()
+  })
+};
+var DESCRIPTION3 = "Check the verdict you wrote as the Judge on an amendment against the Judge's rules. On success it returns the normalised verdict and binding; on failure it lists every problem, one per line. Nothing is stored. It calls no model and no server.";
+var FAILURE_HEADING2 = "The verdict does not pass yet:";
+async function handleCheckVerdict(now, args) {
+  const input = external_exports.object(inputShape3).safeParse(args);
+  if (!input.success) return errorResult(describeInputError(input.error));
+  const result = checkVerdict(input.data, now);
+  if (!result.ok) return errorResult(renderProblems(FAILURE_HEADING2, result.problems));
+  return textResult(renderLocalVerdict(result.verdict), { verdict: result.verdict, binding: result.binding });
+}
+
+// src/tool-curse.ts
+var inputShape4 = {
+  requirement: external_exports.string().trim().min(1, "requirement must not be empty").max(500, "requirement must be at most 500 characters").describe("One software requirement, with its key acceptance criteria. At most 500 characters."),
+  context: external_exports.string().trim().max(200, "context must be at most 200 characters").optional().describe("Optional: one line about the app or feature. At most 200 characters.")
+};
+var outputShape4 = {
+  wishId: external_exports.string(),
+  narration: external_exports.string(),
+  curses: external_exports.array(
+    external_exports.object({
+      handle: external_exports.string(),
+      id: external_exports.string(),
+      type: CurseTypeSchema,
+      status: external_exports.enum(["open", "closed"]),
+      story: external_exports.string(),
+      loophole: external_exports.string()
+    })
+  )
+};
+var DESCRIPTION4 = "Curse a software requirement. The Paw follows it to the letter and returns up to five loopholes, each with a handle you can pass to paw_bind.";
+async function handleCurse(deps, args) {
+  const input = external_exports.object(inputShape4).safeParse(args);
+  if (!input.success) return errorResult(describeInputError(input.error));
+  const { requirement, context } = input.data;
+  const wish = context ? { text: requirement, context } : { text: requirement };
+  const res = await deps.api.postJson("paw_curse", "/api/grant", { wish }, GrantResponseSchema);
+  if (!res.ok) return errorResult(res.message);
+  const { grant } = res.data;
+  deps.memory.remember(grant);
+  return textResult(renderCurses(grant), {
+    wishId: grant.wishId,
+    narration: grant.narration,
+    curses: curseViews(grant)
+  });
+}
+
+// src/rules.ts
+var CURSE_FOOTER = "Write the curses yourself, following these rules. Include no ids; the system assigns them. Then call paw_check_curses with the requirement and your curses, and fix what it reports once.";
+var BIND_FOOTER = "Judge the amendment yourself, strictly: if in doubt, closed is false. Then call paw_check_verdict with the curse, the amendment, its kind and your verdict, and fix what it reports once.";
+function cursesJsonSchema() {
+  const item = CurseSchema.pick({ type: true, story: true, loophole: true });
+  const curses = GrantSchema.shape.curses;
+  const schema = item.array().min(curses._def.minLength?.value ?? MIN_CURSES).max(curses._def.maxLength?.value ?? MAX_CURSES);
+  return zodToJsonSchema(schema, { $refStrategy: "none" });
+}
+function verdictJsonSchema() {
+  const schema = VerdictSchema.pick({ closed: true, reason: true, property: true });
+  return zodToJsonSchema(schema, { $refStrategy: "none" });
+}
+function buildRules(kind) {
+  const sections = kind === "curse" ? [
+    { name: "role", text: PAW_ROLE },
+    { name: "curse-rules", text: CURSE_RULES },
+    { name: "taxonomy", text: CURSE_TAXONOMY },
+    { name: "guardrails", text: GUARDRAILS },
+    { name: "json-shape", text: CURSES_JSON_SHAPE },
+    { name: "array-rule", text: CURSES_ARRAY_RULE }
+  ] : [
+    { name: "role", text: JUDGE_ROLE },
+    { name: "json-shape", text: VERDICT_JSON_SHAPE },
+    { name: "verdict-rules", text: VERDICT_RULES },
+    { name: "ears-format", text: EARS_CLAUSE_FORMAT }
+  ];
+  const jsonSchema = kind === "curse" ? cursesJsonSchema() : verdictJsonSchema();
+  const next = kind === "curse" ? CURSE_FOOTER : BIND_FOOTER;
+  const text = [
+    ...sections.map((section) => section.text),
+    `JSON Schema:
+${JSON.stringify(jsonSchema, null, 2)}`,
+    next
+  ].join("\n\n");
+  return { kind, text, sections, jsonSchema, next };
+}
+
+// src/tool-rules.ts
+var inputShape5 = {
+  kind: external_exports.enum(["curse", "bind"], { errorMap: () => ({ message: 'kind must be "curse" or "bind"' }) }).describe('"curse" to find loopholes in a requirement; "bind" to judge whether an amendment closes one.')
+};
+var outputShape5 = {
+  kind: external_exports.enum(["curse", "bind"]),
+  sections: external_exports.array(external_exports.object({ name: external_exports.string(), text: external_exports.string() })),
+  jsonSchema: external_exports.record(external_exports.unknown()),
+  next: external_exports.string()
+};
+var DESCRIPTION5 = `Get the rules of the Monkey's Paw as text: kind "curse" for finding loopholes in a requirement, kind "bind" for judging whether an amendment closes one. Call it first. It calls no model and no server.`;
+async function handleRules(args) {
+  const input = external_exports.object(inputShape5).safeParse(args);
+  if (!input.success) return errorResult(describeInputError(input.error));
+  const { text, kind, sections, jsonSchema, next } = buildRules(input.data.kind);
+  return textResult(text, { kind, sections, jsonSchema, next });
+}
+
 // src/version.ts
-var PAW_MCP_VERSION = "0.1.0";
+var PAW_MCP_VERSION = "0.2.0";
 
 // src/server.ts
 async function safely(run) {
@@ -21930,31 +22360,80 @@ async function safely(run) {
   }
 }
 function createPawServer(options) {
-  const api = createApiClient(options);
-  const deps = { api, memory: createGrantMemory() };
-  const server2 = new McpServer({ name: "paw", version: PAW_MCP_VERSION });
+  const now = options.now ?? Date.now;
+  const log2 = options.log ?? (() => void 0);
+  const remote = options.mode === "remote";
+  if (remote && !options.baseUrl) throw new Error("Remote mode needs a baseUrl.");
+  const server2 = new McpServer(
+    { name: "paw", version: PAW_MCP_VERSION },
+    { instructions: remote ? REMOTE_INSTRUCTIONS : LOCAL_INSTRUCTIONS }
+  );
+  const local = (tool, run) => (args) => safely(async () => {
+    const started = Date.now();
+    let result;
+    try {
+      result = await run(args);
+    } catch {
+      log2(tool, "invalid", Date.now() - started);
+      throw new Error("local tool failed");
+    }
+    log2(tool, result.isError ? "invalid" : "ok", Date.now() - started);
+    return result;
+  });
   server2.registerTool(
-    "paw_curse",
-    { description: DESCRIPTION, inputSchema: inputShape, outputSchema: outputShape },
-    (args) => safely(() => handleCurse(deps, args))
+    "paw_rules",
+    { description: DESCRIPTION5, inputSchema: inputShape5, outputSchema: outputShape5 },
+    local("paw_rules", (args) => handleRules(args))
   );
   server2.registerTool(
-    "paw_bind",
+    "paw_check_curses",
     { description: DESCRIPTION2, inputSchema: inputShape2, outputSchema: outputShape2 },
-    (args) => safely(() => handleBind(deps, args))
+    local("paw_check_curses", (args) => handleCheckCurses(args))
   );
+  server2.registerTool(
+    "paw_check_verdict",
+    {
+      description: DESCRIPTION3,
+      inputSchema: inputShape3,
+      outputSchema: outputShape3
+    },
+    local("paw_check_verdict", (args) => handleCheckVerdict(now, args))
+  );
+  if (remote) {
+    const api = createApiClient({
+      baseUrl: options.baseUrl,
+      ...options.fetchFn ? { fetchFn: options.fetchFn } : {},
+      ...options.timeoutMs !== void 0 ? { timeoutMs: options.timeoutMs } : {},
+      log: log2
+    });
+    const deps = { api, memory: createGrantMemory() };
+    server2.registerTool(
+      "paw_curse",
+      { description: DESCRIPTION4, inputSchema: inputShape4, outputSchema: outputShape4 },
+      (args) => safely(() => handleCurse(deps, args))
+    );
+    server2.registerTool(
+      "paw_bind",
+      { description: DESCRIPTION, inputSchema: inputShape, outputSchema: outputShape },
+      (args) => safely(() => handleBind(deps, args))
+    );
+  }
   return server2;
 }
 
 // src/index.ts
-var baseUrl = resolveBaseUrl(process.env.PAW_API_URL);
-process.stderr.write(`paw-mcp ${PAW_MCP_VERSION} api=${originOf(baseUrl)}
+var { mode, ignored } = resolveMode(process.env.PAW_API_URL);
+process.stderr.write(`${startupLine(PAW_MCP_VERSION, mode)}
 `);
-var server = createPawServer({
-  baseUrl,
-  log: (tool, status, ms) => process.stderr.write(`${tool} ${status} ${ms}ms
-`)
-});
+if (ignored) process.stderr.write(`${ignoredLine(PAW_MCP_VERSION)}
+`);
+var log = (tool, outcome, ms) => {
+  process.stderr.write(`${tool} ${outcome} ${ms}ms
+`);
+};
+var server = createPawServer(
+  mode.kind === "remote" ? { mode: "remote", baseUrl: mode.baseUrl, log } : { mode: "local", log }
+);
 server.connect(new StdioServerTransport()).catch(() => {
   process.stderr.write("paw-mcp failed to start\n");
   process.exit(1);

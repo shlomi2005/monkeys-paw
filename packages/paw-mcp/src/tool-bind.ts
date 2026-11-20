@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { BindResponseSchema, BindingKindSchema } from 'paw-core';
 import { openHandles } from './grant-memory';
 import { errorResult, renderVerdict, textResult, type ToolResult } from './render';
-import { describeInputError, type ToolDeps } from './tool-curse';
+import { describeInputError } from './issue';
+import type { ToolDeps } from './tool-curse';
 
 export const inputShape = {
   curse: z
