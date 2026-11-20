@@ -2,7 +2,7 @@ import { serve } from '@hono/node-server';
 
 import { createApp } from './app';
 import { GeminiModelClient } from './client/gemini';
-import { loadBudgetConfig } from './budget/config';
+import { loadBudgetConfig, loadTrustedProxyHops } from './budget/config';
 import { loadPriceTable } from './budget/prices';
 import { createGlobalState } from './budget/state';
 import { getCurrentMode } from './modes';
@@ -18,6 +18,7 @@ const app = createApp({
   corsOrigin: process.env.CORS_ORIGIN || '*',
   examplesCachePath: defaultExamplesCachePath(),
   prices: loadPriceTable(),
+  trustedProxyHops: loadTrustedProxyHops(),
 });
 
 const mode = getCurrentMode(model.available, createGlobalState(), budget);

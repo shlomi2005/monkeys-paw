@@ -5,6 +5,7 @@ import {
   calculateSpecificityScore,
   calculateTypeCoverage,
   runEval,
+  runEvalCli,
   EvalAbortError,
 } from './script';
 import type { CurseType } from 'paw-core';
@@ -113,9 +114,88 @@ describe('Eval script budget guard (iron-rules §5, Req 12.7)', () => {
 
     expect(error).toBeInstanceOf(EvalAbortError);
     const message = (error as Error).message;
-    expect(message).toContain('budget guard');
-    expect(message).toContain('3 model calls');
+    expect(message).toContain('budget exhausted');
+    expect(message).toContain('after 3 model calls');
+    expect(message).toContain('1 of 5 wishes done');
+    expect(message).toMatch(/\d+\.\d{4} cents charged\); nothing was written\.$/);
     expect(message).not.toContain('\n');
     expect(model.calls).toBe(3);
+  });
+
+  it('a refusal mid-run is a failure: one budget exhausted line, exit 1, nothing written (task 109)', async () => {
+    const model = new FakeModel({ usage: 'ceiling' });
+    const writeEvalReport = vi.fn(async () => undefined);
+    const writeExamplesCache = vi.fn(async () => undefined);
+    const log = vi.fn();
+    const error = vi.fn();
+
+    const code = await runEvalCli(['--limit', '5'], {
+      // The real eval, over a fake model and a budget that pays for three calls.
+      runEval: (limit) => runEval(limit, { model, delayMs: 0, dailyBudgetCents: 11 }),
+      writeEvalReport,
+      writeExamplesCache,
+      log,
+      error,
+    });
+
+    expect(code).toBe(1);
+    expect(error).toHaveBeenCalledTimes(1);
+    const line = error.mock.calls[0][0] as string;
+    expect(line).toContain('budget exhausted');
+    expect(line).toContain('Eval failed');
+    expect(line).not.toContain('\n');
+    expect(writeEvalReport).not.toHaveBeenCalled();
+    expect(writeExamplesCache).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled(); // no PASS or FAIL summary: the run did not finish
+  });
+
+  it('a refusal on the very first wish also fails and writes nothing', async () => {
+    const model = new FakeModel({ usage: 'ceiling' });
+    const writeEvalReport = vi.fn(async () => undefined);
+    const writeExamplesCache = vi.fn(async () => undefined);
+    const error = vi.fn();
+
+    const code = await runEvalCli([], {
+      runEval: (limit) => runEval(limit, { model, delayMs: 0, dailyBudgetCents: 0 }),
+      writeEvalReport,
+      writeExamplesCache,
+      log: vi.fn(),
+      error,
+    });
+
+    expect(code).toBe(1);
+    expect(error.mock.calls[0][0]).toContain('budget exhausted');
+    expect(model.calls).toBe(0);
+    expect(writeEvalReport).not.toHaveBeenCalled();
+    expect(writeExamplesCache).not.toHaveBeenCalled();
+  });
+
+  it('a finished passing run writes the report and the cache and exits 0', async () => {
+    const writeEvalReport = vi.fn(async () => undefined);
+    const writeExamplesCache = vi.fn(async () => undefined);
+    const log = vi.fn();
+    const result = {
+      timestamp: 'now',
+      wishes: [{ id: 'g1', wish: 'w', curseCount: 3, curses: [], typeCoverage: 1, verdict: 'PASS' as const }],
+      overallSpecificity: 1,
+      overallTypeCoverage: 1,
+      pass: true,
+      modelCalls: 2,
+      costCents: 1.5,
+      examplesList: [],
+    };
+
+    const code = await runEvalCli([], {
+      runEval: async () => result,
+      writeEvalReport,
+      writeExamplesCache,
+      log,
+      error: vi.fn(),
+    });
+
+    expect(code).toBe(0);
+    expect(writeEvalReport).toHaveBeenCalledTimes(1);
+    expect(writeExamplesCache).toHaveBeenCalledTimes(1);
+    expect(log.mock.calls[0][0]).toContain('1.5000 cents charged');
   });
 });

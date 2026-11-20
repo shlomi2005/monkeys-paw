@@ -10,6 +10,9 @@ export const DEFAULT_MODEL = 'gemini-3.6-flash';
 
 /** `gemini-3.1-flash-lite` shuts down on 2027-05-07. It stays as the last fallback until then. */
 const DEFAULT_FALLBACKS = 'gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite';
+
+/** The default chain, primary first, as it is when no model variable is set. */
+export const DEFAULT_MODEL_CHAIN: readonly string[] = [DEFAULT_MODEL, ...DEFAULT_FALLBACKS.split(',')];
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
@@ -219,9 +222,18 @@ export class GeminiModelClient implements ModelClient {
     throw lastError;
   }
 
-  private inputTokensOf(prompt: string, responseSchema: unknown): number {
+  /** Characters of one request as the input estimate counts them: the prompt plus its response schema. */
+  requestChars(prompt: string): number {
+    return this.requestCharsOf(prompt, this.schemaFor(prompt));
+  }
+
+  private requestCharsOf(prompt: string, responseSchema: unknown): number {
     const schemaLength = responseSchema ? JSON.stringify(responseSchema).length : 0;
-    return Math.ceil((prompt.length + schemaLength) / 3);
+    return prompt.length + schemaLength;
+  }
+
+  private inputTokensOf(prompt: string, responseSchema: unknown): number {
+    return Math.ceil(this.requestCharsOf(prompt, responseSchema) / 3);
   }
 
   /**

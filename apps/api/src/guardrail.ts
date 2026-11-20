@@ -10,6 +10,12 @@
  *    first two words after it (determiners and possessives skipped) is a person
  *    word, or a named person/group (capitalised, not an acronym, not modifying
  *    a following lowercase content word).
+ *  - Game-role exemption: a combat verb (kill, attack, shoot, ...) aimed at a game-role
+ *    word (player, NPC, enemy, monster, ...) is a normal game requirement and passes
+ *    ("Players can attack other players"). Social-harm verbs (harass, bully, threaten,
+ *    stalk, abuse, hate, torture, murder) are not exempt: aimed at players they reach
+ *    the real people behind the avatars. Real person words (users, people) and named
+ *    people or groups still refuse with any harm verb.
  *  - Prevention or safety framing within the four words before the harm word
  *    cancels it ("Prevent abuse of the signup form").
  *  - A tiny list of words is refused without a target (ALWAYS_REFUSED_WORDS).
@@ -19,25 +25,46 @@
  * Wishes that actually call for harm are caught by the harm-verb rule.
  */
 
-/** Harm verbs with the inflections we accept. */
-export const HARM_WORDS: readonly string[] = [
+/** Combat verbs with the inflections we accept. Exempt when aimed at a game role. */
+export const COMBAT_WORDS: readonly string[] = [
   'kill', 'kills', 'killed', 'killing',
-  'murder', 'murders', 'murdered', 'murdering',
   'hurt', 'hurts', 'hurting',
   'harm', 'harms', 'harmed', 'harming',
   'injure', 'injures', 'injured', 'injuring',
   'attack', 'attacks', 'attacked', 'attacking',
   'assault', 'assaults', 'assaulted', 'assaulting',
-  'torture', 'tortures', 'tortured', 'torturing',
   'stab', 'stabs', 'stabbed', 'stabbing',
   'shoot', 'shoots', 'shot', 'shooting',
   'poison', 'poisons', 'poisoned', 'poisoning',
+];
+
+/**
+ * Social-harm verbs with the inflections we accept. Never exempt: aimed at players
+ * they reach the real people behind the avatars.
+ */
+export const SOCIAL_HARM_WORDS: readonly string[] = [
+  'murder', 'murders', 'murdered', 'murdering',
+  'torture', 'tortures', 'tortured', 'torturing',
   'harass', 'harasses', 'harassed', 'harassing',
   'bully', 'bullies', 'bullied', 'bullying',
   'threaten', 'threatens', 'threatened', 'threatening',
   'stalk', 'stalks', 'stalked', 'stalking',
   'abuse', 'abuses', 'abused', 'abusing',
   'hate', 'hates', 'hated', 'hating',
+];
+
+/** Harm verbs with the inflections we accept. */
+export const HARM_WORDS: readonly string[] = [...COMBAT_WORDS, ...SOCIAL_HARM_WORDS];
+
+/**
+ * Game-role words (lowercase). A combat verb aimed at one of these is not aimed at a
+ * real person. "player" and "players" are also person words, so the exemption is
+ * what lets "Players can attack other players" pass.
+ */
+export const GAME_ROLE_WORDS: readonly string[] = [
+  'player', 'players', 'character', 'characters', 'npc', 'npcs',
+  'avatar', 'avatars', 'enemy', 'enemies', 'monster', 'monsters',
+  'opponent', 'opponents', 'mob', 'mobs',
 ];
 
 /** Refused even without a target, unless prevention framing applies. */
@@ -122,6 +149,8 @@ const FUNCTION_WORDS = new Set([
 ]);
 
 const HARM = new Set(HARM_WORDS);
+const COMBAT = new Set(COMBAT_WORDS);
+const GAME_ROLE = new Set(GAME_ROLE_WORDS);
 const ALWAYS_REFUSED = new Set(ALWAYS_REFUSED_WORDS);
 const DETERMINER_SET = new Set(DETERMINERS);
 const PERSON = new Set(PERSON_WORDS);
@@ -190,9 +219,11 @@ function targetWindow(tokens: Token[], harmIndex: number): number[] {
   return picked;
 }
 
-function isPersonTarget(tokens: Token[], j: number): boolean {
+function isPersonTarget(tokens: Token[], j: number, harmWord: string): boolean {
   const t = tokens[j];
   if (t.possessive) return false;
+  // A combat verb at a game role is a game mechanic, not a wish to hurt a real person.
+  if (COMBAT.has(harmWord) && GAME_ROLE.has(t.lower)) return false;
   if (PERSON.has(t.lower)) {
     // "user sessions": a singular noun modifying a content word is not a person.
     return !(NOUN_ADJUNCTS.has(t.lower) && isModifiedBy(tokens[j + 1]));
@@ -217,7 +248,7 @@ function checkOne(input: string): boolean {
     if (!isHarm && !isAlways) continue;
     if (hasPreventionBefore(tokens, i)) continue;
     if (isAlways) return true;
-    if (targetWindow(tokens, i).some((j) => isPersonTarget(tokens, j))) return true;
+    if (targetWindow(tokens, i).some((j) => isPersonTarget(tokens, j, word))) return true;
   }
   return false;
 }

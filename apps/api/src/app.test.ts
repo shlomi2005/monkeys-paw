@@ -127,6 +127,31 @@ describe('createApp', () => {
       expect((await post(app, '/api/grant', grantBody, '198.51.100.9')).status).toBe(200);
     });
 
+    it('a client that fakes the leftmost x-forwarded-for entry is still limited (task 111)', async () => {
+      const app = makeApp(new FakeModel());
+      for (let i = 1; i <= 10; i++) {
+        const res = await post(app, '/api/grant', grantBody, `fake-${i}, 203.0.113.7`);
+        expect(res.status, `grant ${i}`).toBe(200);
+      }
+      const eleventh = await post(app, '/api/grant', grantBody, 'fake-11, 203.0.113.7');
+      expect(eleventh.status).toBe(503);
+    });
+
+    it('trustedProxyHops 2 reads the second entry from the right (task 111)', async () => {
+      const app = createApp({
+        model: new FakeModel(),
+        budget: { ...BUDGET, perIpLimit: 2 },
+        corsOrigin: '*',
+        examplesCachePath: EXAMPLES_FIXTURE,
+        clock: () => 1_000_000,
+        trustedProxyHops: 2,
+      });
+      for (const fake of ['a', 'b']) {
+        expect((await post(app, '/api/grant', grantBody, `${fake}, 203.0.113.7, 10.0.0.1`)).status).toBe(200);
+      }
+      expect((await post(app, '/api/grant', grantBody, 'c, 203.0.113.7, 10.0.0.1')).status).toBe(503);
+    });
+
     it('counts a request when it is admitted, so parallel requests cannot slip through', async () => {
       const app = makeApp(new FakeModel());
       const responses = await Promise.all(

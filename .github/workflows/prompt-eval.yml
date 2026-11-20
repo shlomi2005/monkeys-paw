@@ -64,7 +64,9 @@ jobs:
         if: steps.key.outputs.present == 'true'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          DAILY_BUDGET_CENTS: '25'
+          # The worst case of the default 5-wish eval (apps/api README, "Cost guard and worst case"):
+          # ceil(5 x 278.50695 cents per grant) = ceil(1392.53) = 1393 cents. The eval makes no binds.
+          DAILY_BUDGET_CENTS: '1393'
         run: pnpm -C apps/api eval
 
       - name: Upload the eval report

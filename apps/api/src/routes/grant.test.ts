@@ -6,6 +6,7 @@ import { createGrantRoute } from './grant';
 import { BudgetedModelClient } from '../budget/guarded-client';
 import { createGlobalState } from '../budget/state';
 import { FakeMeteredModel } from '../budget/fake-metered';
+import { MAX_WISH_CONTEXT_CHARS, MAX_WISH_TEXT_CHARS } from '../schemas';
 
 /** A per-request guard factory over `model` with a budget large enough not to matter. */
 function guarded(model: ModelClient, dailyBudgetCents = 500) {
@@ -156,5 +157,73 @@ describe('POST /api/grant', () => {
     expect(res.status).toBe(503);
     const data = (await res.json()) as { message: string };
     expect(data.message).toBe('The paw is resting. Browse the examples until it wakes.');
+  });
+});
+
+describe('POST /api/grant input caps (task 107)', () => {
+  /** A route over a fake that counts every call that reaches the model. */
+  function setup() {
+    const inner = new FakeMeteredModel();
+    const state = createGlobalState();
+    let guardsCreated = 0;
+    const app = new Hono();
+    createGrantRoute(app, () => {
+      guardsCreated += 1;
+      return new BudgetedModelClient(inner, state, {
+        perIpLimit: 10,
+        windowMs: 60_000,
+        dailyBudgetCents: 500,
+      });
+    });
+    const post = (wish: { text: string; context?: string }) =>
+      app.request(
+        new Request('http://localhost/api/grant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wish }),
+        }),
+      );
+    return { inner, post, guardsCreated: () => guardsCreated, state };
+  }
+
+  it('exports the limits as named constants', () => {
+    expect(MAX_WISH_TEXT_CHARS).toBe(500);
+    expect(MAX_WISH_CONTEXT_CHARS).toBe(200);
+  });
+
+  it('accepts a wish text of 500 characters and rejects 501 with 400 and no model call', async () => {
+    const ok = setup();
+    expect((await ok.post({ text: 'a'.repeat(500) })).status).toBe(200);
+    expect(ok.inner.calls).toBeGreaterThan(0);
+
+    const over = setup();
+    const res = await over.post({ text: 'a'.repeat(501) });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { message: string }).message).toBe('Invalid wish format');
+    expect(over.inner.calls).toBe(0);
+    expect(over.guardsCreated()).toBe(0);
+    expect(over.state.spentCents).toBe(0);
+    expect(over.state.reservedCents).toBe(0);
+  });
+
+  it('counts the wish text after trim', async () => {
+    const padded = setup();
+    expect((await padded.post({ text: `   ${'a'.repeat(500)}   ` })).status).toBe(200);
+
+    const over = setup();
+    expect((await over.post({ text: `   ${'a'.repeat(501)}   ` })).status).toBe(400);
+    expect(over.inner.calls).toBe(0);
+  });
+
+  it('accepts a context of 200 characters and rejects 201 with 400 and no model call', async () => {
+    const ok = setup();
+    expect((await ok.post({ text: 'Save a draft', context: 'b'.repeat(200) })).status).toBe(200);
+    expect(ok.inner.calls).toBeGreaterThan(0);
+
+    const over = setup();
+    const res = await over.post({ text: 'Save a draft', context: 'b'.repeat(201) });
+    expect(res.status).toBe(400);
+    expect(over.inner.calls).toBe(0);
+    expect(over.guardsCreated()).toBe(0);
   });
 });

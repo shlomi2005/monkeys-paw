@@ -170,7 +170,7 @@ export async function runEval(
     // The guard refused a call: the grant is paw-core's fallback, so stop here.
     if (modelClient.denied) {
       throw new EvalAbortError(
-        `Eval stopped: the budget guard refused a model call after ${modelClient.calls} model calls (${wishes.length} of ${wishesToEval.length} wishes done); nothing was written.`,
+        `Eval failed: budget exhausted after ${modelClient.calls} model calls (${wishes.length} of ${wishesToEval.length} wishes done, ${modelClient.costCents.toFixed(4)} cents charged); nothing was written.`,
       );
     }
 
@@ -322,23 +322,43 @@ function parseArgs(args: string[]): { limit?: number; all?: boolean } {
   return result;
 }
 
+/** What `runEvalCli` calls. Tests replace them; the defaults are the real ones. */
+export interface EvalCliDeps {
+  runEval: typeof runEval;
+  writeEvalReport: typeof writeEvalReport;
+  writeExamplesCache: typeof writeExamplesCache;
+  log: (line: string) => void;
+  error: (line: string) => void;
+}
+
 /**
- * Main eval entry point
+ * The eval as a command: returns the exit code instead of exiting, so a test can check it.
  * (Task 72)
  * Task 97: Load .env in eval script (tsx --env-file=.env)
  * Task 100: Print model call count
+ * Task 109: when the budget guard refuses a call, `runEval` throws before anything is
+ * written, so this prints one "budget exhausted" line, writes neither the report nor
+ * the examples cache, and returns 1. A refused run never passes.
  */
-async function main() {
+export async function runEvalCli(
+  argv: string[],
+  deps: Partial<EvalCliDeps> = {},
+): Promise<number> {
+  const run = deps.runEval ?? runEval;
+  const report = deps.writeEvalReport ?? writeEvalReport;
+  const cache = deps.writeExamplesCache ?? writeExamplesCache;
+  const log = deps.log ?? ((line: string) => console.log(line));
+  const error = deps.error ?? ((line: string) => console.error(line));
+
   try {
-    const args = process.argv.slice(2);
-    const { limit, all } = parseArgs(args);
+    const { limit, all } = parseArgs(argv);
 
     const evalLimit = all ? undefined : limit;
-    const result = await runEval(evalLimit);
-    await writeEvalReport(result);
+    const result = await run(evalLimit);
+    await report(result);
 
     // Write examples cache if available
-    await writeExamplesCache(result.examplesList);
+    await cache(result.examplesList);
 
     // Print final test summary line (Task 100: include model call count)
     const passRate = (
@@ -346,23 +366,22 @@ async function main() {
       100
     ).toFixed(1);
     const summary = `${result.wishes.length} wishes: ${result.pass ? 'PASS ✓' : 'FAIL ✗'} (${passRate}% pass rate, specificity ${(result.overallSpecificity * 100).toFixed(1)}%, coverage ${(result.overallTypeCoverage * 100).toFixed(1)}%, ${result.modelCalls} model calls, ${result.costCents.toFixed(4)} cents charged)`;
-    console.log(summary);
+    log(summary);
 
-    // Exit with appropriate code
-    if (!result.pass) {
-      process.exit(1);
-    }
-
-    process.exit(0);
+    return result.pass ? 0 : 1;
   } catch (err) {
     // One line, no stack: it must not echo prompts or secrets.
-    console.error(
+    error(
       err instanceof EvalAbortError
         ? err.message
         : `Eval script error: ${err instanceof Error ? err.message : 'unknown'}`,
     );
-    process.exit(1);
+    return 1;
   }
+}
+
+async function main(): Promise<void> {
+  process.exit(await runEvalCli(process.argv.slice(2)));
 }
 
 // Run if called directly

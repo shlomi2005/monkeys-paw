@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { CI_EVAL_WISHES, computeWorstCase } from '../src/budget/worst-case';
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const text = readFileSync(path.join(REPO_ROOT, '.github', 'workflows', 'prompt-eval.yml'), 'utf8');
@@ -81,7 +82,13 @@ describe('.github/workflows/prompt-eval.yml', () => {
   it('runs the eval with a hard CI budget and uploads the report even when the eval fails', () => {
     const all = steps();
     const evalStep = all.find((step) => step.includes('pnpm -C apps/api eval'));
-    expect(evalStep).toContain("DAILY_BUDGET_CENTS: '25'");
+    // ceil(5 x the worst case per grant): the worst case of the default 5-wish eval.
+    const cap = Math.ceil(CI_EVAL_WISHES * computeWorstCase().grantCents);
+    expect(CI_EVAL_WISHES).toBe(5);
+    expect(evalStep).toContain(`DAILY_BUDGET_CENTS: '${cap}'`);
+    expect(evalStep).toContain('ceil(5 x ');
+    const readme = readFileSync(path.join(REPO_ROOT, 'apps', 'api', 'README.md'), 'utf8');
+    expect(readme).toContain(`DAILY_BUDGET_CENTS=${cap}`);
     expect(evalStep).not.toContain('continue-on-error');
     expect(text).not.toMatch(/continue-on-error/);
     const upload = all.find((step) => step.includes('upload-artifact'));

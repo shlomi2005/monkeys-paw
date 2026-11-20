@@ -2,10 +2,13 @@ import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import {
   isHarmfulWish,
+  COMBAT_WORDS,
+  GAME_ROLE_WORDS,
   HARM_WORDS,
   DETERMINERS,
   PERSON_WORDS,
   PREVENTION_WORDS,
+  SOCIAL_HARM_WORDS,
 } from './guardrail';
 
 describe('isHarmfulWish: wishes that pass', () => {
@@ -27,6 +30,10 @@ describe('isHarmfulWish: wishes that pass', () => {
     "Kill the user's session after logout",
     'Kill user sessions after 30 minutes',
     'Detect and report gore in uploaded images',
+    // Game roles are not real-person targets for combat verbs (task 112, Req 1.3).
+    'Players can attack other players',
+    'Players can kill enemies and loot their gear',
+    'NPCs attack the player at night',
   ];
   it.each(passing)('passes: %s', (wish) => {
     expect(isHarmfulWish(wish)).toBe(false);
@@ -42,6 +49,12 @@ describe('isHarmfulWish: wishes that are refused', () => {
     'Make the app harass every Ruritanian',
     'Poison the people in my building',
     'Plan a genocide',
+    // The game-role exemption stops at real people and at social-harm verbs (task 112).
+    'Let players harass other players',
+    'Bully the players who lose',
+    'Attack the users',
+    'Players can attack John Doe',
+    'Make the game hurt real people',
   ];
   it.each(refused)('refuses: %s', (wish) => {
     expect(isHarmfulWish(wish)).toBe(true);
@@ -94,6 +107,8 @@ describe('isHarmfulWish: properties', () => {
         fc.option(fc.constantFrom(...DETERMINERS), { nil: undefined }),
         fc.constantFrom(...PERSON_WORDS),
         (verb, determiner, person) => {
+          // The documented exemption: a combat verb at a game role is a game mechanic.
+          fc.pre(!(COMBAT_WORDS.includes(verb) && GAME_ROLE_WORDS.includes(person)));
           const wish = [verb, determiner, person].filter(Boolean).join(' ');
           expect(isHarmfulWish(wish)).toBe(true);
         },
@@ -112,5 +127,38 @@ describe('isHarmfulWish: properties', () => {
         },
       ),
     );
+  });
+
+  it('a combat verb aimed at a game-role word always passes (task 112)', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...COMBAT_WORDS),
+        fc.option(fc.constantFrom(...DETERMINERS), { nil: undefined }),
+        fc.constantFrom(...GAME_ROLE_WORDS),
+        (verb, determiner, role) => {
+          const wish = [verb, determiner, role].filter(Boolean).join(' ');
+          expect(isHarmfulWish(wish)).toBe(false);
+        },
+      ),
+    );
+  });
+
+  it('a social-harm verb aimed at player or players always refuses (task 112)', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...SOCIAL_HARM_WORDS),
+        fc.option(fc.constantFrom(...DETERMINERS), { nil: undefined }),
+        fc.constantFrom('player', 'players'),
+        (verb, determiner, role) => {
+          const wish = [verb, determiner, role].filter(Boolean).join(' ');
+          expect(isHarmfulWish(wish)).toBe(true);
+        },
+      ),
+    );
+  });
+
+  it('the combat and social-harm verbs are exactly the harm verbs', () => {
+    expect([...COMBAT_WORDS, ...SOCIAL_HARM_WORDS].sort()).toEqual([...HARM_WORDS].sort());
+    expect(COMBAT_WORDS.filter((word) => SOCIAL_HARM_WORDS.includes(word))).toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ import { createBindRoute } from './bind';
 import { BudgetedModelClient } from '../budget/guarded-client';
 import { createGlobalState } from '../budget/state';
 import { FakeMeteredModel } from '../budget/fake-metered';
+import { MAX_CLAUSE_CHARS, MAX_LOOPHOLE_CHARS } from '../schemas';
 
 /** A per-request guard factory over `model` with a budget large enough not to matter. */
 function guarded(model: ModelClient, dailyBudgetCents = 500) {
@@ -206,5 +207,88 @@ describe('POST /api/bind', () => {
     expect(res.status).toBe(503);
     const data = (await res.json()) as { message: string };
     expect(data.message).toBe('The paw is resting. Browse the examples until it wakes.');
+  });
+});
+
+describe('POST /api/bind input caps (task 107)', () => {
+  function setup() {
+    const inner = new FakeMeteredModel();
+    const state = createGlobalState();
+    let guardsCreated = 0;
+    const app = new Hono();
+    createBindRoute(app, () => {
+      guardsCreated += 1;
+      return new BudgetedModelClient(inner, state, {
+        perIpLimit: 10,
+        windowMs: 60_000,
+        dailyBudgetCents: 500,
+      });
+    });
+    const post = (clause: string, loophole: string) => {
+      const curse = (id: string, type: 'permissions' | 'time' | 'money', hole = 'Loophole') => ({
+        id,
+        type,
+        story: 'Story',
+        loophole: hole,
+        status: 'open' as const,
+      });
+      return app.request(
+        new Request('http://localhost/api/bind', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            grant: {
+              wishId: 'w1',
+              narration: 'Granted.',
+              curses: [curse('c1', 'permissions', loophole), curse('c2', 'time'), curse('c3', 'money')],
+            },
+            curseId: 'c1',
+            kind: 'ears-clause',
+            clause,
+          }),
+        }),
+      );
+    };
+    return { inner, post, guardsCreated: () => guardsCreated, state };
+  }
+
+  it('exports the limits as named constants', () => {
+    expect(MAX_CLAUSE_CHARS).toBe(1000);
+    expect(MAX_LOOPHOLE_CHARS).toBe(1000);
+  });
+
+  it('accepts a clause of 1000 characters and rejects 1001 with 400 and no model call', async () => {
+    const ok = setup();
+    expect((await ok.post('c'.repeat(1000), 'Loophole')).status).toBe(200);
+    expect(ok.inner.calls).toBeGreaterThan(0);
+
+    const over = setup();
+    const res = await over.post('c'.repeat(1001), 'Loophole');
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { message: string }).message).toBe('Invalid bind request');
+    expect(over.inner.calls).toBe(0);
+    expect(over.guardsCreated()).toBe(0);
+    expect(over.state.reservedCents).toBe(0);
+  });
+
+  it('counts the clause after trim', async () => {
+    const padded = setup();
+    expect((await padded.post(`  ${'c'.repeat(1000)}  `, 'Loophole')).status).toBe(200);
+
+    const over = setup();
+    expect((await over.post(`  ${'c'.repeat(1001)}  `, 'Loophole')).status).toBe(400);
+    expect(over.inner.calls).toBe(0);
+  });
+
+  it('accepts a judged loophole of 1000 characters and rejects 1001 with 400 and no model call', async () => {
+    const ok = setup();
+    expect((await ok.post('Only the owner or a deputy.', 'l'.repeat(1000))).status).toBe(200);
+    expect(ok.inner.calls).toBeGreaterThan(0);
+
+    const over = setup();
+    const res = await over.post('Only the owner or a deputy.', 'l'.repeat(1001));
+    expect(res.status).toBe(400);
+    expect(over.inner.calls).toBe(0);
+    expect(over.guardsCreated()).toBe(0);
   });
 });

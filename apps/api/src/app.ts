@@ -28,6 +28,8 @@ export interface AppDeps {
   clock?: () => number;
   /** Model prices for the budget guard. Defaults to the 1.1.2027 table. */
   prices?: PriceTable;
+  /** Proxies of ours in front of the server, for the per-IP key. Defaults to 1. */
+  trustedProxyHops?: number;
 }
 
 /**
@@ -65,7 +67,7 @@ export function createApp(deps: AppDeps): Hono {
   };
 
   // Per-request IP limit and daily budget (Req 7, Task 52)
-  const admit = checkBudget(globalState, budget, clock);
+  const admit = checkBudget(globalState, budget, clock, deps.trustedProxyHops);
   for (const route of ['/api/grant', '/api/bind']) {
     app.use(route, checkMode);
     app.use(route, admit);

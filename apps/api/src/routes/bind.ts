@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 import type { Hono } from 'hono';
 import { judgeBinding, proposeBinding } from 'paw-core';
 import type { Curse } from 'paw-core';
-import { BindRequestSchema, BindResponseSchema } from '../schemas';
+import { BindRequestSchema, BindResponseSchema, isLoopholeWithinCap } from '../schemas';
 import type { BudgetedModelClient } from '../budget/guarded-client';
 import { RESTING_MESSAGE } from '../budget/messages';
 
@@ -30,6 +30,11 @@ export function createBindRoute(app: Hono, createClient: () => BudgetedModelClie
           { message: 'The paw has no memory of this curse.' },
           404,
         );
+      }
+
+      // The Judge prompt carries the loophole; cap it before any budget check or model call.
+      if (!isLoopholeWithinCap(curse)) {
+        return c.json({ message: 'Invalid bind request' }, 400);
       }
 
       // Propose binding (Req 2)

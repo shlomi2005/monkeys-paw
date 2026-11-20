@@ -72,6 +72,7 @@ component has a pure interface. All work happens in `packages/paw-core` unless n
 
 ## Real cost accounting
 
-- [ ] **26. Real cost accounting** — each model call is charged by its real tokens at the model's price, a ceiling is
+- [x] **26. Real cost accounting** — each model call is charged by its real tokens at the model's price, a ceiling is
   reserved before the call so the daily budget is not passed (except by the documented excess), and the fixed
   per-call estimate is removed. Done in `apps/api`; see paw-api tasks 102-109. (Req 7.5, 7.6, 7.7)
+  Done: the guard in `apps/api` reserves the whole fallback-chain ceiling before each model call and settles to the real token cost at the answering model's 1.1.2027 price; the fixed per-call estimate is gone; the worst case is 278.51 cents per grant and 16.39 cents per bind (`apps/api/README.md`); `paw-core` is unchanged.
