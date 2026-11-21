@@ -209,7 +209,7 @@ or `packages/paw-mcp/src` ends with `pnpm -C packages/paw-core build` (so `paw-m
     Format tests updated in `hooks-format`, `agents-format`, `power-format`, `repo-wiring` and `tools` (instructions); the
     bundle was rebuilt (793,432 bytes, `minify: false`). `paw-mcp`: 257 tests pass (was 246), typecheck clean,
     `bundle-fresh` green after the rebuild. `kiro-cli` was not run.
-- [ ] 13. Reviewer task, not an agent task: a real MCP check over stdio, in both modes. Build nothing new; use the
+- [x] 13. Reviewer task, not an agent task: a real MCP check over stdio, in both modes. Build nothing new; use the
   committed bundle. (a) Local: no `PAW_API_URL` (also try the literal `${PAW_API_URL}` and an empty value). Run
   `initialize`, `tools/list` (exactly `paw_rules`, `paw_check_curses`, `paw_check_verdict`), `paw_rules` with `curse` and
   with `bind`, `paw_check_curses` with good and bad curses (an array and a JSON string), `paw_check_verdict` with a closed,
@@ -218,6 +218,17 @@ or `packages/paw-mcp/src` ends with `pnpm -C packages/paw-core build` (so `paw-m
   lines, never the requirement. (b) A set but unusable value (`ftp://x`): local mode, one ignored line, no value in it.
   (c) Remote: `PAW_API_URL` set to a stub API on `127.0.0.1`; five tools; `paw_curse` then `paw_bind` as in task 7.
   Record each result here with the date. (Req 18.1, 18.2, 19, 20, 21)
+  Result, 21.11.2026 (reviewer): a raw JSON-RPC client over stdio ran the committed `0.2.0` bundle with a preload that
+  logs any network attempt; 33 of 33 checks passed (transcript kept outside the repo). (a) Local, no `PAW_API_URL`:
+  protocol `2025-06-18`, instructions start "Local mode.", `tools/list` is exactly `paw_rules`, `paw_check_curses`,
+  `paw_check_verdict`; `paw_rules` gives 2,961 characters for `curse` and 1,438 for `bind`; `paw_check_curses` passes 3
+  good curses as an array and as a JSON string (ids `curse-0` to `curse-2`) and names 5 problems by path for 3 bad ones;
+  `paw_check_verdict` answers `CLOSED:` for a closed verdict, `OPEN:` for an open one sent as JSON strings, and a problem
+  list for a bad one; 0 network calls, stdout JSON-RPC only, stderr only `mode=local` and `tool ok|invalid ms` lines. An
+  empty value and the literal `${PAW_API_URL}`: the same, with no extra line. (b) `ftp://user:secret@example.invalid/x`:
+  local mode, one "ignored" line with no part of the value, 0 network calls. (c) Remote, a stub API on `127.0.0.1`:
+  instructions start "Remote mode.", five tools, and `paw_curse` then `paw_bind` reached the stub (`POST /api/grant`,
+  `POST /api/bind`); the network log saw both calls, so the trap works.
 - [ ] 14. Reviewer task, not an agent task, in the Kiro IDE: install the power from the `powers/monkeys-paw` folder with no
   `PAW_API_URL` set, and confirm that only the three local tools appear (no `paw_curse`, no `paw_bind`). Make the agent
   save a `requirements.md` under `.kiro/specs/` and confirm that `paw-reviews-requirements` fires, calls `paw_rules` once
