@@ -187,6 +187,13 @@ Three changes make the plate read as a paw with a ring around it, not a ring wit
    did not move out and the paw takes a bigger share of the plate. On a phone `--paw-size` is `clamp(150px, 52vw,
    200px)`, which is 200 px at 390 px wide (was 156). The medal is compact (4.5 rem at most).
 
+The bigger paw box made the square poster (an opaque photo) reach the top label and its caption, so the poster is now
+a round medallion with a thin double ink rim, centred in the box. Its size is `--poster-size` (the whole box on a phone;
+on desktop `min(--paw-size, 2 x (--ring-ry - 40px - 1.75rem - 0.5rem))`, so it ends 0.5 rem under the top label: 277 px
+at 1280×800, 331 px at 1440×900, 271 px at 1024×768). The box, the canvas and so CLS are unchanged, and the static shell
+in `index.html` draws the same medallion. `e2e/fallbacks.spec.ts` checks the circle (not its box) against every disc,
+label and caption at 1024, 1280 and 1440 wide.
+
 Checked by `e2e/layout.desktop.spec.ts` (1280×800 and 1440×900) and `e2e/layout.mobile.spec.ts` (390×844), which find
 the paw from two pictures of the paw box (with and without the canvas): the paw may cover at most 0.5% of any text box,
 the stamp is at least 8 px from the paw and off the cord, no two boxes overlap, the longest narration is not clipped,

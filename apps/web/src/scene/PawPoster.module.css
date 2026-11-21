@@ -1,9 +1,21 @@
-/* PawPoster: fills the 1:1 paw box. The canvas sits on top of it, then the poster is hidden (not removed). */
+/*
+ * PawPoster: a round medallion centred in the 1:1 paw box, with a thin double ink rim, like a cameo engraved on the rays.
+ * Its size is --poster-size (tokens.css): the whole box on a phone, and on desktop capped so it ends 0.5 rem under the
+ * label of the top circle and never covers a disc, label or caption. The box keeps its size (no layout shift). The
+ * canvas sits on top of it, then the poster is hidden (not removed).
+ */
 
 .poster {
+  position: absolute;
+  inset: 0;
   display: block;
-  width: 100%;
-  height: 100%;
+  box-sizing: border-box;
+  width: var(--poster-size);
+  height: var(--poster-size);
+  margin: auto;
+  border: 4px double var(--ink);
+  border-radius: 50%;
+  background: var(--parchment);
   object-fit: cover;
   user-select: none;
 }

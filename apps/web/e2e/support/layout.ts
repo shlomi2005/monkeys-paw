@@ -25,6 +25,23 @@ export function overlaps(a: Rect, b: Rect, slack = 0.5): boolean {
   return Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > slack && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > slack;
 }
 
+/** Distance from a point to the nearest point of a box (0 when the point is inside it). */
+export function distanceToRect(x: number, y: number, rect: Rect): number {
+  const dx = Math.max(rect.x0 - x, 0, x - rect.x1);
+  const dy = Math.max(rect.y0 - y, 0, y - rect.y1);
+  return Math.hypot(dx, dy);
+}
+
+/** The drawn circle of a round element: the centre and the radius of its box (valid when the box is a square with border-radius 50%). */
+export interface Circle {
+  readonly x: number;
+  readonly y: number;
+  readonly r: number;
+}
+
+/** Space between the edge of a circle and a box: negative when they intersect. */
+export const clearanceOf = (circle: Circle, rect: Rect): number => distanceToRect(circle.x, circle.y, rect) - circle.r;
+
 /** Boxes of the shown elements that match `selector`, in document coordinates. */
 export async function rectsOf(page: Page, selector: string): Promise<Rect[]> {
   return page.evaluate((query) => {

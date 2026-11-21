@@ -7,6 +7,7 @@
 import { EXAMPLES_SLEEPING_MESSAGE, JUDGE_RESTING_MESSAGE, RESTING_MESSAGE } from '../src/api/api-messages';
 import { CURL_MS, OPEN_MS } from '../src/scene/anim-sampler';
 import { grantFixture, WISH_TEXT } from './support/fixtures';
+import { clearanceOf, plateRects, rectOf, tagged } from './support/layout';
 import { OPEN_IN_KIRO, REWRITE, TAKE_SCROLL } from './support/paw-page';
 import { expect, test } from './support/test';
 import { eventsOf, readTimeline, requireEvent, statusOf } from './support/timeline';
@@ -244,3 +245,50 @@ test('a 503 on grant shows the resting message, then an untouched example replay
   expect(stub.to('grant')).toHaveLength(1);
   expect(stub.to('bind')).toHaveLength(0);
 });
+
+// The poster is a round medallion. Its drawn shape (a circle, not its square box) must stay clear of every disc, label
+// and caption of the ring, by at least 0.5 rem less a pixel, while the picture is still shown. No WebGL, so the poster
+// is on screen the whole time, the same picture the scene-loading state shows.
+for (const [width, height] of [
+  [1024, 768],
+  [1280, 800],
+  [1440, 900],
+] as const) {
+  test(`no WebGL: the poster medallion stays off the discs, labels and captions at ${width}x${height}`, { tag: '@no-webgl' }, async ({ paw }) => {
+    test.setTimeout(90_000);
+    const { page } = paw;
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    await expect(page.locator('[data-state="ready"]')).toBeVisible();
+    await paw.makeWish();
+    await paw.expectCurled(5);
+    await expect(paw.stamp).toHaveText('Granted.');
+    await expect(page.locator('[data-canvas-slot] canvas')).toHaveCount(0);
+
+    const poster = page.locator('[data-poster]');
+    await expect(poster).toBeVisible();
+    await expect.poll(() => poster.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+
+    // The drawn shape is a circle: a square box with a 50% radius, centred in the paw box, which keeps its size.
+    const shape = await poster.evaluate((img) => ({ radius: getComputedStyle(img).borderTopLeftRadius, width: img.clientWidth }));
+    expect(shape.radius, 'the poster is round').toBe('50%');
+    const box = await rectOf(page, '[data-paw-stage]');
+    const rect = await rectOf(page, '[data-poster]');
+    expect(rect.x1 - rect.x0, 'a square').toBeCloseTo(rect.y1 - rect.y0, 1);
+    expect(rect.x1 - rect.x0, 'a real picture, not a speck').toBeGreaterThan((box.x1 - box.x0) * 0.6);
+    expect(rect.x0 + rect.x1, 'centred horizontally').toBeCloseTo(box.x0 + box.x1, 0);
+    expect(rect.y0 + rect.y1, 'centred vertically').toBeCloseTo(box.y0 + box.y1, 0);
+    const circle = { x: (rect.x0 + rect.x1) / 2, y: (rect.y0 + rect.y1) / 2, r: (rect.x1 - rect.x0) / 2 };
+
+    const rects = await plateRects(page);
+    const others = tagged(rects, ['discs', 'labels', 'captions']);
+    expect(others.filter((entry) => entry.name.startsWith('discs')), 'five discs').toHaveLength(5);
+    expect(others.filter((entry) => entry.name.startsWith('labels')), 'five labels').toHaveLength(5);
+    expect(others.filter((entry) => entry.name.startsWith('captions')), 'five captions').toHaveLength(5);
+    const clearances = others.map((entry) => ({ name: entry.name, gap: clearanceOf(circle, entry.rect) }));
+    const nearest = clearances.reduce((a, b) => (b.gap < a.gap ? b : a));
+    test.info().annotations.push({ type: 'poster-clearance', description: `${width}x${height}: ${nearest.name} ${nearest.gap.toFixed(1)} px` });
+    console.log(`poster clearance ${width}x${height}: ${nearest.name} ${nearest.gap.toFixed(1)} px (poster ${(2 * circle.r).toFixed(0)} px in a ${(box.x1 - box.x0).toFixed(0)} px box)`);
+    for (const { name, gap } of clearances) expect(gap, `the poster circle clears ${name}`).toBeGreaterThanOrEqual(8);
+  });
+}

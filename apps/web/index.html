@@ -15,10 +15,15 @@
         --sepia: #7a5a3a;
         --parchment: #e9d8b4;
         --paw-size: clamp(150px, 52vw, 200px);
+        --ring-size: var(--paw-size);
+        --ring-ry: calc(var(--ring-size) * 0.72);
+        --poster-size: var(--paw-size);
       }
       @media (min-width: 768px) {
         :root {
           --paw-size: clamp(300px, min(30vw, 45vh), 400px);
+          --ring-size: clamp(300px, min(30vw, 38vh), 400px);
+          --poster-size: min(var(--paw-size), calc(2 * (var(--ring-ry) - 40px - 1.75rem - 0.5rem)));
         }
       }
       html {
@@ -58,9 +63,16 @@
         aspect-ratio: 1 / 1;
       }
       #static-shell .shell-paw img {
+        position: absolute;
+        inset: 0;
         display: block;
-        width: 100%;
-        height: 100%;
+        box-sizing: border-box;
+        width: var(--poster-size);
+        height: var(--poster-size);
+        margin: auto;
+        border: 4px double var(--ink);
+        border-radius: 50%;
+        background: var(--parchment);
         object-fit: cover;
       }
     </style>

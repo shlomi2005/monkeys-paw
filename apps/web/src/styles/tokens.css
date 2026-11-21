@@ -55,6 +55,11 @@
      0.39 x --paw-size + 78 px, so the label of the top circle clears the open fingertips. */
   --ring-rx: min(calc(var(--ring-size) * 1.2), 36vw);
   --ring-ry: calc(var(--ring-size) * 0.72);
+
+  /* The drawn size of the poster (the static paw picture), a round medallion centred in the paw box. Mobile has no ring,
+     so it is the whole box. On desktop it is capped to end 0.5 rem under the label of the top circle (a disc is 80 px,
+     its label 1.75 rem, both under the disc centre at --ring-ry), so the picture never covers a disc, label or caption. */
+  --poster-size: var(--paw-size);
 }
 
 /* Base size: 16 px under 768 px, 18 px from 768 px. max() keeps these as floors and still honours a larger browser setting. */
@@ -68,6 +73,7 @@
     font-size: max(18px, 112.5%);
     --paw-size: clamp(300px, min(30vw, 45vh), 400px);
     --ring-size: clamp(300px, min(30vw, 38vh), 400px);
+    --poster-size: min(var(--paw-size), calc(2 * (var(--ring-ry) - 40px - 1.75rem - 0.5rem)));
   }
 }
 

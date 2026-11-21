@@ -205,3 +205,27 @@ describe('paw size depends on the viewport height as well as the width', () => {
     expect(declarationsFor(tokens, ':root', MOBILE)['--ring-ry']).toMatch(/--ring-size/);
   });
 });
+
+describe('the poster medallion size', () => {
+  const tokens = parseCss(tokensCss);
+  const style = /<style>([\s\S]*?)<\/style>/.exec(indexHtml)?.[1] ?? '';
+  const critical = parseCss(style);
+
+  it('is the whole paw box on a phone and capped under the top label on desktop', () => {
+    expect(declarationsFor(tokens, ':root', MOBILE)['--poster-size']).toBe('var(--paw-size)');
+    expect(declarationsFor(tokens, ':root', DESKTOP)['--poster-size']).toBe(
+      'min(var(--paw-size), calc(2 * (var(--ring-ry) - 40px - 1.75rem - 0.5rem)))',
+    );
+  });
+
+  it('is repeated unchanged, with the ring tokens it needs, in the inline critical CSS of index.html', () => {
+    for (const media of [MOBILE, DESKTOP]) {
+      for (const name of ['--poster-size', '--ring-size']) {
+        expect(declarationsFor(critical, ':root', media)[name], `${name} ${String(media)}`).toBe(
+          declarationsFor(tokens, ':root', media)[name],
+        );
+      }
+    }
+    expect(declarationsFor(critical, ':root', MOBILE)['--ring-ry']).toBe(declarationsFor(tokens, ':root', MOBILE)['--ring-ry']);
+  });
+});

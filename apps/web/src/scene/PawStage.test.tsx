@@ -101,10 +101,13 @@ describe('PawPoster', () => {
     expect(posterSrc('/monkeys-paw/')).toBe('/monkeys-paw/paw/paw-poster.jpg');
   });
 
-  it('fills the box and hides with visibility, so the box keeps its size', () => {
+  it('is a round medallion centred in the box and hides with visibility, so the box keeps its size', () => {
     const poster = declarationsFor(posterCss, '.poster', null);
-    expect(poster['width']).toBe('100%');
-    expect(poster['height']).toBe('100%');
+    expect(poster['width']).toBe('var(--poster-size)');
+    expect(poster['height']).toBe('var(--poster-size)');
+    expect(poster['position']).toBe('absolute');
+    expect(poster['margin']).toBe('auto');
+    expect(poster['border-radius']).toBe('50%');
     expect(declarationsFor(posterCss, '.hidden', null)['visibility']).toBe('hidden');
   });
 
