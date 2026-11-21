@@ -5,7 +5,7 @@ import { canInject, injectInkShader } from './ink-shader';
 import type { InkUniformName } from './ink-shader';
 
 /** Bump the suffix whenever the GLSL in ink-shader.ts changes. */
-export const INK_PROGRAM_KEY = 'paw-ink-v2';
+export const INK_PROGRAM_KEY = 'paw-ink-v3';
 
 type PlaceholderFactory = (scene: Object3D) => Material | null;
 

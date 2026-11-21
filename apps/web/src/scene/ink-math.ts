@@ -22,11 +22,11 @@ export const INK_LUMA: readonly [number, number, number] = [0.2126, 0.7152, 0.07
 export const INK_GAMMA = 2.2;
 
 /** Family A's angle (0 to 180 degrees) is quantised to this many bins; each bin has a constant line direction (D7). */
-export const INK_BIN_COUNT = 8;
-/** Angle between two neighbouring bins, in radians (22.5 degrees). */
+export const INK_BIN_COUNT = 16;
+/** Angle between two neighbouring bins, in radians (11.25 degrees). */
 export const INK_BIN_STEP = Math.PI / INK_BIN_COUNT;
 /** Width of the crossfade between two neighbouring bins, as a fraction of one bin, centred on the half-way point. */
-export const INK_BIN_BLEND = 0.4;
+export const INK_BIN_BLEND = 0.8;
 
 /** Starting values of every tunable uniform, as tuned in the reviewer's browser check (task 5, first pass). */
 export const INK_DEFAULTS = {
@@ -34,22 +34,22 @@ export const INK_DEFAULTS = {
   viewport: [1, 1] as readonly [number, number],
   spacing: 3.5,
   widthMin: 0.6,
-  widthMax: 1.7,
-  thresholds: [0.1, 0.38, 0.62] as readonly [number, number, number],
+  widthMax: 1.4,
+  thresholds: [0.24, 0.52, 0.76] as readonly [number, number, number],
   /** Angle of families B and C to family A, in radians (55 degrees). */
   crossAngle: (55 * Math.PI) / 180,
   /** Fallback line angle in radians (25 degrees). */
   baseAngle: 0.44,
   /** 0 gives straight lines. Must stay at 0.9 or below. */
-  follow: 0.85,
-  normalBend: 0.25,
+  follow: 0.8,
+  normalBend: 0.1,
   lightLo: 0.45,
   lightHi: 1.8,
   lightWeight: 0.8,
-  albedoWhite: 0.9,
-  toneStrength: 1,
+  albedoWhite: 1.1,
+  toneStrength: 1.3,
   /** Share of the light that lifts the flat base tone toward parchment. Small: the lines carry the form. */
-  baseLight: 0.15,
+  baseLight: 0.1,
   contourPx: 1.4,
   /** Hue distance to red, as fractions of a turn: full at 10 degrees, zero at 13.5 degrees. */
   cordHue: [0.0278, 0.0375] as readonly [number, number],

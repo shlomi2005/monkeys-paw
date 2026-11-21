@@ -61,7 +61,9 @@ describe('familyWeights', () => {
   });
 
   it('keeps B and C off while A grows', () => {
-    const w = familyWeights(0.3);
+    const [t0, t1] = INK_DEFAULTS.thresholds;
+    const w = familyWeights(t0 + INK_FADE + 0.02);
+    expect(t0 + INK_FADE + 0.02).toBeLessThan(t1);
     expect(w[0]).toBe(1);
     expect(w[1]).toBe(0);
     expect(w[2]).toBe(0);
@@ -98,23 +100,27 @@ describe('lineWidthPx, lightness, darkness, albedoLuma', () => {
 describe('direction bins', () => {
   const deg = (d: number) => (d * Math.PI) / 180;
 
-  it('has eight bins of 22.5 degrees', () => {
-    expect(INK_BIN_COUNT).toBe(8);
-    expect(INK_BIN_STEP).toBeCloseTo(deg(22.5), 12);
+  it('has sixteen bins of 11.25 degrees, crossfaded over a share of a bin in (0, 1]', () => {
+    expect(INK_BIN_COUNT).toBe(16);
+    expect(INK_BIN_STEP).toBeCloseTo(deg(11.25), 12);
+    expect(INK_BIN_BLEND).toBeGreaterThan(0);
+    expect(INK_BIN_BLEND).toBeLessThanOrEqual(1);
   });
 
   it('gives the two bin angles around an angle', () => {
     const b = binBlend(deg(30));
-    expect([b.index0, b.index1]).toEqual([1, 2]);
+    expect([b.index0, b.index1]).toEqual([2, 3]);
     expect(b.angle0).toBeCloseTo(deg(22.5), 12);
-    expect(b.angle1).toBeCloseTo(deg(45), 12);
+    expect(b.angle1).toBeCloseTo(deg(33.75), 12);
   });
 
   it('weights only the lower bin near it, only the upper bin near the next, and half at the edge', () => {
-    expect(binBlend(deg(22.5)).weight).toBe(0);
-    expect(binBlend(deg(22.5 + 22.5 * 0.25)).weight).toBe(0);
-    expect(binBlend(deg(22.5 * 1.5)).weight).toBeCloseTo(0.5, 9);
-    expect(binBlend(deg(22.5 * 1.75)).weight).toBe(1);
+    const step = 11.25;
+    const lo = 0.5 - INK_BIN_BLEND / 2;
+    expect(binBlend(deg(step)).weight).toBe(0);
+    expect(binBlend(deg(step * (1 + lo / 2))).weight).toBe(0);
+    expect(binBlend(deg(step * 1.5)).weight).toBeCloseTo(0.5, 9);
+    expect(binBlend(deg(step * (2 - lo / 2))).weight).toBe(1);
   });
 
   it('keeps the crossfade within INK_BIN_BLEND of a bin', () => {
@@ -123,7 +129,7 @@ describe('direction bins', () => {
     expect(binBlend((1 + 1 - lo + 1e-6) * INK_BIN_STEP).weight).toBe(1);
   });
 
-  it('wraps at 180 degrees: angle and angle + 180 agree, and bin 8 is bin 0', () => {
+  it('wraps at 180 degrees: angle and angle + 180 agree, and the last bin runs into bin 0', () => {
     const a = binBlend(deg(10));
     const b = binBlend(deg(190));
     const c = binBlend(deg(-170));
@@ -131,9 +137,9 @@ describe('direction bins', () => {
     expect(c.index0).toBe(a.index0);
     expect(b.weight).toBeCloseTo(a.weight, 9);
     const top = binBlend(deg(170));
-    expect([top.index0, top.index1]).toEqual([7, 0]);
+    expect([top.index0, top.index1]).toEqual([INK_BIN_COUNT - 1, 0]);
     expect(top.angle1).toBeCloseTo(Math.PI, 12);
-    expect(binBlend(-1e-12).index0).toBe(7);
+    expect(binBlend(-1e-12).index0).toBe(INK_BIN_COUNT - 1);
   });
 
   it('is continuous across bin edges, including 0 and 180 degrees', () => {
@@ -148,7 +154,7 @@ describe('direction bins', () => {
       const [x1, y1] = f(b.angle1);
       return [w0 * x0 + w1 * x1, w0 * y0 + w1 * y1];
     };
-    for (let k = 0; k <= 16; k++) {
+    for (let k = 0; k <= 2 * INK_BIN_COUNT; k++) {
       const edge = (k * INK_BIN_STEP) / 2; // bin centres and bin edges
       const [ax, ay] = blended(edge - 1e-9);
       const [bx, by] = blended(edge + 1e-9);
@@ -156,7 +162,7 @@ describe('direction bins', () => {
     }
   });
 
-  it('keeps the weight in 0..1, the indices in 0..7 and the weight monotone inside a bin', () => {
+  it('keeps the weight in 0..1, the indices below INK_BIN_COUNT and the weight monotone inside a bin', () => {
     fc.assert(
       fc.property(fc.double({ min: -20, max: 20, noNaN: true }), (angle) => {
         const b = binBlend(angle);

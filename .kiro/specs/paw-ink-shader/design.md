@@ -30,7 +30,8 @@ Everything below is procedural. There is no new texture, pass, dependency or tim
 | D4 | The ink material turns tone mapping off. | The canvas applies tone mapping to standard materials. It would shift the ink and parchment colours. |
 | D5 | If any anchor is missing at creation time, the hook falls back to the placeholder. | A three upgrade can never produce a half-patched shader. |
 | D6 | All numeric defaults below are starting values, tuned by the reviewer in the browser (task 5), as paw-web did for the lights in task 31. The agent records the returned values in `INK_DEFAULTS` and in this file. | The lighting term depends on `PawLights.tsx` intensities, which are not designed here. |
-| D7 | Family A's angle is quantised into 8 bins of 22.5°. Each family is drawn at the two nearest bin angles (B and C at the same two angles ± the cross angle) and the two are crossfaded over a narrow smoothstep. The antialias width is analytic, not `fwidth`. | With a per-pixel direction, the phase `u = dot(q, dir) / spacing` gains a term `|q| · dθ/dpx / spacing` (q is up to 150 to 250 CSS px from the wrist). At 150 px, 0.02 rad/px and 3.5 spacing that is 0.86 cycles per pixel, so `fwidth(u)` passed 0.7, coverage fell back to the flat mean density (grey), and nearby values broke lines into dashes. A constant direction per bin keeps `u` linear in `q`. The bin index can differ inside a 2x2 quad, so `fwidth` of the blended phase is unusable; for a constant unit `d`, `du/dpx` is known exactly. |
+| D7 | Family A's angle is quantised into bins (8 of 22.5° at first, 16 of 11.25° since D8). Each family is drawn at the two nearest bin angles (B and C at the same two angles ± the cross angle) and the two are crossfaded over a narrow smoothstep. The antialias width is analytic, not `fwidth`. | With a per-pixel direction, the phase `u = dot(q, dir) / spacing` gains a term `|q| · dθ/dpx / spacing` (q is up to 150 to 250 CSS px from the wrist). At 150 px, 0.02 rad/px and 3.5 spacing that is 0.86 cycles per pixel, so `fwidth(u)` passed 0.7, coverage fell back to the flat mean density (grey), and nearby values broke lines into dashes. A constant direction per bin keeps `u` linear in `q`. The bin index can differ inside a 2x2 quad, so `fwidth` of the blended phase is unusable; for a constant unit `d`, `du/dpx` is known exactly. |
+| D8 | Second tuning pass, after the reviewer's receipts at 1280 px. Directions: bins 8 → 16 (11.25°), crossfade 0.4 → 0.8 of a bin, `normalBend` 0.25 → 0.1, `follow` 0.85 → 0.8. Tone: `toneStrength` 1 → 1.3, `albedoWhite` 0.9 → 1.1, `baseLight` 0.15 → 0.1, `widthMax` 1.7 → 1.4, thresholds (0.10, 0.38, 0.62) → (0.24, 0.52, 0.76). | The 22.5° bins with a crossfade over 0.4 of a bin read as woodcut patches on the palm and the back of the hand, and the normal map flipped the bin in small islands. Half the step, twice the crossfade and a smaller normal-map share make the direction change gradually. Each bin still has a constant direction, so D7's phase argument holds and there is no per-pixel direction. The paw read as khaki grey (mean hue 32°, saturation 0.34) because the light fur albedo made the base mostly parchment and the dark lines only darkened it. A higher `toneStrength` (the mix runs a little past sepia on the darkest albedo), a higher `albedoWhite` and less `baseLight` move the base toward sepia. Higher thresholds and a lower `widthMax` give fewer and thinner lines, so the mean brightness stays close to the old one. Measured on the 1280 px idle receipt, non-cord pixels: hue 32.8° → 30.4°, saturation 0.34 → 0.44, HSV value 0.456 → 0.423 (−7%). Only `INK_DEFAULTS`, `INK_BIN_COUNT` and `INK_BIN_BLEND` change: no new uniform, GLSL, texture or palette change. Program key `paw-ink-v3`. |
 
 ---
 
@@ -69,7 +70,7 @@ material plus `onBeforeCompile`, six injections into three's physical shader) or
 5. Otherwise `source.clone()`. Then on the copy:
    - `color.set(0xffffff)` and `userData.pawInk = true`. The maps (base colour, normal, metallic-roughness) are kept.
    - `toneMapped = false` (D4). `metalness` and `roughness` are left alone; the patch overrides metalness in the shader.
-   - `customProgramCacheKey = () => 'paw-ink-v2'`. Bump the suffix whenever the GLSL changes.
+   - `customProgramCacheKey = () => 'paw-ink-v3'`. Bump the suffix whenever the GLSL changes.
    - `onBeforeCompile = (shader) => injectInkShader(shader, uniforms)`. The `uniforms` object is created by
      `createInkUniforms()` and shared with the material, so later updates reach the program.
    - `onBeforeRender = (renderer) => { uniforms.uPixelRatio.value = renderer.getPixelRatio();
@@ -141,7 +142,7 @@ base  = mix( paper, uBlood, mask )
 
 The lines carry the form; `uBaseLight` (0.15) only keeps the form readable where the lines are thin.
 
-**5. Hatch families.** With thresholds `T = (0.10, 0.38, 0.62)` and `FADE = 0.2`:
+**5. Hatch families.** With thresholds `T = (0.24, 0.52, 0.76)` and `FADE = 0.2`:
 
 ```
 weight_k = smoothstep( T_k, T_k + FADE, D )          // k = A, B, C   (familyWeights)
@@ -154,7 +155,7 @@ So D below 0.10 gives bare paper; each family grows in at its threshold, and lin
 **6. Direction** (view space, x right, y up, same as screen):
 
 ```
-n        = normalize( mix( nonPerturbedNormal, normal, uNormalBend ) )   // uNormalBend = 0.25: only partly bent
+n        = normalize( mix( nonPerturbedNormal, normal, uNormalBend ) )   // uNormalBend = 0.1: only slightly bent
 len      = length( n.xy )
 tangent  = vec2( -n.y, n.x ) / max( len, 1e-4 )                           // along the silhouette, i.e. along the finger
 base     = vec2( cos( 2*uBaseAngle ), sin( 2*uBaseAngle ) )               // double-angle form
@@ -173,9 +174,9 @@ line pattern is symmetric under a sign change of its direction.
 
 ```
 theta   = atan( dirA.y, dirA.x ), folded into [0, π)                 // lines have no sign
-pos     = theta / (π/8);  i = min( floor( pos ), 7 );  f = pos - i
-w       = smoothstep( 0.3, 0.7, f )                                  // INK_BIN_BLEND = 0.4 of a bin, centred
-bins    = ( i, i + 1 )   →   directions d0, d1 = ( cos, sin ) of i·π/8 and (i+1)·π/8      // bin 8 is bin 0 again (wraps at 180°)
+pos     = theta / (π/16); i = min( floor( pos ), 15 ); f = pos - i
+w       = smoothstep( 0.1, 0.9, f )                                  // INK_BIN_BLEND = 0.8 of a bin, centred
+bins    = ( i, i + 1 )   →   directions d0, d1 = ( cos, sin ) of i·π/16 and (i+1)·π/16    // bin 16 is bin 0 again (wraps at 180°)
 q       = ( gl_FragCoord.xy - vInkOrigin ) / uPixelRatio             // CSS px from the projected wrist (D3)
 line(d) :
   u   = dot( q, d ) / uSpacing                                       // linear in q: d is constant
@@ -194,7 +195,7 @@ ink   = 1 - ( 1 - cov_A ) * ( 1 - cov_B ) * ( 1 - cov_C )
 
 Three families, each sampled at two bin angles: six line evaluations per fragment (Req 7.3). All six are always
 evaluated (no branch). The lines use no derivative; `fwidth` is left only in the contour (8), which has no branch around it.
-A line can sit up to 0.3 of a bin (6.75°) off the true direction before the crossfade starts; that is the price of a
+A line can sit up to 0.1 of a bin (1.1°) off the true direction before the crossfade starts; that is the price of a
 constant direction per bin. `binBlend(angle)` and `lineFwidth(dx, dy, spacing, pixelRatio)` in `ink-math.ts` are the
 reference.
 
@@ -261,17 +262,17 @@ Tone mapping is off for this material (D4), so `rgb` is what the colour-space ch
 | `uPixelRatio` | float | 1 | set in `onBeforeRender` from `renderer.getPixelRatio()` |
 | `uViewport` | Vector2 | (1, 1) | drawing-buffer size in device px, set in `onBeforeRender` |
 | `uSpacing` | float | 3.5 | CSS px between lines |
-| `uWidthMin`, `uWidthMax` | float | 0.6, 1.7 | CSS px, at D = 0 and D = 1 |
-| `uThresholds` | vec3 | 0.10, 0.38, 0.62 | family on-thresholds on D |
+| `uWidthMin`, `uWidthMax` | float | 0.6, 1.4 | CSS px, at D = 0 and D = 1 |
+| `uThresholds` | vec3 | 0.24, 0.52, 0.76 | family on-thresholds on D |
 | `uCross` | vec2 | (cos 55°, sin 55°) | angle of B and C to A |
 | `uBaseAngle` | float | 0.44 (25°) | fallback line angle in radians |
-| `uFollow` | float | 0.85 | 0 gives straight lines; must stay ≤ 0.9 |
-| `uNormalBend` | float | 0.25 | share of the normal map in the direction |
+| `uFollow` | float | 0.8 | 0 gives straight lines; must stay ≤ 0.9 |
+| `uNormalBend` | float | 0.1 | share of the normal map in the direction |
 | `uLightLo`, `uLightHi` | float | 0.45, 1.8 | light window; ambient alone maps to 0, full key (N·L = 1) to 1 |
 | `uLightWeight` | float | 0.8 | light against albedo in D |
-| `uAlbedoWhite` | float | 0.9 | albedo luma that counts as bare paper |
-| `uToneStrength` | float | 1.0 | how far the base tone goes toward sepia |
-| `uBaseLight` | float | 0.15 | share of the light that lifts the base tone toward parchment |
+| `uAlbedoWhite` | float | 1.1 | albedo luma that counts as bare paper |
+| `uToneStrength` | float | 1.3 | how far the base tone goes toward sepia |
+| `uBaseLight` | float | 0.1 | share of the light that lifts the base tone toward parchment |
 | `uContourPx` | float | 1.4 | CSS px |
 | `uCordHue` | vec2 | 0.0278, 0.0375 | hue distance to red as fractions of a turn: full at 10°, zero at 13.5° |
 | `uCordSat` | vec2 | 0.50, 0.65 | saturation ramp |
@@ -294,7 +295,7 @@ average, with dense dark line work, and bare paper only on the brightest highlig
 2. **Too light.** The key light (4.8, direction about (-0.48, 0.57, 0.67)) gives the front-facing palm N·L ≈ 0.67, so
    `L` ≈ 0.43 + 1.37 · 0.67 ≈ 1.35. In the old window (0.40 to 1.45) that is lightness 0.9, and with the light palm
    albedo `D` landed at about 0.16, on the first threshold (0.15): a bare palm. The new window is 0.45 to 1.8 (the top is
-   the full key, `L` = 0.43 + 1.37), `uLightWeight` is 0.8, and the thresholds are (0.10, 0.38, 0.62). The estimate, with
+   the full key, `L` = 0.43 + 1.37), `uLightWeight` is 0.8, and the thresholds were (0.10, 0.38, 0.62), now (0.24, 0.52, 0.76) (D8). The estimate, with
    albedo luma 0.35 to 0.5 and `uAlbedoWhite` 0.9:
 
    | N·L | 1 | 0.8 | 0.67 | 0.5 | 0.3 | 0 |
@@ -361,7 +362,7 @@ shared constants), and a visual check in the browser.
 
 ## Bundle and performance notes
 
-- New code is about 4 KB (roughly 1.5 KB gz). The 3D chunk is 278.95 KB gz after the bin pass (275.2 KB before) against a 330 KB budget; the reviewer's check
+- New code is about 4 KB (roughly 1.5 KB gz). The 3D chunk is 278.0 KB gz after the D8 pass (278.95 KB after the bin pass, 275.2 KB before) against a 330 KB budget; the reviewer's check
   (task 5) confirms it.
 - Per fragment, on top of three's standard shader: one HSV conversion, one normal blend, one `atan`, six `fract` line
   evaluations and a few `smoothstep` calls. No texture fetch, extra pass or time uniform. Idle budget stays 0 frames.

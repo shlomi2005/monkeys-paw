@@ -60,6 +60,10 @@ describe('createInkUniforms', () => {
     const cross = u.uCross.value as Vector2;
     expect(Math.atan2(cross.y, cross.x)).toBeCloseTo(INK_DEFAULTS.crossAngle, 9);
     expect(u.uFollow.value).toBeLessThanOrEqual(0.9);
+    for (const name of ['uFollow', 'uNormalBend', 'uBaseLight', 'uLightWeight'] as const) {
+      expect(u[name].value).toBeGreaterThanOrEqual(0);
+      expect(u[name].value).toBeLessThanOrEqual(1);
+    }
   });
 });
 

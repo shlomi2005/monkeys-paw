@@ -165,7 +165,7 @@ the width, so the stage and the first row of the wish line fit a 1440×900 or 12
   sits just under the box and is not covered.
 - From 1024 px, the narration goes in the free column under the paw between the two lower circles, whose captions
   sit beside their discs on the outer side. The medal (lower left) and the actions (lower right) sit in a row under
-  the circle labels; the braziers stand above that row. The narration is clamped to 5 lines. A lower caption is capped
+  the circle labels; the braziers stand above that row. The narration is clamped to 6 lines (`--narration-lines`, 1024 to 1279 px). A lower caption is capped
   so it ends before the brazier column (`--brazier-inner`); the brazier narrows between 1024 and about 1230 px to leave room.
 - From 1280 px the narration is a 30 rem band under the lowest labels. Four lines hold the longest narration (260
   characters, `GrantSchema`). The medal and the actions sit beside it, their bottom edges on its last line.
