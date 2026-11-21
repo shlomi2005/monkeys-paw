@@ -10,6 +10,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { mkdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { settledPaw } from './canvas';
+import { LONGEST_NARRATION } from './fixtures';
 import type { PawPage } from './paw-page';
 
 const RECEIPT_DIR = join(import.meta.dirname, '..', 'receipts');
@@ -133,4 +134,28 @@ export async function posterOnlyReceipt(paw: PawPage, testInfo: TestInfo): Promi
     .poll(() => page.locator('[data-poster]').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0))
     .toBe(true);
   await shoot(page, testInfo, 'poster-only');
+}
+
+/**
+ * The plate at 1440 x 900 with the longest narration (260 characters): curses landed, then rested with the medal. These
+ * two pictures are for the eye: the stamp beside the wrist, the big paw, the narration band, the medal and the buttons.
+ */
+export async function wideReceipts(paw: PawPage, testInfo: TestInfo): Promise<void> {
+  const { page, stub } = paw;
+  await page.setViewportSize({ width: 1440, height: 900 });
+  stub.grantWithNarration(LONGEST_NARRATION);
+  await paw.open();
+  const idle = await settle(paw);
+  await paw.makeWish();
+  await expect(paw.stamp).toHaveText('Granted.');
+  await paw.expectCurled(5);
+  await settle(paw, idle);
+  await shoot(page, testInfo, '1440-curses-landed');
+
+  for (const index of [1, 3, 0, 4, 2]) await paw.bindAndClose(index, clauseFor(index));
+  await expect(paw.medal).toBeVisible();
+  await expect(paw.medal).toHaveAttribute('data-score', '5');
+  await expect(paw.stateText).toHaveText('The paw rests.');
+  await settle(paw);
+  await shoot(page, testInfo, '1440-rested');
 }

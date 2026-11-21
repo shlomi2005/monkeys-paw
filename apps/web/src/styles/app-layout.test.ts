@@ -47,28 +47,49 @@ describe('App layout: mobile grid (under 768 px)', () => {
     expect(rows.map((row) => row[0])).toEqual(order);
   });
 
-  it('reserves the narration height only when there is a Grant, so the wish line does not wait under an empty band', () => {
+  it('gives the stamp slot no height without a Grant, and the narration its natural height with one', () => {
     expect(declarationsFor(rules, '.stampSlot', MOBILE)['min-height']).toBe('0');
-    const withGrant = declarationsFor(rules, '.stampSlot:has([data-narration])', MOBILE);
-    expect(withGrant['min-height']).toMatch(/narration-lines/);
+    // No reserved lines on the phone: the narration is not clipped (the plate polish).
+    expect(declarationsFor(rules, '.stampSlot:has([data-narration])', MOBILE)['min-height']).toBeUndefined();
+    const narration = declarationsFor(rules, '.stampSlot [data-narration]', MOBILE);
+    expect(narration['-webkit-line-clamp']).toBeUndefined();
+    expect(narration['overflow']).toBeUndefined();
+    expect(narration['position']).toBeUndefined();
   });
 });
 
-describe('App layout: the Granted stamp stays under the wrist cord', () => {
-  // The cord is at 0.64 to 0.78 of the paw box height. The stamp's top edge is at --stamp-top of the box height.
-  it('has its top edge at 0.80 of the paw box height or lower', () => {
-    const top = Number(layout(MOBILE)['--stamp-top']);
-    expect(top).toBeGreaterThanOrEqual(0.8);
-    expect(top).toBeLessThan(1);
+describe('App layout: the Granted stamp never lies on the paw', () => {
+  it('is a row in the flow under the state text on a phone, not drawn over the paw box', () => {
+    const stamp = declarationsFor(rules, '.stampSlot [data-stamp]', MOBILE);
+    expect(stamp['position']).toBeUndefined();
+    expect(stamp['top']).toBeUndefined();
+    expect(stamp['display']).toBe('block');
   });
 
-  it('is placed from the paw box size, on a phone and on desktop, not in fixed pixels', () => {
-    for (const media of [MOBILE, DESKTOP]) {
+  // The paw is never wider than 0.2 of the box from its centre, in any pose (measured in layout.desktop.spec.ts).
+  it('from 1024 px sits right of the paw: its left edge is --stamp-left of the box from the centre, 0.25 or more', () => {
+    const left = Number(layout(MOBILE)['--stamp-left']);
+    expect(left).toBeGreaterThanOrEqual(0.25);
+    expect(left).toBeLessThan(0.5);
+    const stamp = declarationsFor(rules, '.stampSlot [data-stamp]', WIDE);
+    expect(stamp['left']).toMatch(/50%.*--paw-size\)[^;]*--stamp-left/);
+    expect(stamp['top']).toMatch(/--paw-size\)[^;]*--stamp-mid/);
+    expect(stamp['right']).toBe('auto');
+  });
+
+  it('is placed from the paw box size, never in fixed pixels', () => {
+    for (const media of [DESKTOP, WIDE]) {
       const stamp = declarationsFor(rules, '.stampSlot [data-stamp]', media);
-      expect(stamp['top'], String(media)).toMatch(/--paw-size\)[^;]*--stamp-top/);
+      expect(stamp['top'], String(media)).toMatch(/--paw-size|--narration-top/);
       expect(stamp['top'], String(media)).not.toMatch(/\d+px/);
       expect(stamp['bottom'], String(media)).toBeUndefined();
     }
+  });
+
+  it('from 768 px to 1023 px has a row of its own above the narration band', () => {
+    const stamp = declarationsFor(rules, '.stampSlot [data-stamp]', DESKTOP);
+    expect(stamp['top']).toMatch(/--narration-top.*--stamp-row/);
+    expect(layout(DESKTOP)['--stamp-row']).toBeDefined();
   });
 
   it('sizes the letters from the paw box, at least 14 px on a phone and 18 px on desktop', () => {
@@ -175,5 +196,12 @@ describe('paw size depends on the viewport height as well as the width', () => {
   it('is repeated unchanged in the inline critical CSS of index.html', () => {
     const style = /<style>([\s\S]*?)<\/style>/.exec(indexHtml)?.[1] ?? '';
     expect(declarationsFor(parseCss(style), ':root', DESKTOP)['--paw-size']).toBe(desktop);
+  });
+
+  it('is taller than the circle ring scale: the paw takes 45vh, the ring keeps 38vh', () => {
+    expect(desktop).toMatch(/min\([\d.]+vw, 45vh\)/);
+    expect(declarationsFor(tokens, ':root', DESKTOP)['--ring-size']).toBe('clamp(300px, min(30vw, 38vh), 400px)');
+    expect(declarationsFor(tokens, ':root', MOBILE)['--ring-size']).toBe('var(--paw-size)');
+    expect(declarationsFor(tokens, ':root', MOBILE)['--ring-ry']).toMatch(/--ring-size/);
   });
 });

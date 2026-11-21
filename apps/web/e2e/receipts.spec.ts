@@ -4,7 +4,7 @@
 // The no-WebGL receipt also carries `@no-webgl`: only the `desktop-no-webgl` project runs it and the `desktop`
 // project skips it (playwright.config.ts). The mobile receipts are in receipts.mobile.spec.ts.
 
-import { posterOnlyReceipt, reducedMotionReceipt, roundReceipts, stoppedReceipt } from './support/receipts';
+import { posterOnlyReceipt, reducedMotionReceipt, roundReceipts, stoppedReceipt, wideReceipts } from './support/receipts';
 import { test } from './support/test';
 
 test('@receipt a round: idle, curses landed, card open, not closed, closed, rested with medal', async ({ paw }, testInfo) => {
@@ -15,6 +15,11 @@ test('@receipt a round: idle, curses landed, card open, not closed, closed, rest
 test('@receipt stopped with the medal', async ({ paw }, testInfo) => {
   test.setTimeout(120_000);
   await stoppedReceipt(paw, testInfo);
+});
+
+test('@receipt 1440x900 with the longest narration: curses landed and rested', async ({ paw }, testInfo) => {
+  test.setTimeout(150_000);
+  await wideReceipts(paw, testInfo);
 });
 
 test.describe('reduced motion', () => {

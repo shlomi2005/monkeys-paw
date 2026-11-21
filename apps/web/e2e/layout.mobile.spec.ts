@@ -1,6 +1,23 @@
 // Task 48: the mobile project, 390 px wide (Req 2.2, 9.1 to 9.4, 10.5). Only `*.mobile.spec.ts` files run here.
 
 import type { Page } from '@playwright/test';
+import { LONGEST_NARRATION } from './support/fixtures';
+import {
+  boundsOf,
+  boxPixels,
+  closeAll,
+  countIn,
+  height,
+  narrationIsWhole,
+  overlaps,
+  paintSilhouette,
+  plateRects,
+  rectOf,
+  stampRect,
+  tagged,
+  unionOf,
+  width,
+} from './support/layout';
 import { OPEN_IN_KIRO, TAKE_SCROLL } from './support/paw-page';
 import { expect, test } from './support/test';
 import { eventsOf, readTimeline } from './support/timeline';
@@ -219,4 +236,80 @@ test('rotation reflows without remounting the canvas, and only paw-mobile.glb is
   expect(eventsOf(events, 'canvas').map((event) => event.value), 'mounted once, never unmounted').toEqual(['mounted']);
   expect(navigations, 'no reload').toHaveLength(1);
   expect(glbs).toEqual(['/paw/paw-mobile.glb']);
+});
+
+// Plate polish at 390 x 844 (paw-web design.md, "Plate polish"): a 200 px paw, a stamp that never lies on it, a narration
+// that is shown whole, and nothing that sits on anything else. The silhouette is found as in layout.desktop.spec.ts.
+test('@layout 390x844: a 200 px paw, the stamp under its text, the longest narration whole, nothing overlaps', async ({ paw }) => {
+  test.setTimeout(150_000);
+  const { page } = paw;
+  const view = { width: 390, height: 844 };
+  paw.stub.grantWithNarration(LONGEST_NARRATION);
+  await paw.open();
+  await page.evaluate(() => document.fonts.ready);
+
+  // (f) The paw box is 200 px, and the paw (idle) fills most of it.
+  const idleSilhouette = await paintSilhouette(page);
+  const idleBounds = boundsOf(idleSilhouette)!;
+  expect(width(idleSilhouette.box), 'the paw box is 200 px at 390 px wide').toBeGreaterThanOrEqual(199);
+  expect(width(idleSilhouette.box)).toBeLessThanOrEqual(200.5);
+  expect(height(idleBounds), `the idle paw is ${height(idleBounds)} px high`).toBeGreaterThanOrEqual(150);
+  const idleWish = await rectOf(page, '[data-wish-line]');
+  const idleButton = await rectOf(page, 'button[aria-label="Make the wish"]');
+  // (h) The first row of the wish line is on the first screen, before the Grant.
+  expect(idleButton.y1, 'the wish button is on the first screen').toBeLessThanOrEqual(view.height);
+
+  await paw.makeWish();
+  await paw.expectCurled(5);
+  await expect(paw.stamp).toHaveText('Granted.');
+  await page.evaluate(() => document.fonts.ready);
+  const curled = await paintSilhouette(page);
+  const landedRects = await plateRects(page);
+  const landedStamp = await stampRect(page);
+  const landedWish = await rectOf(page, '[data-wish-line]');
+
+  await closeAll(paw);
+  const rested = await paintSilhouette(page);
+  const restedRects = await plateRects(page);
+  const restedWish = await rectOf(page, '[data-wish-line]');
+  const union = unionOf([idleSilhouette, curled, rested]);
+  const box = union.box;
+
+  // (a) The stamp is a row under the paw's state text, never over the paw box, and clear of the paw and the cord.
+  expect(landedStamp.y0, 'the stamp starts below the paw box').toBeGreaterThanOrEqual(box.y1);
+  expect(countIn(union, landedStamp), 'the paw is not under the stamp').toBe(0);
+  expect(countIn(union, landedStamp, 'cord')).toBe(0);
+  const stateText = landedRects.stateText[0]!;
+  expect(landedStamp.y0, 'the stamp is under the state text').toBeGreaterThanOrEqual(stateText.y1 - 0.5);
+
+  // (b, c, d) Nothing sits on anything else, in either phase; the paw is clear of every box.
+  for (const [name, rects, stamp] of [
+    ['landed', landedRects, landedStamp],
+    ['rested', restedRects, landedStamp],
+  ] as const) {
+    const parts = tagged(rects, ['discs', 'labels', 'captions', 'stateText', 'narration', 'medal', 'buttons']);
+    parts.push({ name: 'stamp', rect: stamp });
+    for (let i = 0; i < parts.length; i += 1) {
+      for (let j = i + 1; j < parts.length; j += 1) {
+        const [a, b] = [parts[i]!, parts[j]!];
+        const family = (text: string): boolean => /^(discs|labels|captions)\[/.test(text);
+        if (family(a.name) && family(b.name) && a.name.split('[')[1] === b.name.split('[')[1]) continue;
+        expect(overlaps(a.rect, b.rect), `${name}: ${a.name} and ${b.name} overlap`).toBe(false);
+      }
+    }
+    for (const { name: part, rect } of parts) {
+      expect(countIn(union, rect), `${name}: the paw covers ${part}`).toBeLessThanOrEqual(Math.ceil(0.005 * boxPixels(union, rect)));
+      expect(rect.x0, `${name}: ${part} starts inside the screen`).toBeGreaterThanOrEqual(-0.5);
+      expect(rect.x1, `${name}: ${part} ends inside the screen`).toBeLessThanOrEqual(view.width + 0.5);
+    }
+  }
+
+  // (g) The longest narration (260 characters) is shown whole, with no clipping.
+  expect((await narrationIsWhole(page)).whole, 'the narration is clipped').toBe(true);
+
+  // (h) After the Grant, the page moves no more: the wish line is where it was when the curses landed.
+  expect(restedWish.y0, 'the wish line did not move when the paw rested').toBeCloseTo(landedWish.y0, 0);
+  expect(landedWish.y0, 'the Grant pushes the wish line down by the narration').toBeGreaterThan(idleWish.y0);
+  const [scroll, client] = await noSidewaysScroll(page);
+  expect(scroll, 'no sideways scroll at 390 px').toBeLessThanOrEqual(client);
 });

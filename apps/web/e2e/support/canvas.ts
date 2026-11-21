@@ -16,9 +16,13 @@ const OVERLAYS = [
   'dialog::backdrop { background: transparent !important; }',
 ].join('\n');
 
-/** A picture of the paw box (PNG). */
-export async function paintPaw(page: Page): Promise<Buffer> {
-  return page.locator('[data-paw-stage]').screenshot({ animations: 'disabled', caret: 'hide', style: OVERLAYS });
+/** Also hides the canvas, so only what is behind the paw (the rays, the parchment) is left. */
+const NO_CANVAS = '[data-canvas-slot] canvas { visibility: hidden !important; }';
+
+/** A picture of the paw box (PNG). With `withoutPaw`, the canvas is hidden too (see support/layout.ts, the silhouette). */
+export async function paintPaw(page: Page, options: { readonly withoutPaw?: boolean } = {}): Promise<Buffer> {
+  const style = options.withoutPaw === true ? `${OVERLAYS}\n${NO_CANVAS}` : OVERLAYS;
+  return page.locator('[data-paw-stage]').screenshot({ animations: 'disabled', caret: 'hide', style });
 }
 
 export interface PictureDiff {

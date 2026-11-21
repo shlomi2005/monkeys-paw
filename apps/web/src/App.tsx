@@ -184,7 +184,7 @@ export function App() {
             onCancel={() => dispatch({ type: 'card_closed' })}
           />
 
-          <div className={styles.actions}>
+          <div className={styles.actions} data-actions>
             <StopButton show={view.showStop} onStop={() => dispatch({ type: 'stop' })} />
             <div className={styles.exportSlot} data-slot="export">
               <ExportButtons show={view.showExport} wish={ctx.wish} grant={projectGrant(ctx)} api={api} />

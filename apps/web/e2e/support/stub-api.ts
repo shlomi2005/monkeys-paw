@@ -57,6 +57,8 @@ export interface StubApi {
   to(endpoint: Endpoint): RecordedRequest[];
   /** Use a Grant of 3 or 5 curses for the next `POST /api/grant`. */
   grantWith(count: CurseCount): void;
+  /** Use a Grant of 5 curses with this narration for the next `POST /api/grant` (layout checks). */
+  grantWithNarration(narration: string): void;
 }
 
 function jsonBody(text: string | null): unknown {
@@ -162,6 +164,9 @@ export async function installStubApi(page: Page, appOrigin: string): Promise<Stu
     to: (endpoint) => requests.filter((entry) => entry.endpoint === endpoint),
     grantWith: (count) => {
       behavior.grant = grantResponseFixture(count);
+    },
+    grantWithNarration: (narration) => {
+      behavior.grant = grantResponseFixture(5, narration);
     },
   };
 }

@@ -17,6 +17,8 @@
   padding: 0.125rem 1rem;
   border: 3px solid var(--blood);
   border-radius: 4px;
+  /* Parchment fill: the red letters keep their contrast over the rays. */
+  background: var(--parchment);
   box-shadow: inset 0 0 0 2px var(--parchment), inset 0 0 0 3px var(--blood);
   color: var(--blood);
   font-family: var(--font-display);

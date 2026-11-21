@@ -68,7 +68,7 @@ export function WishLine({
   }
 
   return (
-    <form className={styles.band} onSubmit={handleSubmit} noValidate>
+    <form className={styles.band} onSubmit={handleSubmit} noValidate data-wish-line>
       {/* DOM order is the tab order (Req 8.1): wish, "for…" disclosure and context, then the seal.
           CSS grid areas put the seal at the end of the wish row. No positive tabindex. */}
       <label className={styles.prefix} htmlFor={wishId}>

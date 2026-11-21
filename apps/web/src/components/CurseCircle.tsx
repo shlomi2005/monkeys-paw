@@ -59,7 +59,7 @@ export function CurseCircle({ view, curse, onActivate }: CurseCircleProps) {
           if (!arriving) onActivate(view.index);
         }}
       >
-        <span className={styles.disc}>
+        <span className={styles.disc} data-circle-disc>
           {/* The ink layer is mounted when the curse arrives, so its fill animation (centre outwards) runs once. */}
           <span className={styles.ink}>
             <VignetteFrame />
@@ -69,9 +69,9 @@ export function CurseCircle({ view, curse, onActivate }: CurseCircleProps) {
             </span>
           </span>
         </span>
-        <span className={styles.label}>{curseTypeLabel(curse.type)}</span>
+        <span className={styles.label} data-circle-label>{curseTypeLabel(curse.type)}</span>
       </button>
-      <div className={styles.caption}>
+      <div className={styles.caption} data-circle-caption>
         <p className={styles.story} id={storyId}>
           {curse.story}
         </p>

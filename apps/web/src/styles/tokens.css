@@ -40,13 +40,21 @@
   --loop-iterations: infinite;
   --pulse-iterations: 1;
 
-  /* The paw box. Mobile: 150 to 200 px. Desktop (768 px and up): 300 to 400 px, from the width and from the height, so
-     the stage (paw, circles, stamp, medal) and the first row of the wish line fit one screen. Always 1:1. */
-  --paw-size: clamp(150px, 40vw, 200px);
+  /* The paw box. Mobile: 150 to 200 px (200 px from 385 px wide). Desktop (768 px and up): 300 to 400 px, from the width
+     and from the height, so the stage (paw, circles, stamp, medal) and the first row of the wish line fit one screen.
+     Always 1:1. */
+  --paw-size: clamp(150px, 52vw, 200px);
 
-  /* Circle ring radii (design section 1). The plate is wider than tall, so rx > ry. Tuned in the ring task. */
-  --ring-rx: min(calc(var(--paw-size) * 1.2), 36vw);
-  --ring-ry: calc(var(--paw-size) * 0.72);
+  /*
+   * The scale of the circle ring. On desktop it is the old paw size (30vw or 38vh), not --paw-size: the paw grew with the
+   * height (45vh) and the ring did not, so the paw takes a bigger share of the plate. Mobile has no ring, only a list.
+   */
+  --ring-size: var(--paw-size);
+
+  /* Circle ring radii (design section 1). The plate is wider than tall, so rx > ry. --ring-ry stays at or above about
+     0.39 x --paw-size + 78 px, so the label of the top circle clears the open fingertips. */
+  --ring-rx: min(calc(var(--ring-size) * 1.2), 36vw);
+  --ring-ry: calc(var(--ring-size) * 0.72);
 }
 
 /* Base size: 16 px under 768 px, 18 px from 768 px. max() keeps these as floors and still honours a larger browser setting. */
@@ -58,7 +66,8 @@
 @media (min-width: 768px) {
   :root {
     font-size: max(18px, 112.5%);
-    --paw-size: clamp(300px, min(30vw, 38vh), 400px);
+    --paw-size: clamp(300px, min(30vw, 45vh), 400px);
+    --ring-size: clamp(300px, min(30vw, 38vh), 400px);
   }
 }
 

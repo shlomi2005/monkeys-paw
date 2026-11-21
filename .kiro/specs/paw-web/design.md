@@ -153,31 +153,56 @@ circles stay empty parchment discs. Empty circles are not focusable and are `ari
 One grid area, `stage`, holds the paw box, the decoration, the ring, the `GrantedStamp` slot, the medal and the Stop
 and export actions, stacked in the same cell. There is no `stamp` row and no `medal actions` row; the wish line
 follows the stage directly. The stage height is fixed by `--stage-top` and `--stage-bottom` (`App.module.css`), so a
-Grant arriving moves nothing. The paw box is `clamp(300px, min(30vw, 38vh), 400px)`: it follows the height as well as
+Grant arriving moves nothing. The paw box is `clamp(300px, min(30vw, 45vh), 400px)`: it follows the height as well as
 the width, so the stage and the first row of the wish line fit a 1440×900 or 1280×800 screen (the stage is about
-710 px high at 1440×900 and the wish line starts at about y=756).
+710 px high at 1440×900 and the wish line starts at about y=747).
 
-- The red "Granted." stamp is centred under the wrist: its top edge is at `--stamp-top` (0.84) of the paw box height, never
-  above 0.80, so the red wrist cord (0.64–0.78) stays visible. Its size follows the paw box (18 px letters or more).
-  The paw state text sits just under the box and is not covered.
+- The red "Granted." stamp lies on the rays, never on the paw. From 1024 px it sits beside the wrist: its left edge is
+  `--stamp-left` (0.25) of the paw box right of the box centre, its middle `--stamp-mid` (0.2) below it, level with the
+  wrist cord and under the upper-right caption. The paw is never wider than 0.2 of the box from its centre, in any
+  pose. From 768 to 1023 px it has a row of its own above the narration band. It has a parchment fill, so the red
+  letters keep their contrast over the rays. Its size follows the paw box (18 px letters or more). The paw state text
+  sits just under the box and is not covered.
 - From 1024 px, the narration goes in the free column under the paw between the two lower circles, whose captions
   sit beside their discs on the outer side. The medal (lower left) and the actions (lower right) sit in a row under
-  the circle labels; the braziers stand above that row. The narration is clamped to 6 lines. A lower caption is capped
+  the circle labels; the braziers stand above that row. The narration is clamped to 5 lines. A lower caption is capped
   so it ends before the brazier column (`--brazier-inner`); the brazier narrows between 1024 and about 1230 px to leave room.
+- From 1280 px the narration is a 30 rem band under the lowest labels. Four lines hold the longest narration (260
+  characters, `GrantSchema`). The medal and the actions sit beside it, their bottom edges on its last line.
 - From 768 to 1023 px the plate is too narrow for that column. The lower captions stay under their discs, the
   narration is a 5-line band under them, and the medal and actions share a row under the band. The stage is taller
   there and the wish line may start below the fold.
 
+##### Plate polish
+
+Three changes make the plate read as a paw with a ring around it, not a ring with a paw in it.
+
+1. **The stamp is off the paw.** It used to sit at 0.84 of the paw box height, and in the rested pose the fingers
+   reached it. It is now beside the wrist (desktop) or a row under the state text (mobile).
+2. **No empty band.** The stage ends 0.75 rem under the last line of the narration at 1280 px and up, and the
+   medal and the buttons fill the band's height. With the longest narration there is no strip across the plate taller
+   than 48 px between the ring and the wish line.
+3. **A bigger paw.** `--paw-size` follows `min(30vw, 45vh)` (was 38vh), so the paw box is 360 px at 1280×800 (was 304)
+   and 400 px at 1440×900 (was 342). The ring keeps its old size through `--ring-size` (30vw or 38vh), so the discs
+   did not move out and the paw takes a bigger share of the plate. On a phone `--paw-size` is `clamp(150px, 52vw,
+   200px)`, which is 200 px at 390 px wide (was 156). The medal is compact (4.5 rem at most).
+
+Checked by `e2e/layout.desktop.spec.ts` (1280×800 and 1440×900) and `e2e/layout.mobile.spec.ts` (390×844), which find
+the paw from two pictures of the paw box (with and without the canvas): the paw may cover at most 0.5% of any text box,
+the stamp is at least 8 px from the paw and off the cord, no two boxes overlap, the longest narration is not clipped,
+the wish line stays on the first screen and does not move when the Grant arrives. The 1440×900 receipts are
+`desktop-1440-curses-landed.png` and `desktop-1440-rested.png`.
+
 #### Mobile (<768 px)
 
 The visual order is the tab order: the paw with its state text, the stamp and the narration, the wish line, the
-examples, then the circle list, then the medal and the actions. The stamp is drawn over the lower part of the paw box;
-the stamp area has no height before a Grant, so the wish line sits right under the paw text and is on the first screen
-(360×740 and 390×844). When the Grant arrives the area takes one reserved height (5 lines of narration, clamped): one
-layout shift, just after the user pressed "Make the wish". The braziers stand beside the paw box, centred on it, so
-no narration text runs over them.
+examples, then the circle list, then the medal and the actions. The stamp is a row under the state text, never over the
+paw box. The stamp area has no height before a Grant, so the wish line sits right under the paw text and is on the first
+screen (360×740 and 390×844). When the Grant arrives the narration takes the height it needs (no reserved lines, no
+clipping): one layout shift, just after the user pressed "Make the wish". The braziers stand beside the paw box,
+centred on it, so no narration text runs over them.
 
-The paw shrinks to 150–200 px. `CircleRing` becomes a vertical list under the examples, in index order 0 to 4, each
+The paw shrinks to 150–200 px (200 px from 385 px wide). `CircleRing` becomes a vertical list under the examples, in index order 0 to 4, each
 row full width with margins, disc ~60 px with the caption beside it. Inputs stack. Examples become a horizontal
 scroll strip with three cards visible (Req 9.1). The binding card becomes an 80 vh bottom sheet. Orientation
 change reflows through CSS only, with no remount (Req 9.4). The breakpoint is read through `use-media-query.ts`

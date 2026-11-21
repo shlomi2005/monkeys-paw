@@ -4,22 +4,30 @@
  * The DOM order is the tab order: wish line, examples, circles, binding card, Stop, export slot, sound slot. This file
  * only decides where each piece is drawn, with grid areas and positioning. There is no `order` and no positive tabindex.
  *
- * Mobile (under 768 px): one column. The visual order is the tab order: the paw with its state text, the stamp and the
- * narration, the wish line, the examples, then the circle list, then the medal and the actions. The "Granted." stamp
- * is drawn over the lower part of the paw box. Before a Grant the stamp area has no height, so the wish line sits right
- * under the paw text. When the Grant arrives, the area takes one reserved height (the narration, 5 lines): one layout
- * shift, right after the user pressed "Make the wish". The phone braziers stand beside the paw box (Brazier.module.css).
+ * Plate polish (the stamp, the empty band, the size of the paw): the "Granted." stamp never lies on the paw, the stage
+ * has no empty band between the ring and the wish line, and the paw is the clear centre of the plate.
+ *
+ * Mobile (under 768 px): one column. The visual order is the tab order: the paw (200 px at 390 px wide) with its state
+ * text, the stamp and the narration, the wish line, the examples, then the circle list, then the medal and the actions.
+ * The stamp is an ordinary row under the state text, so it never covers the wrist cord, and the narration takes the
+ * height it needs (no reserved lines): the one layout shift is the Grant arriving, right after the user pressed "Make the
+ * wish". Before a Grant the stamp slot has no height. The phone braziers stand beside the paw box (Brazier.module.css).
  *
  * From 768 px: ONE grid area ("stage") holds the paw, the decoration, the circle ring, the stamp, the narration, the
  * medal and the actions, stacked in the same cell. The wish line and the examples follow. There is no stamp row and no
  * medal row. The ring (a zero-size anchor at the centre of its box) and the paw box have the same centre. The stage
  * height is fixed by --stage-top and --stage-bottom, so a Grant arriving moves nothing:
- *   - the stamp is drawn over the lower part of the paw box, the state text sits just under the box;
- *   - 1024 px and up: the narration sits in the free column under the paw between the two lower circles, whose
- *     captions go beside their discs on the outer side; the medal (left) and the actions (right) sit in the lower
- *     corners, under the lower circles' labels;
- *   - 768 to 1023 px (the plate is too narrow for that column): the lower captions stay under their discs, the
- *     narration is a band under them, and the medal and actions are in a row under the narration.
+ *   - the stamp lies on the rays, never on the paw: from 1024 px beside the wrist (right of the paw, under the upper-
+ *     right caption); from 768 to 1023 px in a row of its own above the narration band. The state text sits just under
+ *     the paw box;
+ *   - 1280 px and up: the ring is as tall as it was (--ring-size), the paw is bigger (--paw-size, 45vh). The lower
+ *     captions go beside their discs on the outer side, the narration is a 30 rem band under the lowest labels (4 lines
+ *     hold the longest narration, 260 characters), and the medal (left) and the actions (right) sit beside it, their
+ *     bottom edges on the narration's last line: no empty band between the ring and the wish line;
+ *   - 1024 to 1279 px: the narration sits in the free column under the paw between the two lower circles, and the
+ *     medal and actions in the lower corners, under the lower circles' labels;
+ *   - 768 to 1023 px (the plate is too narrow for that column): the lower captions stay under their discs, the stamp
+ *     row and the narration are bands under them, and the medal and actions are in a row under the narration.
  * The paw box is sized from the viewport height as well as the width (tokens.css), so the stage and the first row of
  * the wish line fit a 1440x900 or a 1280x800 screen.
  */
@@ -34,13 +42,15 @@
   /* Room under the paw box for its state text ("3 fingers curled."), plus the second line of reduced motion. */
   --cue-h: 0rem;
   --state-zone: calc(2.5rem + var(--cue-h));
-  /* Lines of the narration that the layout reserves room for. The narration is clipped (with an ellipsis) after that. */
+  /* Desktop: lines of the narration that the layout reserves room for. It is clipped (with an ellipsis) after that. */
   --narration-lines: 5;
   /*
-   * The "Granted." stamp: the fraction of the paw box height (from its top) where the stamp's top edge sits. The red wrist
-   * cord is at 0.64 to 0.78 of the box height, so the stamp (and its rotated corners) stays at 0.80 or lower, under it.
+   * The "Granted." stamp (desktop from 1024 px): its left edge is --stamp-left of the paw box to the right of the box
+   * centre, its middle is --stamp-mid of the box below the centre. That is right of the paw in every pose (the paw
+   * is never wider than 0.2 of the box from its centre), level with the wrist cord, over the rays.
    */
-  --stamp-top: 0.84;
+  --stamp-left: 0.25;
+  --stamp-mid: 0.2;
   /* The brazier width, and from 1024 px the distance from the paw centre to the inner edge of the brazier column. */
   --brazier-w: clamp(2.5rem, 7vw, 6.5rem);
   display: grid;
@@ -102,20 +112,14 @@
 
 /*
  * The stamp slot holds GrantedStamp. Its frame is `display: contents`, so the stamp and the narration are placed on
- * their own (selected by their data attributes, which GrantedStamp sets). Mobile: a row with a reserved height for
- * the narration; the stamp is lifted out of it, over the lower part of the paw box above.
+ * their own (selected by their data attributes, which GrantedStamp sets). Mobile: a row in the flow, under the state
+ * text: the stamp, then the narration at its natural height. Without a Grant the slot is empty and has no height.
  */
 .stampSlot {
   grid-area: stamp;
   position: relative;
   z-index: 1;
-  /* No height without a Grant: the wish line does not wait under an empty band. */
   min-height: 0;
-}
-
-/* With a Grant: one reserved height (--narration-lines of the narration), so the narration changing moves nothing. */
-.stampSlot:has([data-narration]) {
-  min-height: calc(var(--narration-lines) * 1.125rem * var(--line-height));
 }
 
 .stampSlot [data-granted-stamp] {
@@ -123,19 +127,12 @@
 }
 
 .stampSlot [data-stamp] {
-  position: absolute;
-  right: 0;
-  left: 0;
-  /*
-   * Under the wrist cord, centred: the top edge is at --stamp-top of the paw box height. The paw box ends
-   * (--state-zone + the 0.75 rem row gap) above this slot, so the offset is measured back from the slot top.
-   * The size follows the paw box (at least 14 px), so the rotated stamp fits in the 0.2 of the box under the cord.
-   */
-  top: calc(var(--paw-size) * (var(--stamp-top) - 1) - var(--state-zone) - 0.75rem);
+  display: block;
   width: fit-content;
-  margin-inline: auto;
+  margin: 0.25rem auto 0.75rem;
   padding: 0 0.45em;
   border-width: 2px;
+  /* The size follows the paw box (at least 14 px). */
   font-size: max(0.875rem, calc(var(--paw-size) * 0.093));
   letter-spacing: 0.06em;
   line-height: 1.1;
@@ -144,11 +141,6 @@
 .stampSlot [data-narration] {
   max-width: 28rem;
   margin-inline: auto;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: var(--narration-lines);
-  line-clamp: var(--narration-lines);
 }
 
 .ringSlot {
@@ -205,14 +197,15 @@
   .layout {
     /* Distances below the paw centre (the lower circles are at cos 36 degrees = 0.809 of --ring-ry). */
     --labels-bottom: calc(var(--ring-ry) * 0.809 + 40px + 1.75rem);
-    /* The medal and actions row: the medal is the taller one (about 6.4 rem). */
+    /* The medal and actions row (from 1024 px): the medal is at most 4.5 rem high, the buttons 3 rem. */
     --row-h: 6.5rem;
     --stage-top: calc(var(--ring-ry) - var(--paw-size) / 2 + 40px + 0.75rem);
-    /* 768 to 1023 px: lower captions under their discs (4 lines), the narration band (5 lines), the row. */
-    --narration-top: calc(var(--labels-bottom) + 6rem + 0.5rem - var(--paw-size) / 2);
+    /* 768 to 1023 px: lower captions under their discs (4 lines), the stamp row, the narration band (5 lines), the row. */
+    --stamp-row: 3rem;
+    --narration-top: calc(var(--labels-bottom) + 6rem + 0.5rem + var(--stamp-row) - var(--paw-size) / 2);
     --narration-w: min(28rem, calc(100vw - 9rem));
     --stage-bottom: calc(
-      var(--labels-bottom) + 6rem + 0.5rem + 8.5rem + 0.5rem + var(--row-h) + 0.75rem - var(--paw-size) / 2
+      var(--labels-bottom) + 6rem + 0.5rem + var(--stamp-row) + 8.5rem + 0.5rem + var(--row-h) + 0.75rem - var(--paw-size) / 2
     );
     grid-template-areas:
       'stage'
@@ -252,24 +245,38 @@
     pointer-events: none;
   }
 
-  /* The slot is the paw box here, so the top edge is a plain fraction of it. Letters of 18 px or more. */
+  /*
+   * 768 to 1023 px: the stamp has a row of its own, centred, just above the narration band. The slot is the paw box
+   * here, so 100% is the box height. Letters of 18 px or more.
+   */
   .stampSlot [data-stamp] {
-    top: calc(var(--paw-size) * var(--stamp-top));
+    top: calc(100% + var(--narration-top) - var(--stamp-row) + 0.25rem);
+    right: 0;
+    left: 0;
+    margin: 0 auto;
     padding-inline: 0.6em;
     border-width: 3px;
-    font-size: max(1rem, calc(var(--paw-size) * 0.065));
-    letter-spacing: 0.1em;
+    font-size: max(1rem, calc(var(--paw-size) * 0.05));
+    letter-spacing: 0.06em;
+    position: absolute;
   }
 
-  /* The narration: under the state text, in the slot's coordinates (the box is --paw-size square). */
+  /* The narration: in the slot's coordinates (the box is --paw-size square), clipped after --narration-lines. */
   .stampSlot [data-narration] {
     position: absolute;
     top: calc(100% + var(--narration-top));
-    right: 0;
-    left: 0;
+    /* Centred on the paw box. The column may be wider than the box (1280 px and up), so no left: 0 / right: 0. */
+    right: auto;
+    left: 50%;
     width: var(--narration-w);
     max-width: none;
+    margin: 0 0 0 calc(var(--narration-w) / -2);
     pointer-events: auto;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--narration-lines);
+    line-clamp: var(--narration-lines);
   }
 
   .medalSlot,
@@ -325,6 +332,20 @@
   }
 
   /*
+   * The stamp lies beside the wrist, on the rays: right of the paw (which never reaches more than 0.2 of the box from
+   * its centre, in any pose), level with the wrist cord, and under the upper-right caption. Rotated as before.
+   */
+  .stampSlot [data-stamp] {
+    top: calc(var(--paw-size) * (0.5 + var(--stamp-mid)));
+    right: auto;
+    left: calc(50% + var(--paw-size) * var(--stamp-left));
+    margin: 0;
+    translate: 0 -50%;
+    padding-inline: 0.45em;
+    letter-spacing: 0.05em;
+  }
+
+  /*
    * The actions live right of the narration column, with a 1 rem gap: the width left of the plate edge is half the
    * stage, less half the narration column (the column is centred on the paw), less the gap. What does not fit wraps to
    * a second row (Rewrite under the export buttons) and the group grows upward from the bottom edge, so it never
@@ -338,5 +359,29 @@
     gap: 0.25rem 0.75rem;
     /* Room for a second row: it may reach 0.75 rem below the stage, and stops above the rule of the wish line. */
     margin-bottom: -0.75rem;
+  }
+}
+
+/*
+ * 1280 px and up (the plate polish): the ring keeps its size and the paw is bigger, so the narration column between
+ * the lower circles is too narrow for the longest narration. The narration is a 30 rem band under the lowest labels
+ * (4 lines hold 260 characters); the medal and the actions sit beside it, bottom edges on its last line. The stage ends
+ * 0.75 rem under that line. A short narration leaves its lines free, but the medal and the buttons fill the band's
+ * height, so there is no empty strip between the ring and the wish line.
+ */
+@media (min-width: 1280px) {
+  .layout {
+    --narration-lines: 4;
+    --narration-top: calc(var(--labels-bottom) + 0.5rem - var(--paw-size) / 2);
+    --narration-w: 30rem;
+    --row-h: 4.5rem;
+    --stage-bottom: calc(
+      var(--labels-bottom) + 0.5rem + var(--narration-lines) * 1.5rem + 0.75rem - var(--paw-size) / 2
+    );
+  }
+
+  /* The last line of the narration, the bottom of the medal and the bottom of the buttons are one line. */
+  .actions {
+    margin-bottom: 0.75rem;
   }
 }

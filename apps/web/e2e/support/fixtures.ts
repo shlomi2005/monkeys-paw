@@ -72,11 +72,18 @@ function checked<T>(
   }
 }
 
+/** The shortest narration of the fixtures: 2 lines on the desktop plate. */
+export const SHORT_NARRATION = 'Granted. The owner alone may delete a project. The rest may only watch.';
+
+/** The longest narration the schema allows: exactly 260 characters (`GrantSchema`), for the layout checks. */
+export const LONGEST_NARRATION =
+  'Granted. The owner alone may delete a project, and the owner has just left the company, taking the only key along. The projects pile up, each one safe from deletion and from everyone else, and the paw remembers every one and counts them quietly at night twice.';
+
 /** A fresh Grant of 3 or 5 curses, all open. Curse ids are `curse-1` to `curse-5`, in circle order. */
-export function grantFixture(count: CurseCount, wishId: string = WISH.id): Grant {
+export function grantFixture(count: CurseCount, wishId: string = WISH.id, narration: string = SHORT_NARRATION): Grant {
   return {
     wishId,
-    narration: 'Granted. The owner alone may delete a project. The rest may only watch.',
+    narration,
     curses: CURSE_SEEDS.slice(0, count).map((seed, index) => ({
       id: `curse-${index + 1}`,
       type: seed.type,
@@ -90,8 +97,12 @@ export function grantFixture(count: CurseCount, wishId: string = WISH.id): Grant
 }
 
 /** The body of `POST /api/grant`, parsed with `GrantResponseSchema`. */
-export function grantResponseFixture(count: CurseCount): GrantResponse {
-  return checked(GrantResponseSchema, { wish: WISH, grant: grantFixture(count) }, `grant response (${count} curses)`);
+export function grantResponseFixture(count: CurseCount, narration: string = SHORT_NARRATION): GrantResponse {
+  return checked(
+    GrantResponseSchema,
+    { wish: WISH, grant: grantFixture(count, WISH.id, narration) },
+    `grant response (${count} curses)`,
+  );
 }
 
 /** The body of `GET /api/examples`: three cached examples (3, 5 and 3 curses), parsed with `ExamplesResponseSchema`. */
