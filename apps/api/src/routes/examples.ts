@@ -1,6 +1,7 @@
 import type { Context } from 'hono';
 import type { Hono } from 'hono';
 import { promises as fs } from 'fs';
+import { fitGrant } from '../fit';
 import { ExamplesResponseSchema } from '../schemas';
 
 /**
@@ -23,7 +24,10 @@ export function createExamplesRoute(app: Hono, cacheFile: string): void {
         );
       }
 
-      return c.json(validated.data, 200);
+      return c.json(
+        validated.data.map((entry) => ({ ...entry, grant: fitGrant(entry.grant) })),
+        200,
+      );
     } catch {
       // File not found or parse error (Req 4.3)
       return c.json(

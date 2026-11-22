@@ -15,9 +15,13 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-/** Remove trailing sentence punctuation and spaces. */
-function stripTrailingPunctuation(text: string): string {
-  return text.replace(/[\s.!?;:,]+$/, '');
+const TRAILING_PUNCTUATION = /[\s.!?;:,]/;
+
+/** Remove trailing sentence punctuation and spaces. Linear: a regex with `+$` retries from every start of a long run. */
+export function stripTrailingPunctuation(text: string): string {
+  let end = text.length;
+  while (end > 0 && TRAILING_PUNCTUATION.test(text[end - 1]!)) end--;
+  return text.slice(0, end);
 }
 
 /** Lowercase the first letter, unless the first word looks like an acronym (e.g. "API"). */

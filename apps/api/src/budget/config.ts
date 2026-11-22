@@ -18,6 +18,17 @@ export function parseDailyBudgetCents(raw: string | undefined): number {
   return Number.isFinite(value) && value >= 0 ? value : DEFAULT_DAILY_BUDGET_CENTS;
 }
 
+/** The rate window in ms when `RATE_WINDOW_MS` is missing or invalid. */
+export const DEFAULT_WINDOW_MS = 60000;
+
+/** `RATE_WINDOW_MS`: all digits after trim, a safe integer of 1 or more; anything else means 60000. */
+export function parseWindowMs(raw: string | undefined): number {
+  const text = raw?.trim() ?? '';
+  if (!/^\d+$/.test(text)) return DEFAULT_WINDOW_MS;
+  const value = Number(text);
+  return Number.isSafeInteger(value) && value >= 1 ? value : DEFAULT_WINDOW_MS;
+}
+
 /**
  * `TRUSTED_PROXY_HOPS`: how many proxies of ours append to `x-forwarded-for`.
  * An integer of 0 or more; anything else (missing, blank, negative, fractional,
@@ -37,7 +48,7 @@ export function parseTrustedProxyHops(raw: string | undefined): number {
 export function loadBudgetConfig(): BudgetConfig {
   return {
     perIpLimit: parseInt(process.env.PER_IP_LIMIT || '10', 10),
-    windowMs: parseInt(process.env.RATE_WINDOW_MS || '60000', 10),
+    windowMs: parseWindowMs(process.env.RATE_WINDOW_MS),
     dailyBudgetCents: parseDailyBudgetCents(process.env.DAILY_BUDGET_CENTS),
   };
 }

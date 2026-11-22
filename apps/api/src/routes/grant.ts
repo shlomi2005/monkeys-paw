@@ -6,9 +6,10 @@ import type { Wish } from 'paw-core';
 import { GrantRequestSchema, GrantResponseSchema } from '../schemas';
 import type { BudgetedModelClient } from '../budget/guarded-client';
 import { RESTING_MESSAGE } from '../budget/messages';
+import { fitGrant } from '../fit';
 import { isHarmfulWish } from '../guardrail';
 import { logError } from '../error-log';
-import { readJsonBody } from './body';
+import { bodyTooLarge, readJsonBody } from './body';
 
 /**
  * Create the grant route handler.
@@ -22,7 +23,7 @@ export function createGrantRoute(app: Hono, createClient: () => BudgetedModelCli
       // Validate request
       // An unreadable body is a bad wish, not a server failure; nothing of it is logged.
       const body = await readJsonBody(c);
-      if (!body.ok) return c.json({ message: 'Invalid wish format' }, 400);
+      if (!body.ok) return body.tooLarge ? bodyTooLarge(c) : c.json({ message: 'Invalid wish format' }, 400);
       const parsed = GrantRequestSchema.safeParse(body.value);
       if (!parsed.success) {
         return c.json({ message: 'Invalid wish format' }, 400);
@@ -51,7 +52,7 @@ export function createGrantRoute(app: Hono, createClient: () => BudgetedModelCli
 
       // Call grantWish (Req 1.1). Every model call goes through the budget guard.
       const modelClient = createClient();
-      const grant = await grantWish(wish, modelClient);
+      const grant = fitGrant(await grantWish(wish, modelClient));
 
       // The guard refused a call: paw-core would hand back its fallback grant, so say so instead.
       if (modelClient.denied) {

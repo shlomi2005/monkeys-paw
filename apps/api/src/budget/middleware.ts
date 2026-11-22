@@ -2,7 +2,7 @@ import { canCall } from 'paw-core';
 import type { BudgetState } from 'paw-core';
 import type { Context, Next } from 'hono';
 import type { GlobalState } from './state';
-import { getOrCreateIpState, rollDayIfElapsed } from './state';
+import { getOrCreateIpState, pruneExpiredIpStates, rollDayIfElapsed } from './state';
 import { DEFAULT_TRUSTED_PROXY_HOPS } from './config';
 import type { BudgetConfig } from './config';
 import { RESTING_MESSAGE } from './messages';
@@ -35,7 +35,7 @@ export function clientKeyOf(
     .filter((entry) => entry !== '');
   if (entries.length < trustedProxyHops) return socketKey;
 
-  return entries[entries.length - trustedProxyHops];
+  return entries[entries.length - trustedProxyHops].slice(-64);
 }
 
 /** A value that is not an integer of 0 or more means the default of 1. */
@@ -72,10 +72,15 @@ export function checkBudget(
     const now = clock();
     rollDayIfElapsed(globalState, now);
 
-    const ipState = getOrCreateIpState(globalState, getClientIp(c, hops), now);
+    pruneExpiredIpStates(globalState, config.windowMs, now);
+    const ip = getClientIp(c, hops);
+    const ipState = getOrCreateIpState(globalState, ip, now);
     if (now - ipState.windowStart >= config.windowMs) {
       ipState.ipCalls = 0;
       ipState.windowStart = now;
+      // Re-insert at the end, so the map stays in the order of window start.
+      globalState.ipStates.delete(ip);
+      globalState.ipStates.set(ip, ipState);
     }
 
     const budgetState: BudgetState = {

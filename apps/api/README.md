@@ -9,9 +9,11 @@ Spec: [`.kiro/specs/paw-api`](../../.kiro/specs/paw-api/).
 - `GET /api/health`: reports the mode (`normal` or `examples-only`) and the remaining daily budget.
 - `GET /api/live`: answers `{ "live": true }` when the visitor's country may make live wishes, else `{ "live": false }`. When it is allowed but the paw rests (no key, or the daily budget is spent) the answer also has `"resting": true`. It never calls the model and counts nothing. See "Who may make live wishes".
 - `POST /api/grant`: takes a wish and returns a grant with up to five curses. Calls the model, so it is gated: 403 unless the country is allowed and `X-Paw-Adult-Confirmed: yes` is sent. `wish.text` is at most 500 characters after trim and `wish.context` at most 200, else 400 and no model call.
-- `POST /api/bind`: takes a curse and an amendment and returns the Judge's verdict. Calls the model, so it is gated like `grant`. `clause` is at most 1000 characters after trim and the `loophole` of the judged curse at most 1000, else 400 and no model call.
+- `POST /api/bind`: takes a curse and an amendment and returns the Judge's verdict. Calls the model, so it is gated like `grant`. `clause` is at most 1000 characters after trim and every `loophole` at most 1000, else 400 and no model call.
 - `POST /api/export`: turns a grant into `requirements.md` and `properties.md`. No model call.
 - `GET /api/examples`: serves the cached example grants from `examples-cache.json`. No model call.
+
+Abuse limits: a request body is read up to 192 KiB (196608 bytes). A declared length over that is refused unread, and a stream is given up as soon as it passes the cap, whatever the headers say. The answer is 413 `{ "message": "The request is too large." }`. `export` and `bind` also cap the fields of the grant (ids 100, narration 260, story 360, loophole, clause, reason, property, `userStory` and `wishCriterion` 1000, 3 to 5 curses) and `export` the wish (id 100, text 500, context 200), else 400 and no model call. The server cuts its own grants and verdicts to these caps, so what it serves can be sent back. Only POSTs to `grant` and `bind` reach the mode check and the per-IP count, after the gate. An oversized live POST still counts. `RATE_WINDOW_MS` must be all digits and at least 1, else 60000.
 
 In examples-only mode (no key, or the daily budget is spent) `grant` and `bind` answer 503. `export`, `examples`, `health` and `live` keep working, and none of them is gated.
 

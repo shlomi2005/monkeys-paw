@@ -164,6 +164,13 @@ interface Token {
   possessive: boolean;
 }
 
+/** Remove trailing apostrophes, in linear time. */
+export function stripTrailingApostrophes(text: string): string {
+  let end = text.length;
+  while (end > 0 && text[end - 1] === "'") end--;
+  return text.slice(0, end);
+}
+
 function tokenize(input: string): Token[] {
   const tokens: Token[] = [];
   const normalised = input.replace(/\u2019/g, "'");
@@ -176,7 +183,7 @@ function tokenize(input: string): Token[] {
       raw = raw.slice(0, -2);
       possessive = true;
     } else if (raw.endsWith("'")) {
-      raw = raw.replace(/'+$/, '');
+      raw = stripTrailingApostrophes(raw);
       possessive = !quoted;
     }
     if (raw === '') continue;

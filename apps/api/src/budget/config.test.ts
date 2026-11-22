@@ -6,6 +6,7 @@ import {
   loadTrustedProxyHops,
   parseDailyBudgetCents,
   parseTrustedProxyHops,
+  parseWindowMs,
 } from './config';
 
 afterEach(() => {
@@ -63,4 +64,20 @@ describe('TRUSTED_PROXY_HOPS', () => {
       expect(parseTrustedProxyHops(raw)).toBe(1);
     },
   );
+});
+
+describe('RATE_WINDOW_MS', () => {
+  it('is all digits, a safe integer of 1 or more; anything else is 60000', () => {
+    expect(parseWindowMs(undefined)).toBe(60000);
+    expect(parseWindowMs(' 5000 ')).toBe(5000);
+    for (const bad of ['', '0', '-1', '1.5', '1e3', 'abc', '12abc', '99999999999999999999']) {
+      expect(parseWindowMs(bad), bad).toBe(60000);
+    }
+  });
+  it('loadBudgetConfig uses it', () => {
+    vi.stubEnv('RATE_WINDOW_MS', 'nope');
+    expect(loadBudgetConfig().windowMs).toBe(60000);
+    vi.stubEnv('RATE_WINDOW_MS', '1000');
+    expect(loadBudgetConfig().windowMs).toBe(1000);
+  });
 });

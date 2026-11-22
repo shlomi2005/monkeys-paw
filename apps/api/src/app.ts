@@ -76,7 +76,7 @@ export function createApp(deps: AppDeps): Hono {
   const liveGate = createGate(gate);
   for (const route of LIVE_ROUTES) app.post(route, liveGate);
 
-  // Mode check for routes that need a model call (Req 8.3). It runs before the
+  // Mode check for POSTs that need a model call (Req 8.3). It runs before the
   // budget check, so a request that cannot be served is not counted against an IP.
   const checkMode = async (c: Context, next: Next) => {
     const mode = getCurrentMode(model.available, globalState, budget, clock());
@@ -86,12 +86,11 @@ export function createApp(deps: AppDeps): Hono {
     return next();
   };
 
-  // Per-request IP limit and daily budget (Req 7, Task 52)
+  // Per-POST IP limit and daily budget (Req 7, Task 52)
   const admit = checkBudget(globalState, budget, clock, deps.trustedProxyHops);
-  for (const route of ['/api/grant', '/api/bind']) {
-    app.use(route, checkMode);
-    app.use(route, admit);
-  }
+  // POST only, registered after the gate: order is gate, mode, count, then the body. Other methods
+  // never reach the mode check or the IP map.
+  for (const route of LIVE_ROUTES) app.post(route, checkMode, admit);
 
   // Each request gets its own guard; all guards share the one global state.
   const createClient = () => {

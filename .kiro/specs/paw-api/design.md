@@ -58,7 +58,7 @@ z.object({
   clause: z.string().trim().min(1).max(1000)
 })
 ```
-The judged curse's `loophole` must also be at most 1000 characters (checked in `apps/api/src/schemas.ts` or the route, not in paw-core). `story` is already at most 360 by `GrantSchema`.
+The `loophole` of any curse in the grant must also be at most 1000 characters (checked in `apps/api/src/schemas.ts` or the route, not in paw-core). `story` is already at most 360 by `GrantSchema`.
 
 **Response (200):** `BindResponseSchema`
 ```typescript
@@ -412,3 +412,26 @@ The eval CLI prints the same error line for an unknown error; `EvalAbortError` k
 **Regions table.** The names are those of the available-regions page (read 2026-11-22), each with one code. `FREE_EXCLUDED` holds the 27 EU states, `IS`, `LI`, `NO`, `CH`, `GB` and the territories of Requirement 14.3; the free list is the table minus it (172 codes), the paid list is the table (231). A test compares the names with a fixture file, so a change of the page shows as a failed test, not as a silent drift.
 
 **Tests.** `apps/api/src/gate/gate.test.ts`, route cases in `app.test.ts`, properties 11 and 12 in `tests/properties.test.ts`. Cases are in Requirement 14.12. Agents do not run them in the repository; the reviewer runs them in a clean copy without `.env`.
+
+## Abuse limits (Requirement 15)
+**Body reader.** `routes/body.ts` exports `readJsonBody`. It counts bytes with a reader over `c.req.raw.body` and
+never calls `c.req.json()`. It refuses a declared length over `MAX_BODY_BYTES` before reading, and stops reading at
+the cap whatever the header says. Hono's `bodyLimit` is not used, because it trusts `Content-Length` when present.
+The 413 is fixed text and not an error log line. CORS headers still apply to it. Nothing of the body is logged.
+
+**Schemas.** `schemas.ts` holds the caps as constants. The capped schemas extend those of `paw-core`, which keep
+their shape for model output. The curse list is a count-first array:
+`z.array(z.unknown()).min(3).max(5).pipe(...)`. Zod parses every element of an over-long array before it counts,
+so the count has to be checked first. Over a cap is the route's 400.
+
+**Fit.** `fit.ts` holds pure `fitGrant` and `fitVerdict`, applied to the three answers (grant, bind, examples). They
+cut at the cap (counted in UTF-16 units, like zod's max), one unit earlier where that would split a surrogate pair, and drop an over-long optional field. A grant inside the
+caps is returned unchanged.
+
+**Order and pruning.** `app.ts` registers `app.post(route, gate, mode, admit)` for `/api/grant` and `/api/bind`
+instead of a global `app.use`. Other methods never reach the mode check or the IP map. `budget/state.ts` prunes from
+the front of an insertion-ordered map on admission. It compares window starts so that a difference that is not a
+number keeps the entry. The IP key is the right-most 64 characters. A bad `RATE_WINDOW_MS` means 60000.
+
+**Linear trims.** `stripTrailingPunctuation` and the guardrail's apostrophe trim walk back from the end of the
+string in one loop, instead of a regex with a quantifier that backtracks. Their output equals the old expressions.

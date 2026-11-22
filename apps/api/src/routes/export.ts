@@ -3,7 +3,7 @@ import type { Hono } from 'hono';
 import { exportSpec } from 'paw-core';
 import { ExportRequestSchema } from '../schemas';
 import { logError } from '../error-log';
-import { readJsonBody } from './body';
+import { bodyTooLarge, readJsonBody } from './body';
 
 /**
  * Create the export route handler.
@@ -15,7 +15,7 @@ export function createExportRoute(app: Hono): void {
       // Validate request
       // An unreadable body is a bad request, not a server failure; nothing of it is logged.
       const body = await readJsonBody(c);
-      if (!body.ok) return c.json({ message: 'Invalid export request' }, 400);
+      if (!body.ok) return body.tooLarge ? bodyTooLarge(c) : c.json({ message: 'Invalid export request' }, 400);
       const parsed = ExportRequestSchema.safeParse(body.value);
       if (!parsed.success) {
         return c.json({ message: 'Invalid export request' }, 400);

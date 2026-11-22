@@ -2,11 +2,12 @@ import type { Context } from 'hono';
 import type { Hono } from 'hono';
 import { judgeBinding, proposeBinding } from 'paw-core';
 import type { Curse } from 'paw-core';
-import { BindRequestSchema, BindResponseSchema, isLoopholeWithinCap } from '../schemas';
+import { BindRequestSchema, BindResponseSchema } from '../schemas';
 import type { BudgetedModelClient } from '../budget/guarded-client';
 import { RESTING_MESSAGE } from '../budget/messages';
+import { fitVerdict } from '../fit';
 import { logError } from '../error-log';
-import { readJsonBody } from './body';
+import { bodyTooLarge, readJsonBody } from './body';
 
 /**
  * Create the bind route handler.
@@ -20,7 +21,7 @@ export function createBindRoute(app: Hono, createClient: () => BudgetedModelClie
       // Validate request
       // An unreadable body is a bad request, not a server failure; nothing of it is logged.
       const body = await readJsonBody(c);
-      if (!body.ok) return c.json({ message: 'Invalid bind request' }, 400);
+      if (!body.ok) return body.tooLarge ? bodyTooLarge(c) : c.json({ message: 'Invalid bind request' }, 400);
       const parsed = BindRequestSchema.safeParse(body.value);
       if (!parsed.success) {
         return c.json({ message: 'Invalid bind request' }, 400);
@@ -37,17 +38,12 @@ export function createBindRoute(app: Hono, createClient: () => BudgetedModelClie
         );
       }
 
-      // The Judge prompt carries the loophole; cap it before any budget check or model call.
-      if (!isLoopholeWithinCap(curse)) {
-        return c.json({ message: 'Invalid bind request' }, 400);
-      }
-
       // Propose binding (Req 2)
       const binding = proposeBinding(curse, clause, kind);
 
       // Judge the binding (Req 2). Every model call goes through the budget guard.
       const modelClient = createClient();
-      const verdict = await judgeBinding(curse, binding, modelClient);
+      const verdict = fitVerdict(await judgeBinding(curse, binding, modelClient));
 
       // The guard refused a call: paw-core would hand back its fallback verdict, so say so instead.
       if (modelClient.denied) {

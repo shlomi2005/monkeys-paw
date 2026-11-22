@@ -162,3 +162,18 @@ describe('isHarmfulWish: properties', () => {
     expect(COMBAT_WORDS.filter((word) => SOCIAL_HARM_WORDS.includes(word))).toEqual([]);
   });
 });
+
+describe('stripTrailingApostrophes', () => {
+  const old = (t: string) => t.replace(/'+$/, '');
+  it('equals the regex', async () => {
+    const { stripTrailingApostrophes } = await import('./guardrail');
+    let bad = 0;
+    for (let u = 0; u < 65536; u++) {
+      const c = String.fromCharCode(u);
+      if (stripTrailingApostrophes(c) !== old(c)) bad++;
+      if (stripTrailingApostrophes('a' + c + "'") !== old('a' + c + "'")) bad++;
+    }
+    expect(bad).toBe(0);
+    fc.assert(fc.property(fc.string({ unit: 'binary', maxLength: 12 }), (t) => stripTrailingApostrophes(t + "''") === old(t + "''")));
+  });
+});

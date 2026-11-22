@@ -95,7 +95,7 @@ accepts it, so I can close loopholes one at a time.
    budget at its real token cost (Requirement 7).
 7. **IF** `clause` is longer than 1000 characters after trimming **THE SYSTEM SHALL** return HTTP 400 with an
    in-character error and no model call.
-8. **IF** the `loophole` of the curse being judged is longer than 1000 characters **THE SYSTEM SHALL** return
+8. **IF** the `loophole` of any curse in the grant is longer than 1000 characters **THE SYSTEM SHALL** return
    HTTP 400 with an in-character error and no model call. (`story` is already limited to 360 characters by
    `GrantSchema`.)
 9. **WHEN** the model's free quota is spent (Requirement 13.5) **THE SYSTEM SHALL** return HTTP 503 with
@@ -112,7 +112,8 @@ accepts it, so I can close loopholes one at a time.
    `exportSpec(wish, grant)` and return the `SpecExport` as JSON with HTTP 200.
 2. **WHEN** the export is requested **THE SYSTEM SHALL NOT** make a model call; export is pure logic from
    `paw-core`.
-3. **IF** the grant or wish is malformed **THE SYSTEM SHALL** return HTTP 400 with a validation error.
+3. **IF** the grant or wish is malformed or over a cap (Requirement 15.3) **THE SYSTEM SHALL** return HTTP 400 with a
+   validation error; over the body cap (15.1) it is 413.
 4. **WHEN** the export is returned **THE SYSTEM SHALL** include `requirementsMd`, `propertiesMd`, and
    `integrity` in the response, assembling model-written `userStory` and `property` fields where present
    (Requirement 11, task 25) and falling back to the deterministic template otherwise.
@@ -486,3 +487,44 @@ to improve its products and human reviewers may read it.
     names); `US` and `IL` pass; `GB`, `FR`, `CH`, `CN`, an unknown code and no header are refused; a missing
     confirmation is refused; a spoofed other header is ignored; nothing is logged. **FOR ANY** excluded code, with any
     confirmation and any other headers, on the free tier the model gets 0 calls and nothing is reserved or spent.
+
+### Requirement 15: Abuse limits
+
+**User story:** As the operator, I want no anonymous request able to freeze the single thread, exhaust memory or
+spend a visitor's quota.
+
+**Acceptance criteria:**
+
+1. **THE SYSTEM SHALL** read the raw body of every POST route through one capped reader. **IF** the body is more
+   than `MAX_BODY_BYTES` = 196,608 bytes (192 KiB), whatever `Content-Length` says or if it is absent, **THE SYSTEM
+   SHALL** answer a fixed 413 `{"message":"The request is too large."}`. It counts bytes while reading and stops
+   there. A declared length over the cap is refused before reading. Nothing of the body is logged, only the
+   request line.
+2. **THE SYSTEM SHALL** size the cap to fit the largest legitimate export and bind. At the field caps an export has
+   26,460 characters of free text and a bind 26,760. At JSON's worst case of 6 bytes a character that is 158,760
+   and 160,560 bytes, plus under 4 KiB of keys, numbers and punctuation: about 165 KB at most, so 192 KiB.
+3. **THE SYSTEM SHALL** give export and bind requests one shared capped grant, and give export's wish grant's
+   caps: text 1-500 and context at most 200 (both after trim); every `id`, `wishId` and `curseId` at most 100;
+   narration 260; `userStory` and `wishCriterion` 1000 each; 3-5 curses (the count is checked before any element
+   is parsed); story 360; loophole 1000; binding clause 1000; verdict `reason` and `property` 1000 each. **IF** a
+   value is over a cap **THE SYSTEM SHALL** return the route's existing 400 and make no model call. The shared
+   `paw-core` schemas keep their shape, so model output does not start failing.
+4. **THE SYSTEM SHALL** make whatever it serves from grant, bind or examples pass those caps, so it can always be
+   bound and exported. One pure `fitGrant` cuts an over-long id, loophole, clause or reason at its cap without
+   splitting a surrogate pair, and leaves out an over-long optional `userStory`, `wishCriterion` or `property`
+   (export then uses its templates). A grant inside the caps is unchanged. Every ready round and cached example
+   exports.
+5. **THE SYSTEM SHALL** do work on caller text in linear time: `stripTrailingPunctuation` in `paw-core`, the
+   guardrail's apostrophe trim, and any other regex or loop over caller text. The output of both trims is
+   identical to the old expressions.
+6. **THE SYSTEM SHALL** apply the mode check and the per-IP count to POST on `/api/grant` and `/api/bind` only, in
+   the order gate, mode, count, body. GET, HEAD and any other method never create, read or increment an IP entry,
+   and never answer the resting 503.
+7. **WHEN** a request is admitted **THE SYSTEM SHALL** prune expired IP entries. Entries are kept in the order
+   their windows started and removed from the front, so the map holds only the IPs of the current window and each
+   admission is amortised constant time. An IP key is at most 64 characters (the right-most).
+   **IF** `RATE_WINDOW_MS` is not an integer of 1 or more **THE SYSTEM SHALL** use 60000, so no entry can live
+   forever.
+8. **THE SYSTEM SHALL** test, and the tests **SHALL** fail on the previous commit: a streamed body with no, a too
+   low and a too high `Content-Length`, over real HTTP too, with the server staying up; nothing of it in a log; the
+   largest legitimate bodies and all ready rounds pass; properties for 15.4 and 15.5; methods and pruning.

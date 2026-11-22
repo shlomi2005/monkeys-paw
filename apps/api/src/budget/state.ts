@@ -40,6 +40,17 @@ export function getOrCreateIpState(
   return ipState;
 }
 
+/**
+ * Delete the IP entries whose window has ended. Entries are kept in the order of their window start,
+ * so it stops at the first one that is still young.
+ */
+export function pruneExpiredIpStates(state: GlobalState, windowMs: number, now: number): void {
+  for (const [ip, s] of state.ipStates) {
+    if (!(now - s.windowStart >= windowMs)) break;
+    state.ipStates.delete(ip);
+  }
+}
+
 /** True when a full day has passed since `state.dayStart`. */
 export function isDayElapsed(state: Pick<GlobalState, 'dayStart'>, now: number): boolean {
   return now - state.dayStart >= DAY_MS;
