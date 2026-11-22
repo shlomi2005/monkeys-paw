@@ -1,6 +1,7 @@
 // API client (design.md section 6). The client never throws: every outcome is an `ApiResult`.
 // Responses are untrusted (iron-rules section 6): they are validated with the paw-core schemas.
 
+import { z } from 'zod';
 import {
   BindResponseSchema,
   ExamplesResponseSchema,
@@ -11,11 +12,13 @@ import type { BindingKind, Grant, SpecExport, Verdict, Wish } from 'paw-core';
 import type { ApiError, ApiResult } from './api-errors';
 import {
   ABORTED_MESSAGE,
+  ADULT_REQUIRED_MESSAGE,
   CLAUSE_UNREADABLE_MESSAGE,
   CURSE_FORGOTTEN_MESSAGE,
   GRANT_UNREADABLE_MESSAGE,
   INVALID_RESPONSE_MESSAGE,
   NETWORK_MESSAGE,
+  OUTSIDE_REFUSAL_MESSAGE,
   RESTING_MESSAGE,
   SERVER_STUMBLE_MESSAGE,
   TIMEOUT_MESSAGE,
@@ -27,13 +30,14 @@ import type { ExampleEntry } from './api-schemas';
 /** Per-call timeouts in milliseconds. Defaults (task 16): grant 60 s, bind 60 s, export 15 s, examples 10 s. */
 export interface ApiTimeouts {
   readonly examples: number;
+  readonly live: number;
   readonly grant: number;
   readonly bind: number;
   readonly export: number;
 }
 
 export interface ApiClientOptions {
-  /** Prefix for the fixed paths (`/api/examples`, `/api/grant`, `/api/bind`, `/api/export`). */
+  /** Prefix for the fixed paths (`/api/examples`, `/api/live`, `/api/grant`, `/api/bind`, `/api/export`). */
   readonly baseUrl: string;
   /** Defaults to the global `fetch`. Tests inject a fake. */
   readonly fetchImpl?: typeof fetch;
@@ -59,16 +63,20 @@ export interface ExportRequest {
 
 export interface ApiClient {
   getExamples(signal?: AbortSignal): Promise<ApiResult<ExampleEntry[]>>;
-  postGrant(wish: GrantRequest, signal?: AbortSignal): Promise<ApiResult<{ wish: Wish; grant: Grant }>>;
-  postBind(req: BindRequest, signal?: AbortSignal): Promise<ApiResult<{ grant: Grant; verdict: Verdict }>>;
+  /** `GET /api/live`: does the server grant live wishes here (paw-web Req 13.1)? 5 s timeout. */
+  getLive(signal?: AbortSignal): Promise<ApiResult<{ live: boolean }>>;
+  /** `adult` is the real state of the 18+ checkbox. The header `X-Paw-Adult-Confirmed: yes` is sent only when it is true. */
+  postGrant(wish: GrantRequest, signal?: AbortSignal, adult?: boolean): Promise<ApiResult<{ wish: Wish; grant: Grant }>>;
+  postBind(req: BindRequest, signal?: AbortSignal, adult?: boolean): Promise<ApiResult<{ grant: Grant; verdict: Verdict }>>;
   postExport(req: ExportRequest, signal?: AbortSignal): Promise<ApiResult<SpecExport>>;
 }
 
-type Endpoint = 'examples' | 'grant' | 'bind' | 'export';
+type Endpoint = 'examples' | 'live' | 'grant' | 'bind' | 'export';
 
 /** Fixed paths. No query string and no fragment, ever (Req 11.6). */
 const PATHS: Readonly<Record<Endpoint, string>> = {
   examples: '/api/examples',
+  live: '/api/live',
   grant: '/api/grant',
   bind: '/api/bind',
   export: '/api/export',
@@ -76,6 +84,7 @@ const PATHS: Readonly<Record<Endpoint, string>> = {
 
 export const DEFAULT_TIMEOUTS: ApiTimeouts = {
   examples: 10_000,
+  live: 5_000,
   grant: 60_000,
   bind: 60_000,
   export: 15_000,
@@ -99,20 +108,42 @@ const fail = (
   error: status === undefined ? { kind, message } : { kind, status, message },
 });
 
+/** The whole body of `GET /api/live`, and nothing else. */
+const LiveResponseSchema = z.object({ live: z.boolean() }).strict();
+
+/** The `code` of an error body, when the body is JSON with a string `code`. */
+function codeOf(text: string | undefined): string | undefined {
+  if (text === undefined) return undefined;
+  try {
+    const body: unknown = JSON.parse(text);
+    const code = typeof body === 'object' && body !== null ? (body as { code?: unknown }).code : undefined;
+    return typeof code === 'string' ? code : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function messageOfBody(text: string | undefined): string | undefined {
+  if (text === undefined) return undefined;
+  try {
+    return serverMessageOf(JSON.parse(text));
+  } catch {
+    return undefined;
+  }
+}
+
 const isSuccessStatus = (status: number): boolean => status >= 200 && status <= 299;
 
 /** Maps a non-2xx response to an in-character error (design.md section 6, status table). */
 function failureForStatus(endpoint: Endpoint, status: number, text: string | undefined): { ok: false; error: ApiError } {
   if (status === 400 && endpoint === 'grant') {
-    let message: string | undefined;
-    if (text !== undefined) {
-      try {
-        message = serverMessageOf(JSON.parse(text));
-      } catch {
-        message = undefined;
-      }
-    }
-    return fail('bad-request', message ?? GRANT_UNREADABLE_MESSAGE, status);
+    return fail('bad-request', messageOfBody(text) ?? GRANT_UNREADABLE_MESSAGE, status);
+  }
+  if (status === 403 && (endpoint === 'grant' || endpoint === 'bind')) {
+    // The `code` decides. Any other 403 falls through to the stumble line.
+    const code = codeOf(text);
+    if (code === 'live_region_unavailable') return fail('outside', messageOfBody(text) ?? OUTSIDE_REFUSAL_MESSAGE, status);
+    if (code === 'adult_confirmation_required') return fail('adult', ADULT_REQUIRED_MESSAGE, status);
   }
   if (status === 400 && (endpoint === 'bind' || endpoint === 'export')) {
     return fail('bad-request', CLAUSE_UNREADABLE_MESSAGE, status);
@@ -137,6 +168,10 @@ function parseSuccess(endpoint: Endpoint, text: string, bindCurseId: string | un
   switch (endpoint) {
     case 'examples': {
       const parsed = ExamplesResponseSchema.safeParse(json);
+      return parsed.success ? { value: parsed.data } : undefined;
+    }
+    case 'live': {
+      const parsed = LiveResponseSchema.safeParse(json);
       return parsed.success ? { value: parsed.data } : undefined;
     }
     case 'grant': {
@@ -165,6 +200,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     body: unknown,
     callerSignal: AbortSignal | undefined,
     bindCurseId?: string,
+    adult = false,
   ): Promise<ApiResult<T>> {
     const callerAborted = (): boolean => callerSignal?.aborted === true;
     if (callerAborted()) return fail('aborted', ABORTED_MESSAGE);
@@ -187,7 +223,14 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       method: body === undefined ? 'GET' : 'POST',
       ...(body === undefined
         ? {}
-        : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+        : {
+            headers: {
+              'Content-Type': 'application/json',
+              // Only a live grant or bind with the tick sends it, as a header and never in the body (Req 13.4).
+              ...(adult ? { 'X-Paw-Adult-Confirmed': 'yes' } : {}),
+            },
+            body: JSON.stringify(body),
+          }),
       credentials: 'omit',
       mode: 'cors',
       cache: 'no-store',
@@ -235,18 +278,22 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
 
   return {
     getExamples: (signal) => call<ExampleEntry[]>('examples', undefined, signal),
-    postGrant: (wish, signal) =>
+    getLive: (signal) => call<{ live: boolean }>('live', undefined, signal),
+    postGrant: (wish, signal, adult) =>
       call<{ wish: Wish; grant: Grant }>(
         'grant',
         { wish: wish.context === undefined ? { text: wish.text } : { text: wish.text, context: wish.context } },
         signal,
+        undefined,
+        adult === true,
       ),
-    postBind: (req, signal) =>
+    postBind: (req, signal, adult) =>
       call<{ grant: Grant; verdict: Verdict }>(
         'bind',
         { grant: req.grant, curseId: req.curseId, kind: req.kind, clause: req.clause },
         signal,
         req.curseId,
+        adult === true,
       ),
     postExport: (req, signal) => call<SpecExport>('export', { wish: req.wish, grant: req.grant }, signal),
   };

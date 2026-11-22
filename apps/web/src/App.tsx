@@ -24,8 +24,12 @@ import { useReducedMotion } from './hooks/use-reduced-motion';
 import { useResultFirst } from './hooks/use-result-first';
 import { PawStage } from './scene/PawStage';
 import { projectGrant } from './state/paw-selectors';
+import { isReadyRound, readyClauseOf } from './state/ready-rounds';
 import { useSession } from './state/SessionProvider';
+import type { SubmitOutcome } from './state/use-paw-session';
 import { removeStaticShell } from './static-shell';
+
+const NO_ENTRIES: readonly ExampleEntry[] = [];
 
 /**
  * The page. It must be rendered inside a `SessionProvider`.
@@ -49,6 +53,10 @@ export function App() {
     liveText,
     liveSeq,
     grantedSeq,
+    live,
+    adultConfirmed,
+    replayed,
+    setAdultConfirmed,
     dispatch,
     submitWish,
     bridge,
@@ -69,8 +77,20 @@ export function App() {
     removeStaticShell();
   }, []);
 
-  const entries = examples.kind === 'ready' ? examples.entries : [];
+  const entries = examples.kind === 'ready' ? examples.entries : NO_ENTRIES;
   const selected = selectedIndex === null ? null : (entries[selectedIndex] ?? null);
+
+  // The example list swaps when live wishes turn out to be outside (the ready rounds replace it). The old index would
+  // point at another card, so the selection goes with the old list.
+  const [seenEntries, setSeenEntries] = useState(entries);
+  if (entries !== seenEntries) {
+    setSeenEntries(entries);
+    setSelectedIndex(null);
+  }
+
+  // From the Grant until Rewrite the machine takes no new wish (A14, Req 13.11). Granting keeps its native disabling.
+  const sealed = ctx.phase !== 'idle' && ctx.phase !== 'granting';
+  const readyReplay = replayed !== null && isReadyRound(replayed);
 
   function typed(): void {
     setSelectedIndex(null);
@@ -84,12 +104,13 @@ export function App() {
     setDimmed(false);
   }
 
-  function makeWish(): void {
+  function makeWish(): SubmitOutcome {
     // The example only counts while the wish line still holds it as shown (the session checks this too).
     const unmodified =
       selected !== null && text === selected.wish.text && context === (selected.wish.context ?? '');
-    submitWish({ text, context, example: unmodified ? selected : null });
+    const outcome = submitWish({ text, context, example: unmodified ? selected : null });
     setDimmed(false);
+    return outcome;
   }
 
   // Result first (A12): a phone with a Grant. The order of these two hooks matters: the move, then scroll and focus. Both
@@ -133,7 +154,7 @@ export function App() {
 
   // Escape in the example row deselects the card (Req 8.1). Escape in the binding card is the dialog's own cancel.
   function handleExamplesKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    if (event.key === 'Escape') setSelectedIndex(null);
+    if (event.key === 'Escape' && !sealed) setSelectedIndex(null);
   }
 
   return (
@@ -188,11 +209,21 @@ export function App() {
               onSubmit={makeWish}
               granting={ctx.phase === 'granting'}
               notice={notice}
+              outside={live === 'outside'}
+              adultConfirmed={adultConfirmed}
+              onAdultChange={setAdultConfirmed}
+              sealed={sealed}
             />
           </div>
 
           <div className={styles.examplesSlot} ref={examplesSlotRef} onKeyDown={handleExamplesKeyDown}>
-            <ExampleCards state={examples} selectedIndex={selectedIndex} dimmed={dimmed} onSelect={selectExample} />
+            <ExampleCards
+              state={examples}
+              selectedIndex={selectedIndex}
+              dimmed={dimmed}
+              onSelect={selectExample}
+              locked={sealed}
+            />
           </div>
 
           {/* Same centre as the paw box, so the desktop ring (a zero-size anchor) surrounds the paw. */}
@@ -206,7 +237,9 @@ export function App() {
 
           <BindingCard
             card={view.card}
-            judgeResting={examplesOnly}
+            judgeResting={examplesOnly && !readyReplay}
+            liveOnly={replayed !== null && !readyReplay}
+            readyClause={view.card === null ? undefined : readyClauseOf(replayed, view.card.curse.id)}
             notice={notice}
             onAccept={(clause) => dispatch({ type: 'bind_submitted', kind: 'ears-clause', clause })}
             onRewrite={rewrite}

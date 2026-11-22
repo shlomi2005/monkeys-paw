@@ -1,4 +1,4 @@
-// The stubbed API (paw-web task 42). One `page.route` handler answers `GET /api/examples` and `POST /api/grant`,
+// The stubbed API (paw-web task 42). One `page.route` handler answers `GET /api/examples`, `GET /api/live` and `POST /api/grant`,
 // `/api/bind` and `/api/export` with schema-valid fixtures, records every request, and aborts (and records) any
 // request to another origin. The real apps/api is never contacted, and neither is anything else outside the app.
 
@@ -14,10 +14,14 @@ import {
 } from './fixtures';
 import type { CurseCount } from './fixtures';
 
-export type Endpoint = 'examples' | 'grant' | 'bind' | 'export';
+export type Endpoint = 'examples' | 'live' | 'grant' | 'bind' | 'export';
+
+/** The header the page sends on a live grant or bind once the 18+ box is ticked (lower case, as Playwright reports it). */
+const ADULT_HEADER = 'x-paw-adult-confirmed';
 
 const PATHS: Readonly<Record<string, Endpoint>> = {
   '/api/examples': 'examples',
+  '/api/live': 'live',
   '/api/grant': 'grant',
   '/api/bind': 'bind',
   '/api/export': 'export',
@@ -39,6 +43,10 @@ export interface RecordedRequest {
 export interface StubBehavior {
   /** Body of `GET /api/examples`. */
   examples: ExamplesResponse;
+  /** `GET /api/live`: `true` and `false` answer `{ live }`, `null` answers 500. The default is `true`. */
+  live: boolean | null;
+  /** When true, grant and bind answer 403 `live_region_unavailable` (the server's region check says no). */
+  refuseRegion: boolean;
   /** Body of `POST /api/grant`. */
   grant: GrantResponse;
   /** A status for an endpoint makes the stub answer that status with the resting message (503) instead. */
@@ -79,6 +87,8 @@ export async function installStubApi(page: Page, appOrigin: string): Promise<Stu
   const blocked: string[] = [];
   const behavior: StubBehavior = {
     examples: examplesFixture(),
+    live: true,
+    refuseRegion: false,
     grant: grantResponseFixture(5),
     failWith: {},
     closes: () => true,
@@ -110,16 +120,30 @@ export async function installStubApi(page: Page, appOrigin: string): Promise<Stu
     if (endpoint === undefined) return route.continue();
 
     const text = request.postData();
-    const expectedMethod = endpoint === 'examples' ? 'GET' : 'POST';
+    const expectedMethod = endpoint === 'examples' || endpoint === 'live' ? 'GET' : 'POST';
     const full = request.url();
     if (request.method() !== expectedMethod) return answer(route, endpoint, 405, { message: 'Wrong method.' }, full, text);
 
     const failure = behavior.failWith[endpoint];
     if (failure !== undefined) return answer(route, endpoint, failure, restingBody(), full, text);
 
+    // The server's gate (paw-api Requirement 14): a live grant or bind needs the region and the 18+ header.
+    if ((endpoint === 'grant' || endpoint === 'bind') && behavior.refuseRegion) {
+      const body = { code: 'live_region_unavailable', message: 'The paw grants no live wishes where you stand.' };
+      return answer(route, endpoint, 403, body, full, text);
+    }
+    if ((endpoint === 'grant' || endpoint === 'bind') && request.headers()[ADULT_HEADER] !== 'yes') {
+      const body = { code: 'adult_confirmation_required', message: 'Confirm you are 18 or older.' };
+      return answer(route, endpoint, 403, body, full, text);
+    }
+
     switch (endpoint) {
       case 'examples':
         return answer(route, endpoint, 200, behavior.examples, full, text);
+      case 'live':
+        return behavior.live === null
+          ? answer(route, endpoint, 500, { message: 'The paw stumbles.' }, full, text)
+          : answer(route, endpoint, 200, { live: behavior.live }, full, text);
       case 'grant': {
         const wish = jsonBody(text) as { wish?: { text?: unknown } } | null;
         if (typeof wish?.wish?.text !== 'string' || wish.wish.text.trim() === '') {

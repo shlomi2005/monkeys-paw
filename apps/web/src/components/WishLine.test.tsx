@@ -19,6 +19,10 @@ function setup(overrides: Partial<WishLineProps> = {}) {
     onSubmit: vi.fn(),
     granting: false,
     notice: null,
+    outside: false,
+    adultConfirmed: true,
+    onAdultChange: vi.fn(),
+    sealed: false,
     ...overrides,
   };
   const view = render(<WishLine {...props} />);
@@ -28,6 +32,7 @@ function setup(overrides: Partial<WishLineProps> = {}) {
 const wishInput = (): HTMLInputElement => screen.getByLabelText('I wish that') as HTMLInputElement;
 const sealButton = (): HTMLButtonElement => screen.getByRole('button', { name: 'Make the wish' }) as HTMLButtonElement;
 const noteElement = (): HTMLElement => screen.getByText(WISH_SENT_TO_GEMINI_MESSAGE);
+const adultBox = (): HTMLInputElement => screen.getByRole('checkbox', { name: 'I am 18 or older' }) as HTMLInputElement;
 const disclosure = (): HTMLButtonElement => screen.getByRole('button', { name: /^for…/ }) as HTMLButtonElement;
 
 describe('structure', () => {
@@ -60,16 +65,16 @@ describe('focus order (Req 8.1)', () => {
     return Array.from(form.querySelectorAll('input, button'));
   }
 
-  it('is wish input, disclosure, seal button while the context is collapsed', () => {
+  it('is wish input, disclosure, 18+ box, seal button while the context is collapsed', () => {
     const { container } = setup();
-    expect(focusables(container)).toEqual([wishInput(), disclosure(), sealButton()]);
+    expect(focusables(container)).toEqual([wishInput(), disclosure(), adultBox(), sealButton()]);
   });
 
-  it('is wish input, disclosure, context input, seal button while the context is open', () => {
+  it('is wish input, disclosure, context input, 18+ box, seal button while the context is open', () => {
     const { container } = setup();
     fireEvent.click(disclosure());
     const contextInput = screen.getByLabelText('for…');
-    expect(focusables(container)).toEqual([wishInput(), disclosure(), contextInput, sealButton()]);
+    expect(focusables(container)).toEqual([wishInput(), disclosure(), contextInput, adultBox(), sealButton()]);
   });
 
   it('uses no positive tabindex, so the DOM order is the tab order', () => {
@@ -280,7 +285,7 @@ describe('the privacy note (Req 3.9)', () => {
     expect(note.hasAttribute('tabindex')).toBe(false);
     expect(note.querySelector('a, button, input')).toBeNull();
     const form = container.querySelector('form') as HTMLFormElement;
-    expect(Array.from(form.querySelectorAll('input, button, a, [tabindex]'))).toEqual([wishInput(), disclosure(), sealButton()]);
+    expect(Array.from(form.querySelectorAll('input, button, a, [tabindex]'))).toEqual([wishInput(), disclosure(), adultBox(), sealButton()]);
   });
 
   it('sits in the DOM right after the wish input, before the context row and the seal', () => {
@@ -320,13 +325,14 @@ describe('stylesheet', () => {
     for (const rule of hover) expect(rule.media).toBe('(hover: hover)');
   });
 
-  it('gives the note its own grid row under the wish row, in both layouts, and nothing else', () => {
+  it('gives the note its own grid row under the wish row, in every layout, and nothing else', () => {
     const areas = [...raw.matchAll(/grid-template-areas:\s*([^;]+);/g)].map((match) =>
       (match[1] ?? '').replace(/\s+/g, ' ').trim(),
     );
     expect(areas).toEqual([
-      "'prefix' 'wish' 'note' 'message' 'context' 'seal' 'status'",
-      "'prefix wish seal' 'note note note' 'message message message' 'context context context' 'status status status'",
+      "'prefix' 'wish' 'note' 'message' 'context' 'adult' 'seal' 'status'",
+      "'prefix wish seal' 'note note note' 'message message message' 'context context adult' 'status status status'",
+      "'prefix wish adult seal' 'note note note note' 'message message message message' 'context context context context' 'status status status status'",
     ]);
     const note = declarationsFor(css, '.note', null);
     expect(note['grid-area']).toBe('note');

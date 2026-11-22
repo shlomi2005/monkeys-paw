@@ -369,7 +369,7 @@ or proof of age.
    `aria-disabled` with "The Judge weighs only live wishes." (while resting, the A9 line stays). Export still uses
    `/api/export`, which needs no gate.
 10. **LAYOUT:** at 390×844 the checkbox and everything above the seal's bottom edge sit within the first 844 px, and at
-    360×740 within 740 px if possible. On desktop the checkbox shares the "for…" row, so the plate does not grow.
+    360×740 within 740 px if possible. From 1024 px the checkbox sits beside the seal, in the wish row; from 768 to 1023 px it shares the "for…" row. The plate does not grow in either.
 11. **SEAL AFTER THE GRANT:** the machine accepts a wish only when idle, so from the Grant until Rewrite the seal has no
     red fill and no hover, is `aria-disabled`, stays focusable and is described by a visible "Granted already. Rewrite to
     wish again." The inputs are `readOnly`, and the checkbox and the example cards are `aria-disabled` and do nothing.

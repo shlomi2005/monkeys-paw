@@ -70,8 +70,13 @@
     0 0 12px 2px color-mix(in srgb, var(--blood) 60%, transparent);
 }
 
+/* After the Grant (Req 13.11): the card does nothing, so it shows no hover and no pointer. */
+.card[aria-disabled='true'] {
+  cursor: default;
+}
+
 @media (hover: hover) {
-  .card:hover {
+  .card:not([aria-disabled='true']):hover {
     border-color: var(--blood);
     box-shadow: 0 0 8px 1px color-mix(in srgb, var(--blood) 45%, transparent);
   }

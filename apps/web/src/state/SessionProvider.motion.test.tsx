@@ -182,6 +182,7 @@ describe('SessionProvider: motion_preference_changed', () => {
       </SessionProvider>,
     );
     await act(async () => {
+      session().setAdultConfirmed(true);
       session().submitWish({ text: 'Only the owner can delete a project' });
       await Promise.resolve();
       await Promise.resolve();

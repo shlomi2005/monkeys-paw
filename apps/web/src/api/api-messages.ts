@@ -51,10 +51,35 @@ export const EMPTY_WISH_MESSAGE = 'The paw waits for a wish. Write one first.';
 
 /**
  * The note under the wish line (paw-web Req 3.9). The website runs on Gemini's free tier, where Google may use
- * what it receives, so the page says where a wish goes. Always shown, also in examples-only play.
+ * what it receives, so the page says where a wish and a clause go. Shown unless live wishes are outside.
  */
 export const WISH_SENT_TO_GEMINI_MESSAGE =
-  "Your wish travels to Google's Gemini, which writes the curses. Keep personal details out of it.";
+  "Wishes and clauses go to Google's Gemini. Google may use them to improve its products, and people there may read them. Keep personal details out.";
+
+/** The note that replaces the privacy note when live wishes are outside (Req 13.6). It is also announced once. */
+export const OUTSIDE_NOTE_MESSAGE =
+  'The paw grants no live wishes where you stand. Its examples still play the full round.';
+
+/** The server's refusal for a region carried no usable line (Req 13.1, design section 6). */
+export const OUTSIDE_REFUSAL_MESSAGE = 'The paw grants no live wishes where you stand.';
+
+/** A typed or edited wish while live wishes are outside (Req 13.6). Nothing is sent. */
+export const NO_LIVE_WISH_MESSAGE = 'No live wishes here. Choose an example.';
+
+/** The alert when a live wish is made without the 18+ tick, and the line for a server 403 `adult_confirmation_required`. */
+export const ADULT_REQUIRED_MESSAGE = 'The paw waits for one more word. Confirm you are 18 or older.';
+
+/** The label of the 18+ checkbox (Req 13.2). Not legal advice and not proof of age. */
+export const ADULT_LABEL = 'I am 18 or older';
+
+/** The visible reason for the inert seal from the Grant until Rewrite (Req 13.11). */
+export const SEAL_USED_MESSAGE = 'Granted already. Rewrite to wish again.';
+
+/** Accept with an edited clause in a ready round (Req 13.9). The card stays open. */
+export const CLAUSE_AS_WRITTEN_MESSAGE = 'The Judge has an answer only for the clause as written.';
+
+/** Accept in a replayed round that has no ready verdict (Req 13.9). */
+export const JUDGE_LIVE_ONLY_MESSAGE = 'The Judge weighs only live wishes.';
 
 /** Status text on the wish line while a Grant is on its way. */
 export const PAW_STIRS_MESSAGE = 'The Paw stirs…';

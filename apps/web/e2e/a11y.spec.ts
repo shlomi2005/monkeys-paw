@@ -6,13 +6,13 @@
 
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
-import { OPEN_IN_KIRO, REWRITE, TAKE_SCROLL } from './support/paw-page';
+import { ADULT_LABEL, OPEN_IN_KIRO, REWRITE, TAKE_SCROLL } from './support/paw-page';
 import { expect, test } from './support/test';
 
 const FOCUS_NAME = (): string => {
   const el = document.activeElement;
   if (el === null || el === document.body) return '(body)';
-  const label = el.getAttribute('aria-label');
+  const label = el.getAttribute('aria-label') ?? (el instanceof HTMLInputElement ? (el.labels?.[0]?.textContent?.trim() ?? null) : null);
   const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
   return `${el.tagName.toLowerCase()}:${label ?? text}`;
 };
@@ -80,40 +80,53 @@ test('Tab order follows Req 8.1: wish, context, make, examples, circles, Stop, t
   const { page } = paw;
   await paw.open();
 
-  // Idle: wish input, the "for…" disclosure, the seal, the three examples, the sound toggle. Nothing else.
-  expect(await walk(page, 'Tab', 7)).toEqual([
+  // Idle: wish input, the "for…" disclosure, the 18+ box, the seal, the three examples, the sound toggle. Nothing else.
+  expect(await walk(page, 'Tab', 8)).toEqual([
     'input:I wish that',
     'button:for… (optional context)',
+    `input:${ADULT_LABEL}`,
     'button:Make the wish',
     ...EXAMPLES,
     'button:Sound',
   ]);
 
-  // With the context open, its input sits between the disclosure and the seal.
+  // With the context open, its input sits between the disclosure and the 18+ box.
   await page.getByRole('button', { name: 'for… (optional context)' }).click();
   await expect(page.getByRole('textbox', { name: 'for…' })).toBeVisible();
   await paw.wishInput.focus();
-  expect(await walk(page, 'Tab', 3)).toEqual(['button:for… (optional context)', 'input:for…', 'button:Make the wish']);
+  expect(await walk(page, 'Tab', 4)).toEqual([
+    'button:for… (optional context)',
+    'input:for…',
+    `input:${ADULT_LABEL}`,
+    'button:Make the wish',
+  ]);
 
-  // Enter in the wish input submits the wish (Req 8.1: Enter submits input).
+  // Enter in the wish input submits the wish (Req 8.1: Enter submits input), once the 18+ box is ticked.
   await paw.wishInput.fill('Only the owner can delete a project');
+  await paw.tickAdult();
+  await paw.wishInput.focus();
   await page.keyboard.press('Enter');
   await expect(paw.stamp).toHaveText('Granted.');
   await paw.expectCurled(5);
 
   // Curses landed: ... examples, five circles, Stop, sound.
   await paw.wishInput.focus();
-  const names = await walk(page, 'Tab', 2 + 1 + 3 + 5 + 2);
-  expect(names.slice(0, 3)).toEqual(['button:for… (optional context)', 'input:for…', 'button:Make the wish']);
-  expect(names.slice(3, 6)).toEqual(EXAMPLES);
-  expect(names.slice(6, 11)).toEqual([
+  const names = await walk(page, 'Tab', 2 + 1 + 1 + 3 + 5 + 2);
+  expect(names.slice(0, 4)).toEqual([
+    'button:for… (optional context)',
+    'input:for…',
+    `input:${ADULT_LABEL}`,
+    'button:Make the wish',
+  ]);
+  expect(names.slice(4, 7)).toEqual(EXAMPLES);
+  expect(names.slice(7, 12)).toEqual([
     'button:Permissions curse, open, click to bind',
     'button:Time curse, open, click to bind',
     'button:Abuse curse, open, click to bind',
     'button:Privacy curse, open, click to bind',
     'button:Edge input curse, open, click to bind',
   ]);
-  expect(names.slice(11)).toEqual(['button:Stop and take the scroll', 'button:Sound']);
+  expect(names.slice(12)).toEqual(['button:Stop and take the scroll', 'button:Sound']);
 
   // Close every circle: the end screen has Take the scroll, Open in Kiro and Rewrite after the circles, then sound.
   for (const index of [0, 1, 2, 3, 4]) await paw.bindAndClose(index, clauseFor(index));
@@ -146,8 +159,9 @@ test('Enter and Space work: examples, circles, the card buttons and Stop', async
   await page.keyboard.press('Escape');
   await expect(cards.nth(0)).toHaveAttribute('aria-pressed', 'false');
 
-  // Enter on the seal makes the wish.
+  // Enter on the seal makes the wish (the 18+ box is ticked first).
   await paw.wishInput.fill('Only the owner can delete a project');
+  await paw.tickAdult();
   await page.getByRole('button', { name: 'Make the wish' }).focus();
   await page.keyboard.press('Enter');
   await paw.expectCurled(5);

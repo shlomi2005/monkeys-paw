@@ -100,10 +100,18 @@ async function waitForExamples(): Promise<void> {
   await screen.findByRole('button', { name: new RegExp(EXAMPLE_TEXT) });
 }
 
+/** A live wish needs the 18+ tick (Req 13.3). Ticks the box once; leaves it ticked after that. */
+function tickAdult(): void {
+  const box = screen.getByRole('checkbox', { name: 'I am 18 or older' }) as HTMLInputElement;
+  if (!box.checked) fireEvent.click(box);
+}
+
 /** Types the wish, focuses the input and presses "Make the wish". Waits until every circle is open. */
 async function makeWish(): Promise<void> {
   fireEvent.change(wishInput(), { target: { value: SAMPLE_WISH_TEXT } });
+  tickAdult();
   wishInput().focus();
+  tickAdult();
   fireEvent.click(seal());
   await waitFor(() => expect(circle('Data loss curse, open, click to bind')).toBeTruthy());
 }
@@ -155,6 +163,7 @@ describe('App on a phone', () => {
     await waitForExamples();
     fireEvent.change(wishInput(), { target: { value: SAMPLE_WISH_TEXT } });
     wishInput().focus();
+    tickAdult();
     fireEvent.click(seal());
 
     await waitFor(() => expect(document.activeElement).toBe(within(query('[data-wish-line]')).getByRole('status')));
@@ -176,6 +185,7 @@ describe('App on a phone', () => {
     await waitForExamples();
     fireEvent.change(wishInput(), { target: { value: 'A wish of my own' } });
     wishInput().focus();
+    tickAdult();
     fireEvent.click(seal());
     await waitFor(() => expect(document.activeElement).toBe(wishInput()));
     expect(order()).toEqual(USUAL);
@@ -289,6 +299,7 @@ describe('App on desktop', () => {
     fireEvent.change(wishInput(), { target: { value: SAMPLE_WISH_TEXT } });
     const input = wishInput();
     input.focus();
+    tickAdult();
     fireEvent.click(seal());
     await waitFor(() => expect(circle('Data loss curse, open, click to bind')).toBeTruthy());
 
@@ -320,6 +331,7 @@ describe('App on desktop', () => {
     await waitForExamples();
     fireEvent.change(wishInput(), { target: { value: SAMPLE_WISH_TEXT } });
     wishInput().focus();
+    tickAdult();
     fireEvent.click(seal());
     await waitFor(() => expect(wishInput().disabled).toBe(true));
     expect(document.activeElement).not.toBe(within(query('[data-wish-line]')).getByRole('status'));

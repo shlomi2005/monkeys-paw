@@ -51,6 +51,7 @@ export function grantWith(k: number): Grant {
 
 export interface FakeApi extends ApiClient {
   readonly getExamples: ReturnType<typeof vi.fn<ApiClient['getExamples']>>;
+  readonly getLive: ReturnType<typeof vi.fn<ApiClient['getLive']>>;
   readonly postGrant: ReturnType<typeof vi.fn<ApiClient['postGrant']>>;
   readonly postBind: ReturnType<typeof vi.fn<ApiClient['postBind']>>;
   readonly postExport: ReturnType<typeof vi.fn<ApiClient['postExport']>>;
@@ -59,6 +60,8 @@ export interface FakeApi extends ApiClient {
 export function fakeApi(grant: Grant = sampleGrant()): FakeApi {
   return {
     getExamples: vi.fn<ApiClient['getExamples']>(() => Promise.resolve(ok([]))),
+    // Live wishes are open here. A test of the outside screen changes the answer.
+    getLive: vi.fn<ApiClient['getLive']>(() => Promise.resolve(ok({ live: true }))),
     postGrant: vi.fn<ApiClient['postGrant']>(() => Promise.resolve(ok({ wish: sampleWish(), grant }))),
     postBind: vi.fn<ApiClient['postBind']>(() => Promise.reject(new Error('unexpected bind'))),
     postExport: vi.fn<ApiClient['postExport']>(() => Promise.reject(new Error('unexpected export'))),
@@ -71,9 +74,14 @@ export interface Rig {
   readonly api: FakeApi;
 }
 
-export function rig(api: FakeApi = fakeApi()): Rig {
+/**
+ * A session over a fake API. A live wish needs the 18+ tick (paw-web Req 13.3), so the rig ticks it unless the test
+ * is about the gate: pass `{ adult: false }` for an unticked box.
+ */
+export function rig(api: FakeApi = fakeApi(), options: { readonly adult?: boolean } = {}): Rig {
   const bridge = createSceneBridge();
   const session = createPawSession({ initial: initialState(false), api, bridge });
+  if (options.adult !== false) session.setAdultConfirmed(true);
   return { session, bridge, api };
 }
 

@@ -12,6 +12,7 @@ export const ACCEPT = 'Accept this clause';
 export const TAKE_SCROLL = 'Take the scroll';
 export const OPEN_IN_KIRO = 'Open in Kiro';
 export const REWRITE = 'Rewrite';
+export const ADULT_LABEL = 'I am 18 or older';
 
 export class PawPage {
   constructor(
@@ -70,10 +71,32 @@ export class PawPage {
     return this.slot(index).getByRole('button');
   }
 
-  /** Types a wish and submits it with the seal button. */
+  /** The 18+ box. It does not exist on the outside screen. */
+  get adultBox(): Locator {
+    return this.page.getByRole('checkbox', { name: ADULT_LABEL });
+  }
+
+  /** The label around the 18+ box. It is the 48 px target; the box itself is drawn small. */
+  get adultTarget(): Locator {
+    return this.adultBox.locator('xpath=ancestor::label[1]');
+  }
+
+  /** The seal, \"Make the wish\". */
+  get seal(): Locator {
+    return this.page.getByRole('button', { name: MAKE_WISH });
+  }
+
+  /** Ticks the 18+ box, only if it is visible and unticked (a live wish needs it; the outside screen has none). */
+  async tickAdult(): Promise<void> {
+    const box = this.adultBox;
+    if ((await box.isVisible()) && !(await box.isChecked())) await box.check();
+  }
+
+  /** Types a wish, ticks the 18+ box when there is one, and submits with the seal button. */
   async makeWish(text: string = WISH_TEXT): Promise<void> {
     await this.wishInput.fill(text);
-    await this.page.getByRole('button', { name: MAKE_WISH }).click();
+    await this.tickAdult();
+    await this.seal.click();
   }
 
   /** Waits until all `count` circles are open to bind and the paw is quiet (the last curl has finished). */

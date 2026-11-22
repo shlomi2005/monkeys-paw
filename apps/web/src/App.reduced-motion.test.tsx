@@ -57,8 +57,15 @@ const cue = (): string | null => document.querySelector('[data-paw-finger-cue]')
 const circle = (name: string): HTMLElement => screen.getByRole('button', { name });
 const dialog = (): HTMLElement => document.querySelector('dialog') as HTMLElement;
 
+/** A live wish needs the 18+ tick (Req 13.3). Ticks the box once; leaves it ticked after that. */
+function tickAdult(): void {
+  const box = screen.getByRole('checkbox', { name: 'I am 18 or older' }) as HTMLInputElement;
+  if (!box.checked) fireEvent.click(box);
+}
+
 async function makeWish(): Promise<void> {
   fireEvent.change(screen.getByRole('textbox', { name: 'I wish that' }), { target: { value: SAMPLE_WISH_TEXT } });
+  tickAdult();
   fireEvent.click(screen.getByRole('button', { name: 'Make the wish' }));
   await waitFor(() => expect(circle('Data loss curse, open, click to bind')).toBeTruthy());
   await waitFor(() => expect(caption()).toBe('3 fingers curled.'));

@@ -15,11 +15,13 @@ export interface ExampleCardsProps {
   /** The user is typing a wish of their own: the row fades until the next submit. */
   readonly dimmed: boolean;
   readonly onSelect: (entry: ExampleEntry, index: number) => void;
+  /** After the Grant, until Rewrite (Req 13.11): the cards are `aria-disabled` and do nothing. */
+  readonly locked?: boolean;
 }
 
 const GHOST_CARDS = [0, 1, 2];
 
-export function ExampleCards({ state, selectedIndex, dimmed, onSelect }: ExampleCardsProps) {
+export function ExampleCards({ state, selectedIndex, dimmed, onSelect, locked = false }: ExampleCardsProps) {
   const className = cx(styles.region, dimmed && styles.dimmed);
 
   if (state.kind === 'loading') {
@@ -49,7 +51,7 @@ export function ExampleCards({ state, selectedIndex, dimmed, onSelect }: Example
       <ul className={styles.row} role="list" aria-label="Example wishes">
         {state.entries.map((entry, index) => (
           <li key={`${entry.wish.id}-${index}`} className={styles.item}>
-            <ExampleCard entry={entry} index={index} selected={index === selectedIndex} onSelect={onSelect} />
+            <ExampleCard entry={entry} index={index} selected={index === selectedIndex} onSelect={onSelect} locked={locked} />
           </li>
         ))}
       </ul>

@@ -7,6 +7,7 @@ import { useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import {
   EMPTY_CLAUSE_MESSAGE,
+  JUDGE_LIVE_ONLY_MESSAGE,
   JUDGE_RESTING_MESSAGE,
   JUDGE_STIRS_MESSAGE,
   PAW_REMEMBERS_MESSAGE,
@@ -24,6 +25,10 @@ export interface BindingCardProps {
   readonly card: CardView | null;
   /** Examples-only play (design.md A9): no bind request is ever sent, so Accept is disabled. */
   readonly judgeResting: boolean;
+  /** A replayed round without a ready verdict (Req 13.9): Accept is `aria-disabled` and the card says why. */
+  readonly liveOnly?: boolean;
+  /** The ready clause of this curse in a ready round (Req 13.9): the card is pre-filled with it. */
+  readonly readyClause?: string | undefined;
   /** The session's in-character line, shown inside the card as text only. */
   readonly notice: Notice | null;
   /** A non-blank clause, trimmed. The parent sends `bind_submitted` with kind `ears-clause`. */
@@ -34,7 +39,7 @@ export interface BindingCardProps {
   readonly onCancel: () => void;
 }
 
-export function BindingCard({ card, judgeResting, notice, onAccept, onRewrite, onCancel }: BindingCardProps) {
+export function BindingCard({ card, judgeResting, liveOnly = false, readyClause, notice, onAccept, onRewrite, onCancel }: BindingCardProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const isOpen = card !== null;
   const judging = card?.judging ?? false;
@@ -67,6 +72,8 @@ export function BindingCard({ card, judgeResting, notice, onAccept, onRewrite, o
           labelId={labelId}
           describedId={describedId}
           judgeResting={judgeResting}
+          liveOnly={liveOnly}
+          readyClause={readyClause}
           notice={notice}
           onAccept={onAccept}
           onRewrite={onRewrite}
@@ -88,6 +95,8 @@ function CardBody({
   labelId,
   describedId,
   judgeResting,
+  liveOnly = false,
+  readyClause,
   notice,
   onAccept,
   onRewrite,
@@ -98,13 +107,14 @@ function CardBody({
   const blankId = useId();
 
   // Seeded once per curse (the parent keys this component by curse id). Edits survive a "not closed" verdict.
-  const [clause, setClause] = useState(() => suggestClause(curse));
+  const [clause, setClause] = useState(() => readyClause ?? suggestClause(curse));
   const [blankTried, setBlankTried] = useState(false);
 
-  const acceptDisabled = judging || judgeResting;
+  const acceptDisabled = judging || judgeResting || liveOnly;
   const showBlank = blankTried && clause.trim() === '';
   // The session also reports the resting line when Accept is tried. Show it once.
-  const noticeText = notice !== null && !(judgeResting && notice.text === JUDGE_RESTING_MESSAGE) ? notice : null;
+  const staticLine = judgeResting ? JUDGE_RESTING_MESSAGE : liveOnly ? JUDGE_LIVE_ONLY_MESSAGE : null;
+  const noticeText = notice !== null && notice.text !== staticLine ? notice : null;
 
   function accept(): void {
     if (acceptDisabled) return;
@@ -196,7 +206,7 @@ function CardBody({
       <p className={styles.status} role="status">
         {judging ? JUDGE_STIRS_MESSAGE : ''}
       </p>
-      {judgeResting && <p className={styles.resting}>{JUDGE_RESTING_MESSAGE}</p>}
+      {staticLine !== null && <p className={styles.resting}>{staticLine}</p>}
       {noticeText !== null && (
         <p
           className={cx(styles.notice, noticeText.kind === 'error' && styles.error)}

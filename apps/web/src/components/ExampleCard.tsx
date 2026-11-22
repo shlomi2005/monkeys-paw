@@ -12,6 +12,8 @@ export interface ExampleCardProps {
   readonly index: number;
   readonly selected: boolean;
   readonly onSelect: (entry: ExampleEntry, index: number) => void;
+  /** After the Grant, until Rewrite (Req 13.11): `aria-disabled`, and a click does nothing. */
+  readonly locked?: boolean;
 }
 
 /**
@@ -19,7 +21,7 @@ export interface ExampleCardProps {
  * name that adds or drops words fails WCAG 2.5.3 (Label in Name): a voice user says what is on the card. The whole
  * wish and context are not lost when the snippet cut them: a visually hidden description carries them.
  */
-export function ExampleCard({ entry, index, selected, onSelect }: ExampleCardProps) {
+export function ExampleCard({ entry, index, selected, onSelect, locked = false }: ExampleCardProps) {
   const { text, context } = entry.wish;
   const descriptionId = useId();
   const wishLine = snippet(text);
@@ -41,7 +43,10 @@ export function ExampleCard({ entry, index, selected, onSelect }: ExampleCardPro
         aria-label={name}
         aria-describedby={cut ? descriptionId : undefined}
         aria-pressed={selected}
-        onClick={() => onSelect(entry, index)}
+        aria-disabled={locked ? true : undefined}
+        onClick={() => {
+          if (!locked) onSelect(entry, index);
+        }}
       >
         {/* The spaces keep the words apart where the stylesheet does not make the spans blocks (no CSS, text mode). */}
         <span className={styles.label}>Example</span>{' '}

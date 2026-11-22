@@ -5,9 +5,6 @@ import { FREE_ALLOWED, PAID_ALLOWED } from './regions';
 /** The routes that can call the model. The gate runs on exactly these (all POST). */
 export const LIVE_ROUTES: readonly string[] = ['/api/grant', '/api/bind'];
 
-/** Same list under the name the tests use. */
-export const MODEL_ROUTES = LIVE_ROUTES;
-
 export const ADULT_HEADER = 'x-paw-adult-confirmed';
 
 export type GateCode = 'live_region_unavailable' | 'adult_confirmation_required';

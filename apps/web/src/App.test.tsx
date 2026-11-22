@@ -7,6 +7,7 @@ import { SessionProvider } from './state/SessionProvider';
 const never = <T,>(): Promise<T> => new Promise<T>(() => undefined);
 const idleApi: ApiClient = {
   getExamples: () => never(),
+  getLive: () => never(),
   postGrant: () => never(),
   postBind: () => never(),
   postExport: () => never(),

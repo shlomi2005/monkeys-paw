@@ -137,6 +137,7 @@ test('after a full round the browser keeps nothing, the URL never moves and noth
     '/api/export',
     '/api/export',
     '/api/grant',
+    '/api/live',
   ]);
   for (const request of apiRequests) {
     const headers = await request.allHeaders();

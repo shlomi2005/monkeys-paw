@@ -9,7 +9,11 @@ export type ApiErrorKind =
   | 'network'
   | 'timeout'
   | 'invalid-response'
-  | 'aborted';
+  | 'aborted'
+  /** 403 `live_region_unavailable` on grant or bind. */
+  | 'outside'
+  /** 403 `adult_confirmation_required` on grant or bind. */
+  | 'adult';
 
 export interface ApiError {
   readonly kind: ApiErrorKind;

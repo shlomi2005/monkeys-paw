@@ -18,7 +18,7 @@ import {
   unionOf,
   width,
 } from './support/layout';
-import { MAKE_WISH, OPEN_IN_KIRO, REWRITE, STOP, TAKE_SCROLL } from './support/paw-page';
+import { ADULT_LABEL, MAKE_WISH, OPEN_IN_KIRO, REWRITE, STOP, TAKE_SCROLL } from './support/paw-page';
 import type { PawPage } from './support/paw-page';
 import { inVisualOrder, namesOf, walkTabStops } from './support/tab-order';
 import { expect, test } from './support/test';
@@ -67,7 +67,9 @@ async function scan(page: Page, scope: string): Promise<{ small: string[]; check
     let checked = 0;
     const selector = 'button, input, textarea, select, a[href], [role="button"], [tabindex]:not([tabindex="-1"])';
     for (const element of document.querySelector(root)?.querySelectorAll<HTMLElement>(selector) ?? []) {
-      const rect = element.getBoundingClientRect();
+      // A checkbox is drawn small inside its label: the label is the target.
+      const target = element instanceof HTMLInputElement && element.type === 'checkbox' ? (element.labels?.[0] ?? element) : element;
+      const rect = target.getBoundingClientRect();
       const style = getComputedStyle(element);
       const shown = rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
       if (!shown) continue;
@@ -325,7 +327,7 @@ test('@layout 390x844: a 200 px paw, the stamp under its text, the longest narra
 
 const VIEW_HEIGHT = 844;
 const EXAMPLES_LIST = '[aria-label="Example wishes"]';
-const WISH_STOPS = ['input:I wish that', 'button:for… (optional context)', `button:${MAKE_WISH}`];
+const WISH_STOPS = ['input:I wish that', 'button:for… (optional context)', `input:${ADULT_LABEL}`, `button:${MAKE_WISH}`];
 const EXAMPLE_STOPS = [
   'button:Example. Only the owner can delete a project. a team workspace app',
   'button:Example. Refunds are instant. an online shop',
@@ -453,6 +455,7 @@ test('@result-first a page scrolled to the bottom before the wish is sent with E
   const { page } = paw;
   await paw.open();
   await paw.wishInput.fill(WISH_TEXT);
+  await paw.tickAdult();
   // Scroll to the bottom with the wish input still focused (without scrolling it back into view), then press Enter.
   await page.evaluate(() => {
     document.querySelector<HTMLInputElement>('input[aria-label="I wish that"]')!.focus({ preventScroll: true });
@@ -553,6 +556,8 @@ test('focus is never on the body: while granting, after the Grant, and then Tab 
   const release = await holdGrant(page);
   await paw.open();
   await paw.wishInput.fill(WISH_TEXT);
+  await paw.tickAdult();
+  await paw.wishInput.focus();
   await page.keyboard.press('Enter');
 
   // While granting the wish controls are disabled: focus is on the status line.
@@ -583,6 +588,8 @@ test('focus is never on the body after a failed Grant: it goes back to the wish 
   const release = await holdGrant(page);
   await paw.open();
   await paw.wishInput.fill(WISH_TEXT);
+  await paw.tickAdult();
+  await paw.wishInput.focus();
   await page.keyboard.press('Enter');
   const status = page.locator(STATUS_LINE);
   await expect(status).toBeFocused();
@@ -603,6 +610,8 @@ test('focus is never on the body after a Stop by keyboard: it goes to "Take the 
   const { page } = paw;
   await paw.open();
   await paw.wishInput.fill(WISH_TEXT);
+  await paw.tickAdult();
+  await paw.wishInput.focus();
   await page.keyboard.press('Enter');
   await expect(paw.stamp).toHaveText('Granted.');
   await paw.expectCurled(5);
@@ -660,10 +669,11 @@ test('rotation 390x844 to 844x390 and back keeps the focused wish input, the sam
   await paw.expectCurled(5);
   await expect(page.locator('[data-result-first]')).toHaveCount(1);
 
-  // Real focus and a real caret, four characters before the end (Home does not move the caret on every platform).
+  // Real focus, then a caret four characters before the end. After a Grant the input is readOnly,
+  // and arrow keys do not move the caret in a readOnly field on every platform, so set it directly.
   await paw.wishInput.focus();
-  for (let press = 0; press < 4; press += 1) await page.keyboard.press('ArrowLeft');
   const at = WISH_TEXT.length - 4;
+  await paw.wishInput.evaluate((el, pos) => (el as HTMLInputElement).setSelectionRange(pos, pos), at);
   await page.evaluate(() => {
     document.querySelector<HTMLInputElement>('input[aria-label="I wish that"]')!.dataset['probe'] = 'same-element';
   });

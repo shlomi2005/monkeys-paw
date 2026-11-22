@@ -37,6 +37,7 @@ function rigWithCues(options: { reducedMotion?: boolean; curses?: number } = {})
     bridge,
     onCue: (cue) => cues.push(cue),
   });
+  session.setAdultConfirmed(true); // a live wish needs the 18+ tick (Req 13.3)
   const rig = { session, bridge, api };
   return { rig, cues, clear: () => cues.splice(0) };
 }

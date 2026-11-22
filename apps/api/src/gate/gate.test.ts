@@ -12,7 +12,6 @@ import {
   ADULT_HEADER,
   GATE_MESSAGES,
   LIVE_ROUTES,
-  MODEL_ROUTES,
   adultConfirmed,
   countryAllowed,
   gateDecision,
@@ -262,7 +261,7 @@ describe('the gate on the live routes (Req 14.1, 14.6, 14.7)', () => {
 
   it('refuses GB, FR, CH, CN, XX, T1 and a lowercase code with the exact region body', async () => {
     for (const country of ['GB', 'FR', 'CH', 'CN', 'XX', 'T1', 'us', 'US, GB']) {
-      for (const route of MODEL_ROUTES) {
+      for (const route of LIVE_ROUTES) {
         const { app, model } = build(FREE);
         const res = await post(app, route, live(country));
         expect(res.status, `${route} ${country}`).toBe(403);
@@ -302,7 +301,7 @@ describe('the gate on the live routes (Req 14.1, 14.6, 14.7)', () => {
 
   it('refuses an allowed country without the confirmation, with the exact adult body', async () => {
     for (const confirm of [null, '', 'Yes', 'YES', 'true', '1', 'yes please']) {
-      for (const route of MODEL_ROUTES) {
+      for (const route of LIVE_ROUTES) {
         const { app, model } = build(FREE);
         const res = await post(app, route, live('US', confirm));
         expect(res.status, `${route} ${confirm}`).toBe(403);
@@ -333,7 +332,7 @@ describe('the gate on the live routes (Req 14.1, 14.6, 14.7)', () => {
 
   it('gates /api/grant and /api/bind before the mode check', async () => {
     const { app } = build(FREE, { model: new FakeMeteredModel({ available: false, answer }) });
-    for (const route of MODEL_ROUTES) {
+    for (const route of LIVE_ROUTES) {
       const refused = await post(app, route, live('CN'));
       expect(refused.status).toBe(403);
       const resting = await post(app, route, live('US'));
@@ -449,22 +448,21 @@ describe('the gate on the live routes (Req 14.1, 14.6, 14.7)', () => {
 describe('every route that can call the model is gated (Req 14.1, 14.9)', () => {
   it('has LIVE_ROUTES for grant and bind', () => {
     expect([...LIVE_ROUTES].sort()).toEqual(['/api/bind', '/api/grant']);
-    expect(MODEL_ROUTES).toBe(LIVE_ROUTES);
   });
 
-  it('has no POST route other than MODEL_ROUTES and /api/export, and no other method', () => {
+  it('has no POST route other than LIVE_ROUTES and /api/export, and no other method', () => {
     const { app } = build(FREE);
     const methods = new Set(app.routes.map((route) => route.method));
     expect([...methods].sort()).toEqual(['ALL', 'GET', 'POST']);
     const postPaths = new Set(app.routes.filter((route) => route.method === 'POST').map((route) => route.path));
-    expect(postPaths).toEqual(new Set([...MODEL_ROUTES, '/api/export']));
+    expect(postPaths).toEqual(new Set([...LIVE_ROUTES, '/api/export']));
     for (const route of app.routes.filter((r) => r.method === 'ALL')) {
-      expect(['*', '/*'].includes(route.path) || MODEL_ROUTES.includes(route.path), route.path).toBe(true);
+      expect(['*', '/*'].includes(route.path) || LIVE_ROUTES.includes(route.path), route.path).toBe(true);
     }
   });
 
   it('refuses each of them with no gate header at all, whatever the body', async () => {
-    for (const route of MODEL_ROUTES) {
+    for (const route of LIVE_ROUTES) {
       for (const body of [BODIES[route], {}, 'junk', null]) {
         const { app, model } = build(FREE);
         const res = await post(app, route, {}, body);
@@ -476,7 +474,7 @@ describe('every route that can call the model is gated (Req 14.1, 14.9)', () => 
   });
 
   it('refuses each of them when the gate config is omitted, even with every header', async () => {
-    for (const route of MODEL_ROUTES) {
+    for (const route of LIVE_ROUTES) {
       const { app, model } = build();
       const res = await post(app, route, { ...live('US'), 'cf-ipcountry': 'US', 'x-vercel-ip-country': 'US' });
       expect(res.status, route).toBe(403);
@@ -501,7 +499,7 @@ describe('property 11: an excluded country never reaches the model (Req 14.12)',
     await fc.assert(
       fc.asyncProperty(
         fc.constantFrom(...FREE_EXCLUDED),
-        fc.constantFrom(...MODEL_ROUTES),
+        fc.constantFrom(...LIVE_ROUTES),
         confirmations,
         extraHeaders,
         async (code, route, confirm, extra) => {
@@ -536,7 +534,7 @@ describe('property 11: an excluded country never reaches the model (Req 14.12)',
   it('refuses every excluded code on both routes, with a confirmation, on one shared app', async () => {
     const { app, model } = build(FREE);
     for (const code of FREE_EXCLUDED) {
-      for (const route of MODEL_ROUTES) {
+      for (const route of LIVE_ROUTES) {
         const res = await post(app, route, live(code));
         expect(res.status, `${route} ${code}`).toBe(403);
       }

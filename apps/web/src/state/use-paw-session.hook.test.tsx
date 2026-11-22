@@ -11,6 +11,7 @@ function fakeApi(): ApiClient {
   const ok = <T,>(value: T) => Promise.resolve({ ok: true as const, value });
   return {
     getExamples: vi.fn(() => ok([])),
+    getLive: vi.fn(() => ok({ live: true })),
     postGrant: vi.fn(() => ok({ wish: sampleWish(), grant: sampleGrant() })),
     postBind: vi.fn(() => Promise.reject(new Error('unexpected bind'))),
     postExport: vi.fn(() => Promise.reject(new Error('unexpected export'))),
@@ -26,7 +27,10 @@ describe('usePawSession', () => {
     await waitFor(() => expect(result.current.examples.kind).toBe('ready'));
     expect(api.getExamples).toHaveBeenCalledTimes(1);
 
-    act(() => result.current.submitWish({ text: SAMPLE_WISH_TEXT }));
+    act(() => result.current.setAdultConfirmed(true));
+    act(() => {
+      result.current.submitWish({ text: SAMPLE_WISH_TEXT });
+    });
     expect(result.current.ctx.phase).toBe('granting');
     await waitFor(() => expect(result.current.ctx.phase).toBe('ready'));
     expect(result.current.view.circles[0].status).toBe('open');
@@ -48,7 +52,10 @@ describe('usePawSession', () => {
     const api = fakeApi();
     api.postGrant = vi.fn(() => new Promise<never>(() => undefined));
     const { result, unmount } = renderHook(() => usePawSession({ api }));
-    act(() => result.current.submitWish({ text: SAMPLE_WISH_TEXT }));
+    act(() => result.current.setAdultConfirmed(true));
+    act(() => {
+      result.current.submitWish({ text: SAMPLE_WISH_TEXT });
+    });
     const signal = vi.mocked(api.postGrant).mock.calls[0][1] as AbortSignal;
     expect(signal.aborted).toBe(false);
     unmount();

@@ -5,11 +5,20 @@
 // reducer, an `ApiClient`, the scene bridge and a scheduler. `usePawSession` is a thin
 // `useRef` / `useSyncExternalStore` wrapper around it.
 
+import type { Grant } from 'paw-core';
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { defaultApiClient } from '../api/api-client';
 import type { ApiClient } from '../api/api-client';
 import type { ApiError, ApiResult } from '../api/api-errors';
-import { JUDGE_RESTING_MESSAGE, RESTING_MESSAGE, SERVER_STUMBLE_MESSAGE } from '../api/api-messages';
+import {
+  CLAUSE_AS_WRITTEN_MESSAGE,
+  JUDGE_LIVE_ONLY_MESSAGE,
+  JUDGE_RESTING_MESSAGE,
+  NO_LIVE_WISH_MESSAGE,
+  OUTSIDE_NOTE_MESSAGE,
+  RESTING_MESSAGE,
+  SERVER_STUMBLE_MESSAGE,
+} from '../api/api-messages';
 import { normalizeGrant } from '../api/api-schemas';
 import type { ExampleEntry, ExamplesState } from '../api/api-schemas';
 import { cuesFor } from '../audio/cue-triggers';
@@ -21,6 +30,7 @@ import { initialState, reduce as defaultReduce } from './paw-machine';
 import type { PawContext, PawEffect, PawEvent, Transition } from './paw-machine-types';
 import { selectView } from './paw-selectors';
 import type { PawView } from './paw-selectors';
+import { READY_ROUNDS, isReadyRound } from './ready-rounds';
 import { createSceneBridge, doneEventOf } from './scene-bridge';
 import type { SceneBridgeHost } from './scene-bridge';
 
@@ -50,6 +60,15 @@ export const defaultScheduler: Scheduler = {
     queueMicrotask(fn);
   },
 };
+
+/** Where the page stands on live wishes (Req 13.1). `outside` is sticky: nothing clears it. */
+export type LiveState = 'unknown' | 'open' | 'outside';
+
+/** What `submitWish` did. Only `adult-required` asks the UI to show the age alert and focus the checkbox. */
+export type SubmitOutcome = 'ignored' | 'replayed' | 'outside' | 'resting' | 'adult-required' | 'sent';
+
+/** The examples shown while live wishes are outside: the three ready rounds, whatever `/api/examples` said. */
+const OUTSIDE_EXAMPLES: ExamplesState = { kind: 'ready', entries: READY_ROUNDS };
 
 /** What the UI hands over when the user makes a wish. */
 export interface SubmitWishInput {
@@ -82,6 +101,12 @@ export interface PawSnapshot {
    * so the region can make the DOM text differ and a screen reader announces the repeat. 0 before the first.
    */
   readonly liveSeq: number;
+  /** `GET /api/live` and refusals (Req 13.1). Memory only. */
+  readonly live: LiveState;
+  /** The 18+ tick (Req 13.2). Memory only, kept through Rewrite. */
+  readonly adultConfirmed: boolean;
+  /** The example whose round is being replayed from memory (no grant, no bind), until Rewrite. Null otherwise. */
+  readonly replayed: ExampleEntry | null;
 }
 
 export interface PawSession {
@@ -94,8 +119,13 @@ export interface PawSession {
   readonly liveText: string;
   readonly grantedSeq: number;
   readonly liveSeq: number;
-  /** "Make the wish". Replays a cached example without any API call while `examplesOnly` is set. */
-  readonly submitWish: (input: SubmitWishInput) => void;
+  readonly live: LiveState;
+  readonly adultConfirmed: boolean;
+  readonly replayed: ExampleEntry | null;
+  /** The checkbox. Ignored unless the machine is idle. */
+  readonly setAdultConfirmed: (value: boolean) => void;
+  /** "Make the wish" in the six steps of design \"Live gate and ready rounds\". Replays an example from memory when it may. */
+  readonly submitWish: (input: SubmitWishInput) => SubmitOutcome;
   /** The scene attaches to this: `subscribe`, `setReady` and `done`. */
   readonly bridge: SceneBridgeHost;
   /** The sound toggle's state and the lazy player. The session feeds it the cues. */
@@ -122,8 +152,9 @@ export interface PawSessionRunner {
   readonly getSnapshot: () => PawSnapshot;
   readonly subscribe: (listener: () => void) => () => void;
   readonly dispatch: (event: PawEvent) => void;
-  readonly submitWish: (input: SubmitWishInput) => void;
-  /** Loads the examples once. Safe to call again after `dispose` (React strict mode mounts twice). */
+  readonly submitWish: (input: SubmitWishInput) => SubmitOutcome;
+  readonly setAdultConfirmed: (value: boolean) => void;
+  /** Loads the examples and probes `/api/live` once. Safe to call again after `dispose` (React strict mode mounts twice). */
   readonly start: () => void;
   /** Aborts every in-flight request and stops the live-region timer. */
   readonly dispose: () => void;
@@ -143,7 +174,7 @@ const NOTICE_CLEARING: ReadonlySet<PawEvent['type']> = new Set([
 
 interface QueuedEvent {
   readonly event: PawEvent;
-  /** True for a cached replay: the `request-grant` effect is skipped, so no API call is made. */
+  /** True for a replay from memory: the `request-grant` and `request-bind` effects are skipped, so no API call is made. */
   readonly offline: boolean;
 }
 
@@ -176,7 +207,11 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
   const onCue = options.onCue;
 
   let ctx = options.initial;
-  let examples: ExamplesState = { kind: 'loading' };
+  let stored: ExamplesState = { kind: 'loading' };
+  let examples: ExamplesState = stored;
+  let live: LiveState = 'unknown';
+  let adultConfirmed = false;
+  let replayed: ExampleEntry | null = null;
   let notice: NoticeOf = null;
   let examplesOnly = false;
   let liveText = '';
@@ -187,12 +222,14 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
 
   let viewCtx = ctx;
   let view = selectView(ctx);
-  let snapshot: PawSnapshot = { ctx, view, examples, notice, examplesOnly, liveText, grantedSeq, liveSeq };
+  let snapshot: PawSnapshot = { ctx, view, examples, notice, examplesOnly, liveText, grantedSeq, liveSeq, live, adultConfirmed, replayed };
   const listeners = new Set<() => void>();
 
   let grantController: AbortController | null = null;
   let bindController: AbortController | null = null;
   let examplesController: AbortController | null = null;
+  let liveController: AbortController | null = null;
+  let liveProbed = false;
 
   const liveQueue: string[] = [];
   let cancelLiveGap: (() => void) | null = null;
@@ -205,7 +242,8 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
       viewCtx = ctx;
       view = selectView(ctx);
     }
-    snapshot = { ctx, view, examples, notice, examplesOnly, liveText, grantedSeq, liveSeq };
+    examples = live === 'outside' ? OUTSIDE_EXAMPLES : stored;
+    snapshot = { ctx, view, examples, notice, examplesOnly, liveText, grantedSeq, liveSeq, live, adultConfirmed, replayed };
     for (const listener of [...listeners]) listener();
   }
 
@@ -243,8 +281,17 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
   function failWith(error: ApiError): void {
     notice = { kind: 'error', text: error.message };
     if (error.kind === 'resting') examplesOnly = true; // A9
+    if (error.kind === 'adult') adultConfirmed = false; // the server says the tick is missing (Req 13.5)
     announce(error.message);
+    if (error.kind === 'outside') becomeOutside();
     emit();
+  }
+
+  /** The refusal and the probe both end here. The line is announced once, when it becomes known. The caller emits. */
+  function becomeOutside(): void {
+    if (live === 'outside') return;
+    live = 'outside';
+    announce(OUTSIDE_NOTE_MESSAGE);
   }
 
   async function runGrant(effect: Extract<PawEffect, { type: 'request-grant' }>): Promise<void> {
@@ -252,7 +299,7 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
     const controller = new AbortController();
     grantController = controller;
     const request = effect.context === undefined ? { text: effect.text } : { text: effect.text, context: effect.context };
-    const result = await settled(api.postGrant(request, controller.signal));
+    const result = await settled(api.postGrant(request, controller.signal, adultConfirmed));
     if (controller.signal.aborted) return; // stop, rewrite or unmount: dispatch nothing
     if (grantController === controller) grantController = null;
     if (result.ok) {
@@ -269,7 +316,7 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
     const controller = new AbortController();
     bindController = controller;
     const { curseId, kind, clause, grant } = effect;
-    const result = await settled(api.postBind({ grant, curseId, kind, clause }, controller.signal));
+    const result = await settled(api.postBind({ grant, curseId, kind, clause }, controller.signal, adultConfirmed));
     if (controller.signal.aborted) return;
     if (bindController === controller) bindController = null;
     if (result.ok) {
@@ -289,7 +336,22 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
     if (controller.signal.aborted) return;
     examplesController = null;
     // Any error, a 503 included, only means "unavailable". It is not shown as an error (Req 3.7).
-    examples = result.ok ? { kind: 'ready', entries: result.value } : { kind: 'unavailable' };
+    stored = result.ok ? { kind: 'ready', entries: result.value } : { kind: 'unavailable' };
+    emit();
+  }
+
+  async function loadLive(): Promise<void> {
+    const controller = new AbortController();
+    liveController = controller;
+    const result = await settled(api.getLive(controller.signal));
+    if (controller.signal.aborted) return;
+    liveController = null;
+    liveProbed = true;
+    // A failure leaves `unknown`: the server still decides. `outside` is sticky, so a late `true` changes nothing.
+    if (result.ok) {
+      if (!result.value.live) becomeOutside();
+      else if (live === 'unknown') live = 'open';
+    }
     emit();
   }
 
@@ -301,6 +363,15 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
         if (!offline) void runGrant(effect);
         return;
       case 'request-bind':
+        if (offline) return; // a replay from memory: the verdict is dispatched by the session
+        if (replayed !== null) {
+          // Never reaches the API in a replayed round, whatever raised the event (a race, a forced click).
+          notice = { kind: 'info', text: examplesOnly ? JUDGE_RESTING_MESSAGE : JUDGE_LIVE_ONLY_MESSAGE };
+          announce(notice.text);
+          emit();
+          dispatch({ type: 'bind_failed' });
+          return;
+        }
         if (examplesOnly) {
           // The Judge is resting too (A9). Never reaches the API; the card stays open.
           notice = { kind: 'info', text: JUDGE_RESTING_MESSAGE };
@@ -328,7 +399,10 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
 
   function afterTransition(prev: PawContext, next: PawContext, event: PawEvent): void {
     if (NOTICE_CLEARING.has(event.type)) notice = null;
-    if (event.type === 'rewrite') liveQueue.length = 0; // stale lines must not follow "The wish is unmade."
+    if (event.type === 'rewrite') {
+      replayed = null;
+      liveQueue.length = 0; // stale lines must not follow "The wish is unmade."
+    }
     if (event.type === 'stop' || event.type === 'rewrite') abortInFlight();
     if (event.type === 'grant_received' && prev.phase === 'granting' && next.grant === event.grant) {
       grantedSeq += 1;
@@ -338,8 +412,45 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
     if (text !== null) announce(text);
   }
 
+  /**
+   * Accept in a replayed round: no bind request, ever. A ready round accepts only its own clause (trimmed) and plays
+   * its verdict through the same events as a live one. Anything else leaves the card open with a line.
+   */
+  function replayBind(event: Extract<PawEvent, { type: 'bind_submitted' }>): void {
+    const curse = replayed?.grant.curses.find((c) => c.id === ctx.pendingCurseId);
+    const binding = curse?.binding;
+    const verdict = curse?.verdict;
+    const current = ctx.grant;
+    if (replayed === null || curse === undefined || binding === undefined || verdict === undefined || current === null || !isReadyRound(replayed)) {
+      const text = examplesOnly ? JUDGE_RESTING_MESSAGE : JUDGE_LIVE_ONLY_MESSAGE;
+      notice = { kind: 'info', text };
+      announce(text);
+      emit();
+      return;
+    }
+    if (event.clause.trim() !== binding.clause.trim()) {
+      notice = { kind: 'info', text: CLAUSE_AS_WRITTEN_MESSAGE };
+      announce(CLAUSE_AS_WRITTEN_MESSAGE);
+      emit();
+      return;
+    }
+    const closedGrant: Grant = {
+      ...current,
+      curses: current.curses.map((c) => (c.id === curse.id ? { ...c, status: 'closed' as const, binding, verdict } : c)),
+    };
+    enqueue({ event, offline: true });
+    enqueue({
+      event: { type: 'verdict_received', curseId: curse.id, closed: true, reason: verdict.reason, grant: closedGrant },
+      offline: true,
+    });
+  }
+
   function step({ event, offline }: QueuedEvent): void {
-    if (event.type === 'bind_submitted' && examplesOnly && ctx.phase === 'binding' && !isBlank(event.clause)) {
+    if (event.type === 'bind_submitted' && !offline && replayed !== null && ctx.phase === 'binding' && !isBlank(event.clause)) {
+      replayBind(event);
+      return;
+    }
+    if (event.type === 'bind_submitted' && !offline && examplesOnly && ctx.phase === 'binding' && !isBlank(event.clause)) {
       // Do not even enter `judging`: there is nobody to ask (A9).
       notice = { kind: 'info', text: JUDGE_RESTING_MESSAGE };
       announce(JUDGE_RESTING_MESSAGE);
@@ -376,27 +487,10 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
 
   // -- wishing --------------------------------------------------------------
 
-  function submitWish(input: SubmitWishInput): void {
-    if (isBlank(input.text) || ctx.phase !== 'idle') return;
-    const context = isBlank(input.context) ? undefined : input.context;
-
-    if (!examplesOnly) {
-      dispatch(
-        context === undefined
-          ? { type: 'grant_requested', text: input.text }
-          : { type: 'grant_requested', text: input.text, context },
-      );
-      return;
-    }
-
-    // A9: the model is resting. Only an unmodified example can be wished, from its cached Grant.
-    if (!isUnmodifiedExample(input)) {
-      notice = { kind: 'info', text: RESTING_MESSAGE };
-      announce(RESTING_MESSAGE);
-      emit();
-      return;
-    }
-    const { wish, grant } = input.example;
+  /** Plays an example from memory: the machine runs as usual, and no request is made. */
+  function replay(entry: ExampleEntry): void {
+    const { wish, grant } = entry;
+    replayed = entry;
     enqueue({
       event:
         wish.context === undefined
@@ -405,6 +499,46 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
       offline: true,
     });
     enqueue({ event: { type: 'grant_received', wish, grant: normalizeGrant(grant) }, offline: true });
+  }
+
+  function say(text: string): void {
+    notice = { kind: 'info', text };
+    announce(text);
+    emit();
+  }
+
+  /** The six steps of design "Live gate and ready rounds". Nothing is sent in steps 1 to 5. */
+  function submitWish(input: SubmitWishInput): SubmitOutcome {
+    // 1. Not idle (or blank): nothing.
+    if (isBlank(input.text) || ctx.phase !== 'idle') return 'ignored';
+    const context = isBlank(input.context) ? undefined : input.context;
+
+    // 2. An unmodified example that replays needs no tick and shows no alert.
+    if (isUnmodifiedExample(input) && (isReadyRound(input.example) || live === 'outside' || examplesOnly || !adultConfirmed)) {
+      replay(input.example);
+      return 'replayed';
+    }
+    // 3. Outside: nothing is sent.
+    if (live === 'outside') {
+      say(NO_LIVE_WISH_MESSAGE);
+      return 'outside';
+    }
+    // 4. The paw is resting (A9).
+    if (examplesOnly) {
+      say(RESTING_MESSAGE);
+      return 'resting';
+    }
+    // 5. No tick: the UI shows the alert.
+    if (!adultConfirmed) return 'adult-required';
+
+    // 6. A live request.
+    replayed = null;
+    dispatch(
+      context === undefined
+        ? { type: 'grant_requested', text: input.text }
+        : { type: 'grant_requested', text: input.text, context },
+    );
+    return 'sent';
   }
 
   // -- lifecycle ------------------------------------------------------------
@@ -426,13 +560,21 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
     },
     dispatch,
     submitWish,
+    setAdultConfirmed(value) {
+      if (ctx.phase !== 'idle' || adultConfirmed === value) return;
+      adultConfirmed = value;
+      emit();
+    },
     start() {
-      if (examples.kind === 'loading' && examplesController === null) void loadExamples();
+      if (stored.kind === 'loading' && examplesController === null) void loadExamples();
+      if (!liveProbed && liveController === null) void loadLive();
     },
     dispose() {
       abortInFlight();
       examplesController?.abort();
       examplesController = null;
+      liveController?.abort();
+      liveController = null;
       cancelLiveGap?.();
       cancelLiveGap = null;
       liveQueue.length = 0;
@@ -492,7 +634,15 @@ export function usePawSession(options: UsePawSessionOptions = {}): PawSession {
   }, [runner, sound]);
 
   return useMemo(
-    () => ({ ...snapshot, dispatch: runner.dispatch, submitWish: runner.submitWish, bridge, sound, api }),
+    () => ({
+      ...snapshot,
+      dispatch: runner.dispatch,
+      submitWish: runner.submitWish,
+      setAdultConfirmed: runner.setAdultConfirmed,
+      bridge,
+      sound,
+      api,
+    }),
     [snapshot, runner, bridge, sound, api],
   );
 }

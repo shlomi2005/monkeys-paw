@@ -29,9 +29,11 @@ describe('api-messages lines', () => {
 
   it('says where the wish goes, short and in the page\'s voice (Req 3.9, tone.md)', () => {
     const line = messages.WISH_SENT_TO_GEMINI_MESSAGE;
-    expect(line).toBe("Your wish travels to Google's Gemini, which writes the curses. Keep personal details out of it.");
+    expect(line).toBe(
+      "Wishes and clauses go to Google's Gemini. Google may use them to improve its products, and people there may read them. Keep personal details out.",
+    );
     expect(line).toContain('Gemini');
-    expect(line.split(/(?<=\.)\s+/)).toHaveLength(2); // two short sentences
+    expect(line.split(/(?<=\.)\s+/)).toHaveLength(3); // three short sentences
     expect(line).not.toMatch(/[!]|\p{Extended_Pictographic}/u);
     expect(line).not.toMatch(/\b(awesome|oops|unfortunately|successfully|AI|model|prompt)\b/i);
   });

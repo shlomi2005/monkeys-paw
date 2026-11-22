@@ -1,6 +1,6 @@
 /*
  * WishLine: a ruled band (horizontal ink lines) with the wish, the optional context and the seal button.
- * Mobile first: everything stacks. From 768 px the wish row is one line: prefix, input, seal.
+ * Mobile first: everything stacks. From 768 px the wish row is one line: prefix, input, seal (and from 1024 px the 18+ box before the seal).
  * Every control is at least 48 px high (Req 9.3). Text is never under 1rem (16 px, 18 px from 768 px).
  * Hover effects live inside (hover: hover) only.
  */
@@ -16,6 +16,7 @@
     'note'
     'message'
     'context'
+    'adult'
     'seal'
     'status';
   gap: 0.25rem;
@@ -99,7 +100,7 @@
   transition: box-shadow var(--dur-seal) ease-out;
 }
 
-.seal:active:not(:disabled) {
+.seal:active:not(:disabled):not([aria-disabled='true']) {
   box-shadow: inset 0 2px 4px color-mix(in srgb, var(--ink) 60%, transparent);
 }
 
@@ -109,9 +110,70 @@
 }
 
 @media (hover: hover) {
-  .seal:hover:not(:disabled) {
+  .seal:hover:not(:disabled):not([aria-disabled='true']) {
     box-shadow: 0 0 10px 2px color-mix(in srgb, var(--blood) 70%, transparent);
   }
+}
+
+/*
+ * After the Grant (Req 13.11): the machine takes no new wish until Rewrite, so the seal looks inert. No red fill, ink
+ * text at full contrast, a dashed ink border (still 3:1), the default cursor, no hover glow and no pressed shadow.
+ */
+.sealInert {
+  border-style: dashed;
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+  cursor: default;
+  opacity: 1;
+}
+
+/* The 18+ box (Req 13.2): one row on a phone, at least 48 px high in the whole label. */
+.adult {
+  grid-area: adult;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  min-width: 48px;
+  margin: 0;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+/* The box is drawn small. The label is the 48 px target and the whole label taps. */
+.adultBox {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  accent-color: var(--blood);
+  cursor: inherit;
+}
+
+.adultBox:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* The invalid mark is a shadow ring, so it never competes with the focus ring (an outline). */
+.adultBox[aria-invalid='true'] {
+  box-shadow: 0 0 0 2px var(--blood);
+  border-radius: 4px;
+}
+
+.adultBox:disabled,
+.adultBox[aria-disabled='true'] {
+  cursor: default;
+}
+
+.adult:has(.adultBox:disabled),
+.adult:has(.adultBox[aria-disabled='true']) {
+  cursor: default;
+}
+
+.adultBox:disabled {
+  opacity: 0.7;
 }
 
 /* Where the wish goes (paw-web Req 3.9): body size, ink colour, its own row under the wish row. */
@@ -171,6 +233,17 @@
   color: var(--sepia-text);
 }
 
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 @media (min-width: 768px) {
   .band {
     --rule: 3rem;
@@ -185,7 +258,7 @@
       'prefix wish seal'
       'note note note'
       'message message message'
-      'context context context'
+      'context context adult'
       'status status status';
     column-gap: 0.75rem;
     align-items: center;
@@ -195,6 +268,17 @@
   .wishInput {
     min-width: 0;
     max-width: 200ch;
+  }
+
+  /* The disclosure keeps one line when the narrower "for…" row shares the band. */
+  .disclosure {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  /* 768 to 1023 px: the box shares the "for…" row at its right end, so the band does not grow. */
+  .adult {
+    justify-self: end;
   }
 
   .contextRow {
@@ -207,5 +291,18 @@
     flex: 1 1 auto;
     min-width: 0;
     max-width: 100ch;
+  }
+}
+
+/* From 1024 px the box sits in the wish row, right before the seal, so both are on the first screen. */
+@media (min-width: 1024px) {
+  .band {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'prefix wish adult seal'
+      'note note note note'
+      'message message message message'
+      'context context context context'
+      'status status status status';
   }
 }

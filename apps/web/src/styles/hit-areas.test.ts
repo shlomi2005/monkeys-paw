@@ -86,15 +86,25 @@ function hitAreaProblem(
 function problems(css: string, tsx: string, props?: Props): string[] {
   const rules = parseCss(css);
   const known = props ?? customProperties([rules]);
+  // A checkbox is drawn small: its label is the target, so the label's styles are the ones that must reach 48 px.
+  const labelClasses = [...tsx.matchAll(/<label[^>]*styles\.(\w+)/g)].map((m) => m[1] as string);
   return controlTags(tsx)
     .map((control) => {
-      const problem = hitAreaProblem(rules, control.classes, control.tag, known);
-      return problem === null ? null : `<${control.tag} ${control.classes.map((c) => `.${c}`).join(' ')}> ${problem}`;
+      const isCheckbox = control.tag === 'input' && /type=["']checkbox["']/.test(control.source);
+      const target = isCheckbox ? { tag: 'label', classes: labelClasses } : control;
+      const problem = hitAreaProblem(rules, target.classes, target.tag, known);
+      return problem === null ? null : `<${target.tag} ${target.classes.map((c) => `.${c}`).join(' ')}> ${problem}`;
     })
     .filter((problem) => problem !== null);
 }
 
 describe('hit areas: the checker', () => {
+  it('takes the label as the target of a checkbox', () => {
+    const tsx = '<label className={styles.l}><input type="checkbox" className={styles.box} /></label>';
+    expect(problems('.l { min-width: 48px; min-height: 3rem; } .box { width: 1.5rem; height: 1.5rem; }', tsx)).toEqual([]);
+    expect(problems('.l { min-width: 48px; min-height: 2rem; } .box { width: 3rem; height: 3rem; }', tsx)).toHaveLength(1);
+  });
+
   it('accepts rem, px, a custom property and a full-width field', () => {
     expect(problems('.a { min-width: 48px; min-height: 3rem; }', '<button className={styles.a} />')).toEqual([]);
     expect(problems('.r { --d: 60px; } .a { width: var(--d); height: var(--d); }', '<button className={styles.a} />')).toEqual([]);

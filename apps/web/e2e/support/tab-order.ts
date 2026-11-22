@@ -31,7 +31,9 @@ export async function walkTabStops(page: Page, limit = 40): Promise<TabStop[]> {
         if (element === null || element === document.body || element === document.documentElement) return 'left';
         if (element.hasAttribute(mark!)) return 'again';
         element.setAttribute(mark!, String(index));
-        const label = element.getAttribute('aria-label');
+        const label =
+          element.getAttribute('aria-label') ??
+          (element instanceof HTMLInputElement ? (element.labels?.[0]?.textContent?.trim() ?? null) : null);
         const text = (element.textContent ?? '').replace(/\s+/g, ' ').trim();
         return `${element.tagName.toLowerCase()}:${label ?? text}`;
       },

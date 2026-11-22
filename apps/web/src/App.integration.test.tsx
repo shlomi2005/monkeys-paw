@@ -84,9 +84,17 @@ async function typeWish(text: string): Promise<void> {
   fireEvent.change(wishInput(), { target: { value: text } });
 }
 
+/** A live wish needs the 18+ tick (Req 13.3). Ticks the box once; leaves it ticked after that. */
+function tickAdult(): void {
+  const box = screen.getByRole('checkbox', { name: 'I am 18 or older' }) as HTMLInputElement;
+  if (!box.checked) fireEvent.click(box);
+}
+
 /** Wishes and waits until all three circles are open buttons (every curl done, no scene). */
 async function makeWish(text = SAMPLE_WISH_TEXT): Promise<void> {
   await typeWish(text);
+  tickAdult();
+  tickAdult();
   fireEvent.click(makeButton());
   await waitFor(() => expect(circle('Permissions curse, open, click to bind')).toBeTruthy());
   await waitFor(() => expect(circle('Data loss curse, open, click to bind')).toBeTruthy());
@@ -114,7 +122,7 @@ describe('App: a round from wish to stop', () => {
     renderApp(api, gaps.scheduler);
     await makeWish();
 
-    expect(api.postGrant).toHaveBeenCalledWith({ text: SAMPLE_WISH_TEXT }, expect.anything());
+    expect(api.postGrant).toHaveBeenCalledWith({ text: SAMPLE_WISH_TEXT }, expect.anything(), true);
     await waitFor(() => expect(document.querySelector('[data-stamp]')?.textContent).toBe('Granted.'));
     await waitFor(() => expect(screen.getByText('Granted. Exactly as written.')).toBeTruthy());
     await waitFor(() => expect(fingerText()).toBe('3 fingers curled.'));
@@ -272,6 +280,7 @@ describe('App: wish line and examples', () => {
     await screen.findByRole('button', { name: EXAMPLE_NAME });
 
     await typeWish('A wish of my own');
+    tickAdult();
     fireEvent.click(makeButton());
     await waitFor(() => expect(screen.getAllByText(RESTING_MESSAGE).length).toBeGreaterThan(0));
     expect(api.postGrant).toHaveBeenCalledTimes(1);
@@ -279,12 +288,14 @@ describe('App: wish line and examples', () => {
     // An edited example is not an example any more.
     fireEvent.click(screen.getByRole('button', { name: EXAMPLE_NAME }));
     await typeWish(`${EXAMPLE_TEXT} today`);
+    tickAdult();
     fireEvent.click(makeButton());
     expect(api.postGrant).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: /curse, open/ })).toBeNull();
 
     // The untouched example plays, with no API call.
     fireEvent.click(screen.getByRole('button', { name: EXAMPLE_NAME }));
+    tickAdult();
     fireEvent.click(makeButton());
     await waitFor(() => expect(circle('Permissions curse, open, click to bind')).toBeTruthy());
     expect(api.postGrant).toHaveBeenCalledTimes(1);
@@ -324,6 +335,7 @@ describe('App: DOM order (Req 8.1)', () => {
     expect(focusables().map(nameOf)).toEqual([
       'I wish that',
       'for… (optional context)',
+      '', // the 18+ checkbox (its label is the visible text next to it)
       'Make the wish',
       EXAMPLE_NAME,
       'Permissions curse, open, click to bind',
