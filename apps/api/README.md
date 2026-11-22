@@ -7,7 +7,7 @@ Spec: [`.kiro/specs/paw-api`](../../.kiro/specs/paw-api/).
 ## Endpoints
 
 - `GET /api/health`: reports the mode (`normal` or `examples-only`) and the remaining daily budget.
-- `GET /api/live`: answers `{ "live": true }` when the visitor's country may make live wishes, else `{ "live": false }`. It looks at the country only, never calls the model and counts nothing. See "Who may make live wishes".
+- `GET /api/live`: answers `{ "live": true }` when the visitor's country may make live wishes, else `{ "live": false }`. When it is allowed but the paw rests (no key, or the daily budget is spent) the answer also has `"resting": true`. It never calls the model and counts nothing. See "Who may make live wishes".
 - `POST /api/grant`: takes a wish and returns a grant with up to five curses. Calls the model, so it is gated: 403 unless the country is allowed and `X-Paw-Adult-Confirmed: yes` is sent. `wish.text` is at most 500 characters after trim and `wish.context` at most 200, else 400 and no model call.
 - `POST /api/bind`: takes a curse and an amendment and returns the Judge's verdict. Calls the model, so it is gated like `grant`. `clause` is at most 1000 characters after trim and the `loophole` of the judged curse at most 1000, else 400 and no model call.
 - `POST /api/export`: turns a grant into `requirements.md` and `properties.md`. No model call.

@@ -764,7 +764,7 @@ interface ApiError {
 }
 
 getExamples(signal?): Promise<ApiResult<ExampleEntry[]>>        // GET  /api/examples
-getLive(signal?): Promise<ApiResult<{ live: boolean }>>          // GET  /api/live, 5 s timeout
+getLive(signal?): Promise<ApiResult<{ live: boolean; resting?: boolean }>>          // GET  /api/live, 5 s timeout
 postGrant(wish: { text: string; context?: string }, signal?, adult?: boolean): Promise<ApiResult<{ wish: Wish; grant: Grant }>>
 postBind(req: { grant: Grant; curseId: string; kind: BindingKind; clause: string }, signal?, adult?: boolean): Promise<ApiResult<{ grant: Grant; verdict: Verdict }>>
 postExport(req: { wish: Wish; grant: Grant }, signal?): Promise<ApiResult<SpecExport>>

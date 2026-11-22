@@ -407,7 +407,7 @@ The eval CLI prints the same error line for an unknown error; `EvalAbortError` k
 2. The value must match `^[A-Z]{2}$` exactly (a repeated header arrives as `US, GB` and fails). No trimming, no case folding.
 3. The code must be in the allow-list of the tier.
 
-`adultConfirmed(headers)` is `headers.get('x-paw-adult-confirmed') === 'yes'`. The gate answers `live_region_unavailable` first, then `adult_confirmation_required`, each 403 with `cache-control: no-store` and `{ code, message }` (texts in Requirement 14.7). The country never enters a log line, body, header or error. `GET /api/live` calls only `countryAllowed`.
+`adultConfirmed(headers)` is `headers.get('x-paw-adult-confirmed') === 'yes'`. The gate answers `live_region_unavailable` first, then `adult_confirmation_required`, each 403 with `cache-control: no-store` and `{ code, message }` (texts in Requirement 14.7). The country never enters a log line, body, header or error. `GET /api/live` calls `countryAllowed` and, only when that allows, the mode check for `resting`.
 
 **Regions table.** The names are those of the available-regions page (read 2026-11-22), each with one code. `FREE_EXCLUDED` holds the 27 EU states, `IS`, `LI`, `NO`, `CH`, `GB` and the territories of Requirement 14.3; the free list is the table minus it (172 codes), the paid list is the table (231). A test compares the names with a fixture file, so a change of the page shows as a failed test, not as a silent drift.
 
