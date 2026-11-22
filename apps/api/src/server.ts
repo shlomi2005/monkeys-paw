@@ -3,6 +3,7 @@ import { serve } from '@hono/node-server';
 import { createApp } from './app';
 import { GeminiModelClient } from './client/gemini';
 import { loadBudgetConfig, loadTrustedProxyHops } from './budget/config';
+import { loadGateConfig } from './gate/config';
 import { loadPriceTable } from './budget/prices';
 import { createGlobalState } from './budget/state';
 import { getCurrentMode } from './modes';
@@ -19,6 +20,7 @@ const app = createApp({
   examplesCachePath: defaultExamplesCachePath(),
   prices: loadPriceTable(),
   trustedProxyHops: loadTrustedProxyHops(),
+  gate: loadGateConfig(process.env),
 });
 
 const mode = getCurrentMode(model.available, createGlobalState(), budget);

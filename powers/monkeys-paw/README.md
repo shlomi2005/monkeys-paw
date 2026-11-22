@@ -26,6 +26,12 @@ They call no model and no server.
 In remote mode (`PAW_API_URL` set to a usable `http(s)` URL) two more tools appear: `paw_curse` and `paw_bind`. They call the
 Paw API you run, and its Judge answers.
 
+### Live wishes in remote mode
+
+In remote mode `paw_curse` and `paw_bind` send what you write to the Paw API, and the API sends it to Google's Gemini, where Google may use it and people there may read it. The API grants live wishes only where Google's terms allow the free tier and only to people who confirm they are 18 or older (see [Who may make live wishes](../../apps/api/README.md#who-may-make-live-wishes)). A confirmation is not proof of age, and the gate is not legal advice.
+
+You confirm for yourself. Set `PAW_I_AM_18_OR_OLDER=yes` in the environment of the server, where Kiro starts it, and restart it. Only the exact value `yes` counts, and the server reads it once at start-up. It is never a tool argument, so your agent cannot confirm for you and must not set it for you. Without it, or from a country the API does not serve, the two tools answer with a short note and the three local tools still work. In local mode the variable has no effect.
+
 ## Skills
 
 - `curse-taxonomy`: the ten curse types and what makes a curse good.

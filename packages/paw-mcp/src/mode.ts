@@ -51,3 +51,8 @@ export function startupLine(version: string, mode: Mode): string {
 export function ignoredLine(version: string): string {
   return `paw-mcp ${version} ignored PAW_API_URL: not a usable http(s) URL without credentials; using local mode`;
 }
+
+/** `PAW_I_AM_18_OR_OLDER` counts only when it is exactly `yes`: no case folding, no trimming. */
+export function adultConfirmedOf(raw: string | undefined): boolean {
+  return raw === 'yes';
+}

@@ -6,6 +6,7 @@ import { FakeMeteredModel } from './budget/fake-metered';
 import type { FakeMeteredOptions } from './budget/fake-metered';
 import type { MeteredModelClient } from './budget/guarded-client';
 import type { BudgetConfig } from './budget/config';
+import type { GateConfig } from './gate/config';
 import { fileURLToPath } from 'url';
 
 // A small valid cache, so the tests do not depend on the generated apps/api/examples-cache.json.
@@ -52,6 +53,11 @@ const FULL: FakeMeteredOptions = { usage: 'ceiling' };
 
 const BUDGET: BudgetConfig = { perIpLimit: 10, windowMs: 60_000, dailyBudgetCents: 500 };
 
+// The gate of these tests lets everyone in (a free-tier country, confirmed), so the tests below mean
+// what they meant before the gate. The gate itself is tested in gate/gate.test.ts.
+const TEST_GATE: GateConfig = { tier: 'free', countryHeader: 'x-test-country' };
+const GATE_HEADERS = { 'x-test-country': 'US', 'x-paw-adult-confirmed': 'yes' };
+
 function makeApp(
   model: MeteredModelClient,
   overrides: { budget?: Partial<BudgetConfig>; clock?: () => number } = {},
@@ -62,6 +68,7 @@ function makeApp(
     corsOrigin: '*',
     examplesCachePath: EXAMPLES_FIXTURE,
     clock: overrides.clock ?? (() => 1_000_000),
+    gate: TEST_GATE,
   });
 }
 
@@ -70,7 +77,7 @@ type App = ReturnType<typeof makeApp>;
 function post(app: App, path: string, body: unknown, ip = '203.0.113.7') {
   return app.request(`http://localhost${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': ip, ...GATE_HEADERS },
     body: JSON.stringify(body),
   });
 }
@@ -146,6 +153,7 @@ describe('createApp', () => {
         examplesCachePath: EXAMPLES_FIXTURE,
         clock: () => 1_000_000,
         trustedProxyHops: 2,
+        gate: TEST_GATE,
       });
       for (const fake of ['a', 'b']) {
         expect((await post(app, '/api/grant', grantBody, `${fake}, 203.0.113.7, 10.0.0.1`)).status).toBe(200);

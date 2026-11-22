@@ -30,6 +30,10 @@ You write a software requirement. The Paw follows it to the letter and acts out 
 - [Latest eval report](docs/eval/latest.md): the golden-wish results.
 - [Power guide](powers/monkeys-paw/README.md): how to install and use the Kiro power.
 
+## Live wishes
+
+Live wishes call Google's Gemini API, so they follow Google's [terms](https://ai.google.dev/gemini-api/terms) and [available regions](https://ai.google.dev/gemini-api/docs/available-regions). The server grants them only where the free tier is allowed and only after the visitor confirms they are 18 or older. On unpaid services Google may use and read what is sent. Elsewhere the built-in ready examples play the round. The rules, the settings and the limits of this check are in [Who may make live wishes](apps/api/README.md#who-may-make-live-wishes).
+
 ## Work on it
 
 ```sh

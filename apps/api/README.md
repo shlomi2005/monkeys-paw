@@ -7,12 +7,13 @@ Spec: [`.kiro/specs/paw-api`](../../.kiro/specs/paw-api/).
 ## Endpoints
 
 - `GET /api/health`: reports the mode (`normal` or `examples-only`) and the remaining daily budget.
-- `POST /api/grant`: takes a wish and returns a grant with up to five curses. Calls the model. `wish.text` is at most 500 characters after trim and `wish.context` at most 200, else 400 and no model call.
-- `POST /api/bind`: takes a curse and an amendment and returns the Judge's verdict. Calls the model. `clause` is at most 1000 characters after trim and the `loophole` of the judged curse at most 1000, else 400 and no model call.
+- `GET /api/live`: answers `{ "live": true }` when the visitor's country may make live wishes, else `{ "live": false }`. It looks at the country only, never calls the model and counts nothing. See "Who may make live wishes".
+- `POST /api/grant`: takes a wish and returns a grant with up to five curses. Calls the model, so it is gated: 403 unless the country is allowed and `X-Paw-Adult-Confirmed: yes` is sent. `wish.text` is at most 500 characters after trim and `wish.context` at most 200, else 400 and no model call.
+- `POST /api/bind`: takes a curse and an amendment and returns the Judge's verdict. Calls the model, so it is gated like `grant`. `clause` is at most 1000 characters after trim and the `loophole` of the judged curse at most 1000, else 400 and no model call.
 - `POST /api/export`: turns a grant into `requirements.md` and `properties.md`. No model call.
 - `GET /api/examples`: serves the cached example grants from `examples-cache.json`. No model call.
 
-In examples-only mode (no key, or the daily budget is spent) `grant` and `bind` answer 503. The other three keep working.
+In examples-only mode (no key, or the daily budget is spent) `grant` and `bind` answer 503. `export`, `examples`, `health` and `live` keep working, and none of them is gated.
 
 ## Environment variables
 
@@ -21,6 +22,8 @@ Names match [`.env.example`](.env.example). `pnpm start` loads no `.env` file. S
 | Variable                     | Default                                                        | Meaning                                                                        |
 |------------------------------|----------------------------------------------------------------|--------------------------------------------------------------------------------|
 | `GEMINI_API_KEY`             | empty                                                          | Model key. Empty means examples-only mode.                                     |
+| `GEMINI_TIER`                | `free`                                                         | `paid` only for a key from a project with billing. Unset, blank and every other value is `free`. See "Who may make live wishes". |
+| `COUNTRY_HEADER`             | unset                                                          | The name of the one request header that holds the visitor's country, set by the host in front of the server. Unset means every live wish is refused. Read "Who may make live wishes" before you set it. |
 | `GEMINI_MODEL`               | `gemini-3.6-flash`                                             | Primary model name. The retired name `gemini-3.5-flash` routes to it.          |
 | `GEMINI_MODEL_FALLBACKS`     | `gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite` | Comma-separated models to try on 503, 429 or 404. A 429 whose quota is shared by all models stops the chain. |
 | `GEMINI_TIMEOUT_MS`          | `30000`                                                        | Timeout of one model request.                                                  |
@@ -48,6 +51,43 @@ The website runs on Gemini's free tier. No bill is possible if the key comes fro
 When the day's free quota ends, Gemini answers 429 `RESOURCE_EXHAUSTED`. The paw rests: `POST /api/grant` and `POST /api/bind` answer 503 "The paw is resting. Browse the examples until it wakes." and the site serves the ready examples. `/api/health` still says `normal`, and the next request tries the model again. A quota shared by all models stops the chain after one call. A quota of one model tries the next model. Daily free quotas reset at midnight Pacific time.
 
 A quota attempt costs 0 cents. The budget guard still counts paid-tier prices on paper, as a second fence.
+
+## Who may make live wishes
+
+A live wish is a call to `POST /api/grant` or `POST /api/bind`. The server makes it only when the visitor's country is allowed and the request says the visitor is 18 or older. `/api/examples`, `/api/export` and `/api/health` need neither.
+
+The rules come from Google's terms, read on 2026-11-22:
+
+- [Gemini API terms](https://ai.google.dev/gemini-api/terms), effective 2026-03-23.
+- [Available regions](https://ai.google.dev/gemini-api/docs/available-regions).
+
+On unpaid services Google may use the content it receives to improve its products, and human reviewers may read it. A wish sent on the free tier is such content. The free tier is for the available regions, outside the EEA, Switzerland and the United Kingdom, and not for people under 18.
+
+| `GEMINI_TIER` | Allowed countries |
+|---------------|-------------------|
+| `free` (the default, and any value but `paid`) | The 231 available regions without the 27 EU states, Iceland, Liechtenstein, Norway, Switzerland, the United Kingdom and, to be careful, their territories that have their own code: 172 codes. |
+| `paid` | All 231 available regions. |
+
+Set `paid` only for a key from a project with billing. The table is in `src/gate/regions.ts` and a test compares its names with the page above.
+
+**The country.** The server reads it only from the header named by `COUNTRY_HEADER`, with no default and no fallback to any other header, query or body. The value must be exactly two uppercase letters and on the list of the tier. A missing, empty, lowercase, repeated (`US, GB`) or unlisted value (`XX`, `T1`, `CN`) is refused. So is a `COUNTRY_HEADER` that is unset, blank or not a valid header name. The server fails closed: with nothing configured, every live wish is refused.
+
+**The age.** The request must carry `X-Paw-Adult-Confirmed: yes`, exactly, on both tiers. The web app and the MCP server send it after the user confirms. It is self-declared.
+
+**The refusal.** HTTP 403, `cache-control: no-store`, and `{ code, message }`. The country is checked first.
+
+| `code` | `message` |
+|--------|-----------|
+| `live_region_unavailable` | The paw grants no live wishes where you stand. The examples need no permission. |
+| `adult_confirmation_required` | The paw grants live wishes only to those who confirm they are 18 or older. |
+
+A refusal reads no body, calls no model, reserves and spends nothing, and does not count against the IP. The country is used for that one decision. It is never stored, logged, or put in a body, a header or an error.
+
+**Where the country comes from.** Set `COUNTRY_HEADER` only where the host overwrites that header on every request, and make sure the server cannot be reached around that host. Otherwise anyone can write the header and pick their country. After the deploy, test it with a faked header: send `GET /api/live` with the header set to an allowed code from a place where that answer is wrong, and also to the service's own address if it is reachable. Anything but `{ "live": false }` where it should be false means the header is not overwritten. Unset `COUNTRY_HEADER` then.
+
+Railway's documented request headers include no country. On plain Railway leave `COUNTRY_HEADER` unset: every live wish is refused and the examples still work. Live wishes need a host in front of the service that supplies a country header, with the service reachable only through it.
+
+This is not legal advice. The 18+ confirmation is not proof of age. The eval CLI (`pnpm -C apps/api eval`) is the operator's tool, calls the model with the operator's key and has no gate.
 
 ## Cost guard and worst case
 
@@ -164,15 +204,16 @@ docker build -f apps/api/Dockerfile .   # from the repo root
 Nothing is deployed and no account exists yet.
 
 1. Regenerate `apps/api/examples-cache.json` with `pnpm -C apps/api eval --all` (real model calls, about 2 per wish). The committed cache holds only fallback grants, so `/api/examples` answers 503 until then. Commit the new file.
-2. Create the Gemini key as described in "Running on the free tier": in a Google AI Studio project with no billing account.
+2. Create the Gemini key as described in "Running on the free tier": in a Google AI Studio project with no billing account. Leave `GEMINI_TIER` unset (free).
 3. Create a Railway project from the GitHub repository. Set the root directory to `/`.
 4. Set these service variables:
    - `RAILWAY_DOCKERFILE_PATH=apps/api/Dockerfile`
    - `GEMINI_API_KEY` (the key from step 2)
    - `CORS_ORIGIN` (the web app's exact origin, for example `https://paw.example`)
    - `PER_IP_LIMIT`, `RATE_WINDOW_MS`, `DAILY_BUDGET_CENTS`, `TRUSTED_PROXY_HOPS` (1 for Railway's single proxy, to be checked after the deploy)
+   - `COUNTRY_HEADER`: leave it unset on plain Railway. Every live wish is then refused and the examples work. Set it only behind a host that overwrites that header and is the only way to the service (see "Who may make live wishes").
 5. In the service settings, set the health check path to `/api/health`. Railway sets `PORT`.
-6. Deploy. Open `/api/health` and check that it answers.
+6. Deploy. Open `/api/health` and check that it answers. If you set `COUNTRY_HEADER`, send a faked header as described in "Who may make live wishes" and check that it does not change the answer of `/api/live`.
 7. Point the web app at the Railway URL, and set `PAW_API_URL` to the same URL for the MCP server.
 
 Railway's "Config as Code" (`railway.json`) is deprecated, so the repo uses the Dockerfile only.
@@ -192,3 +233,5 @@ Without the secret (a fork, for example) the eval is skipped and the check passe
 - The log line holds the method, the path, the status and the duration. It never holds wish text, curse text, a prompt, a model answer, an IP address or a key.
 - The key is read from the environment on the server and never sent to a client.
 - The server sets no cookies.
+- The visitor's country is read from one header for one decision and is never stored, logged or echoed. The age confirmation is a header that is checked and dropped.
+- On the free tier the wish text goes to Google, which may use and read it (see "Who may make live wishes").

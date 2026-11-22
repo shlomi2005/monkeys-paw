@@ -8,6 +8,10 @@ import { createBindRoute } from './routes/bind';
 import { createExportRoute } from './routes/export';
 import { createExamplesRoute } from './routes/examples';
 import { createHealthRoute } from './routes/health';
+import { createLiveRoute } from './routes/live';
+import { DEFAULT_GATE_CONFIG } from './gate/config';
+import type { GateConfig } from './gate/config';
+import { createGate, LIVE_ROUTES } from './gate/middleware';
 import { checkBudget } from './budget/middleware';
 import type { BudgetConfig } from './budget/config';
 import { BudgetedModelClient } from './budget/guarded-client';
@@ -30,6 +34,8 @@ export interface AppDeps {
   prices?: PriceTable;
   /** Proxies of ours in front of the server, for the per-IP key. Defaults to 1. */
   trustedProxyHops?: number;
+  /** Who may make live wishes. Omitted is the free tier with no country header: the gate refuses all. */
+  gate?: GateConfig;
 }
 
 /**
@@ -42,6 +48,7 @@ export function createApp(deps: AppDeps): Hono {
 
   const app = new Hono();
   const globalState = createGlobalState(clock());
+  const gate = deps.gate ?? DEFAULT_GATE_CONFIG;
 
   // CORS middleware (Req 10, Task 53)
   app.use(
@@ -49,12 +56,17 @@ export function createApp(deps: AppDeps): Hono {
     cors({
       origin: corsOrigin,
       allowMethods: ['GET', 'POST', 'OPTIONS'],
-      allowHeaders: ['Content-Type'],
+      allowHeaders: ['Content-Type', 'X-Paw-Adult-Confirmed'],
     }),
   );
 
   // Logger middleware (Req 9, Task 50)
   app.use('*', logger());
+
+  // Live-call gate (paw-api Req 14): headers only, so it runs before the mode check, the per-IP
+  // count, the body and the guard.
+  const liveGate = createGate(gate);
+  for (const route of LIVE_ROUTES) app.post(route, liveGate);
 
   // Mode check for routes that need a model call (Req 8.3). It runs before the
   // budget check, so a request that cannot be served is not counted against an IP.
@@ -78,6 +90,7 @@ export function createApp(deps: AppDeps): Hono {
     new BudgetedModelClient(model, globalState, budget, clock, deps.prices);
 
   createHealthRoute(app, globalState, budget, () => model.available, clock);
+  createLiveRoute(app, gate);
   createGrantRoute(app, createClient);
   createBindRoute(app, createClient);
   createExportRoute(app);

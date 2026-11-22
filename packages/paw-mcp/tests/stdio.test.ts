@@ -57,9 +57,15 @@ interface Session {
  * Spawn the committed bundle, run initialize, tools/list and one tools/call, and collect what it wrote.
  * `PAW_API_URL` is removed from the environment unless `apiUrl` is given.
  */
-async function runBundle(apiUrl: string | undefined, call: { name: string; arguments: unknown }): Promise<Session> {
+async function runBundle(
+  apiUrl: string | undefined,
+  call: { name: string; arguments: unknown },
+  extraEnv: NodeJS.ProcessEnv = {},
+): Promise<Session> {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.PAW_API_URL;
+  delete env.PAW_I_AM_18_OR_OLDER;
+  Object.assign(env, extraEnv);
   if (apiUrl !== undefined) env.PAW_API_URL = apiUrl;
   child = spawn('node', [BUNDLE_OUT], { env, stdio: ['pipe', 'pipe', 'pipe'] });
   let stdout = '';
@@ -157,5 +163,25 @@ describe('committed bundle over stdio', () => {
     expect(session.stderr).toMatch(/paw_curse 200 \d+ms/);
     expect(session.stderr).not.toContain(REQUIREMENT);
     expect(session.stderr).not.toContain('zebra');
+  });
+
+  it.each([
+    ['yes', 'yes'],
+    ['Yes', undefined],
+    ['true', undefined],
+  ])('remote mode: PAW_I_AM_18_OR_OLDER=%s sends the header %s and never logs the value', async (value, sent) => {
+    const call = { name: 'paw_curse', arguments: { requirement: REQUIREMENT } };
+    const session = await runBundle(stub.url, call, { PAW_I_AM_18_OR_OLDER: value });
+    expect(stub.requests).toHaveLength(1);
+    expect(stub.requests[0]!.headers['x-paw-adult-confirmed']).toBe(sent);
+    expect(session.stderr).not.toContain('PAW_I_AM_18_OR_OLDER');
+    expect(session.stderr).not.toContain(`=${value}`);
+  });
+
+  it('local mode: PAW_I_AM_18_OR_OLDER=yes changes nothing, three tools and no request', async () => {
+    const session = await runBundle(undefined, { name: 'paw_rules', arguments: { kind: 'curse' } }, { PAW_I_AM_18_OR_OLDER: 'yes' });
+    expect(toolNames(session)).toEqual(['paw_check_curses', 'paw_check_verdict', 'paw_rules']);
+    expect(session.stderr).toContain(`paw-mcp ${PAW_MCP_VERSION} mode=local`);
+    expect(stub.requests).toHaveLength(0);
   });
 });

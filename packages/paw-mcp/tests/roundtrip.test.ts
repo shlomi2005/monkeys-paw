@@ -91,12 +91,12 @@ describe('paw_curse then paw_bind', () => {
     expect(stub.requests[0]?.body).toEqual({ wish: { text: 'R' } });
   });
 
-  it('sends only content-type and accept, no key, token or cookie', async () => {
+  it('without the age confirmation sends only content-type and accept, no key, token or cookie', async () => {
     await curse();
     const h = stub.requests[0]!.headers;
     expect(h['content-type']).toBe('application/json');
     expect(h.accept).toBe('application/json');
-    for (const name of ['authorization', 'cookie', 'x-api-key', 'proxy-authorization']) {
+    for (const name of ['authorization', 'cookie', 'x-api-key', 'proxy-authorization', 'x-paw-adult-confirmed']) {
       expect(h[name]).toBeUndefined();
     }
   });

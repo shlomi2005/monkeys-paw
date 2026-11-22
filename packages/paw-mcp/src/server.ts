@@ -19,6 +19,8 @@ export interface PawServerOptions {
   fetchFn?: typeof fetch;
   timeoutMs?: number;
   log?: CallLogger;
+  /** Remote mode only: `PAW_I_AM_18_OR_OLDER` was exactly `yes`. Local mode has no use for it. */
+  adultConfirmed?: boolean;
   /** The clock for `judgedAt`. Default `Date.now`. */
   now?: () => number;
 }
@@ -89,6 +91,7 @@ export function createPawServer(options: PawServerOptions): McpServer {
       baseUrl: options.baseUrl as string,
       ...(options.fetchFn ? { fetchFn: options.fetchFn } : {}),
       ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+      ...(options.adultConfirmed === true ? { adultConfirmed: true } : {}),
       log,
     });
     const deps = { api, memory: createGrantMemory() };

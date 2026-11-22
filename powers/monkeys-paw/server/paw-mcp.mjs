@@ -13422,6 +13422,9 @@ function startupLine(version2, mode2) {
 function ignoredLine(version2) {
   return `paw-mcp ${version2} ignored PAW_API_URL: not a usable http(s) URL without credentials; using local mode`;
 }
+function adultConfirmedOf(raw) {
+  return raw === "yes";
+}
 
 // ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/external.js
 var external_exports = {};
@@ -21596,6 +21599,8 @@ var EMPTY_COMPLETION_RESULT = {
 // src/api-client.ts
 var REQUEST_TIMEOUT_MS = 3e4;
 var MSG_BAD_SHAPE = "The Paw API answered in a shape this tool does not understand.";
+var MSG_REGION = "The paw grants no live wishes from here. The three local tools still work: paw_rules, paw_check_curses and paw_check_verdict.";
+var MSG_ADULT = "The Paw API grants live wishes only to people who confirm they are 18 or older. Only the user can confirm: ask them to set PAW_I_AM_18_OR_OLDER=yes in the server's environment themselves and restart it. Do not set it for them.";
 function messageOf(text) {
   try {
     const parsed = JSON.parse(text);
@@ -21607,11 +21612,22 @@ function messageOf(text) {
   }
   return null;
 }
+function gateMessageOf(text) {
+  try {
+    const parsed = JSON.parse(text);
+    const code = parsed && typeof parsed === "object" ? parsed.code : void 0;
+    if (code === "live_region_unavailable") return MSG_REGION;
+    if (code === "adult_confirmation_required") return MSG_ADULT;
+  } catch {
+  }
+  return null;
+}
 function createApiClient(options) {
   const fetchFn = options.fetchFn ?? fetch;
   const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
   const log2 = options.log ?? (() => void 0);
   const origin = originOf(options.baseUrl);
+  const adultHeader = options.adultConfirmed === true ? { "x-paw-adult-confirmed": "yes" } : {};
   const unreachable = `Cannot reach the Paw API at ${origin}; set PAW_API_URL.`;
   return {
     async postJson(tool, path, body, schema) {
@@ -21620,7 +21636,7 @@ function createApiClient(options) {
       try {
         const res = await fetchFn(options.baseUrl + path, {
           method: "POST",
-          headers: { "content-type": "application/json", accept: "application/json" },
+          headers: { "content-type": "application/json", accept: "application/json", ...adultHeader },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(timeoutMs),
           redirect: "error"
@@ -21628,6 +21644,8 @@ function createApiClient(options) {
         status = res.status;
         const text = await res.text();
         if (!res.ok) {
+          const gate = status === 403 ? gateMessageOf(text) : null;
+          if (gate !== null) return { ok: false, message: gate };
           return { ok: false, message: messageOf(text) ?? `The Paw API answered HTTP ${status}.` };
         }
         let json;
@@ -22406,6 +22424,7 @@ function createPawServer(options) {
       baseUrl: options.baseUrl,
       ...options.fetchFn ? { fetchFn: options.fetchFn } : {},
       ...options.timeoutMs !== void 0 ? { timeoutMs: options.timeoutMs } : {},
+      ...options.adultConfirmed === true ? { adultConfirmed: true } : {},
       log: log2
     });
     const deps = { api, memory: createGrantMemory() };
@@ -22434,7 +22453,7 @@ var log = (tool, outcome, ms) => {
 `);
 };
 var server = createPawServer(
-  mode.kind === "remote" ? { mode: "remote", baseUrl: mode.baseUrl, log } : { mode: "local", log }
+  mode.kind === "remote" ? { mode: "remote", baseUrl: mode.baseUrl, adultConfirmed: adultConfirmedOf(process.env.PAW_I_AM_18_OR_OLDER), log } : { mode: "local", log }
 );
 server.connect(new StdioServerTransport()).catch(() => {
   process.stderr.write("paw-mcp failed to start\n");
