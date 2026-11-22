@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig, searchForWorkspaceRoot } from 'vite';
 import type { PluginOption } from 'vite';
+import { devApi } from './scripts/dev-api';
 
 // The joint contract lives in docs/art/paw/ and is imported, not copied (design.md, "Assets and where they are
 // served from"). Relative paths only: the alias is resolved against this file.
@@ -21,7 +22,7 @@ const reports = (): PluginOption[] =>
     : [];
 
 export default defineConfig({
-  plugins: [react(), ...reports()],
+  plugins: [react(), devApi(), ...reports()],
   build: {
     // scripts/check-bundle-budget.mjs reads dist/.vite/manifest.json (design.md section 8).
     manifest: true,

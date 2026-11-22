@@ -164,14 +164,11 @@ Use `1` on Railway, which puts a single proxy in front of the service (to be che
 
 ## Run locally
 
-```sh
-pnpm install
-pnpm -C packages/paw-core build
-cp apps/api/.env.example apps/api/.env   # then edit; .env is gitignored
-pnpm -C apps/api dev
-```
+The [root quickstart](../../README.md#quickstart) gives the two terminals, with and without a key.
 
-`dev` reads `.env` if it exists. Without a key the server starts in examples-only mode and logs `"mode":"examples-only"`.
+Alternative: keep the settings in a file. Copy `apps/api/.env.example` to `apps/api/.env` and edit it (`.env` is gitignored), then run `pnpm -C apps/api dev`. `dev` reads `.env` if it exists, and variables set in the shell win over it. Without a key the server starts in examples-only mode and logs `"mode":"examples-only"`.
+
+A browser needs more for a live wish: start the API with `COUNTRY_HEADER=x-paw-dev-country`, and start the web dev server with `PAW_DEV_COUNTRY` set to your country code.
 
 ## Tests
 

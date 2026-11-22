@@ -368,5 +368,7 @@ Design: A13, A14, "Live gate and ready rounds", "Seal after the Grant"; Requirem
 
 ## Running from a fresh clone (batch 18)
 
-- [ ] 60. `apps/web/scripts/dev-api.ts` plugin and its tests: proxy on serve only, header deleted and set in `bypass`, origin check, absent from build, preview and mode test. (Req 14.1, 14.2, 14.5)
-- [ ] 61. Root README quickstart, `apps/web/README.md` and `apps/api/README.md`: prerequisites, install, build, two terminals, address, no-key rounds, own key and gate variables, tests. (Req 14.3, 14.4)
+- [x] 60. `apps/web/scripts/dev-api.ts` plugin and its tests: proxy on serve only, header deleted and set in `bypass`, origin check, absent from build, preview and mode test. (Req 14.1, 14.2, 14.5)
+  - Done: ran vitest scripts/dev-api.test.ts (16 tests passed), pnpm -C apps/web typecheck and lint (clean).
+- [x] 61. Root README quickstart, `apps/web/README.md` and `apps/api/README.md`: prerequisites, install, build, two terminals, address, no-key rounds, own key and gate variables, tests. (Req 14.3, 14.4)
+  - Done: docs only; ran the same typecheck and lint. The reviewer runs the quickstart.

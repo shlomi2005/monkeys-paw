@@ -16,7 +16,7 @@ Run them from the repo root with `pnpm -C apps/web <script>`.
 
 | Script      | What it does                                                                                       |
 |-------------|----------------------------------------------------------------------------------------------------|
-| `dev`       | Vite dev server. Runs the asset copy first (`predev`).                                             |
+| `dev`       | Vite dev server. Runs the asset copy first (`predev`). Forwards `/api/` to `http://127.0.0.1:8787`, dev only. |
 | `build`     | Asset copy (`prebuild`), type check, then `vite build` into `dist/`. Also writes `dist/.vite/manifest.json`. |
 | `preview`   | Serves `dist/` with `vite preview`.                                                                |
 | `test`      | `vitest run`: unit, property and component tests.                                                  |
@@ -30,6 +30,12 @@ Run them from the repo root with `pnpm -C apps/web <script>`.
 `VITE_API_BASE_URL` is the base URL of the API. Leave it empty to call the app's own origin. See `.env.example`, which
 lists the name only. It is read at build time and ends up in the client bundle, so never put a secret in it. The model
 key lives in `apps/api`, never here.
+
+The dev server forwards `/api/` to the API on port 8787, so an empty `VITE_API_BASE_URL` works in development. This
+exists only under `pnpm dev`, never in `build` or `preview`. `PAW_DEV_COUNTRY` (the two uppercase
+letters of the country you are in) makes the dev server send the `x-paw-dev-country` header to the API, for same-origin requests only.
+It is for trying live wishes in a browser. It is not read by build or preview. The steps are in the
+[root quickstart](../../README.md#quickstart).
 
 ## The asset copy step
 
