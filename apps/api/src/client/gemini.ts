@@ -40,6 +40,13 @@ export const MAX_OUTPUT_TOKENS = 4096;
  */
 const NEXT_MODEL_STATUSES = new Set([503, 429, 404]);
 
+/**
+ * HTTP statuses Google does not bill when the answer reports no token usage. Source: Google's
+ * billing FAQ, https://ai.google.dev/gemini-api/docs/billing (read 2026-11-22): a 400 or 500
+ * is not charged for tokens, but it still counts against the quota.
+ */
+const UNBILLED_STATUSES = new Set([400, 500]);
+
 /** The most of an error body that is read. The rest is dropped unread. */
 export const MAX_ERROR_BODY_BYTES = 64 * 1024;
 
@@ -165,6 +172,8 @@ export interface AttemptReport extends AttemptPlan {
   usage?: { promptTokens: number; outputTokens: number };
   /** The attempt was a quota answer (429, or `RESOURCE_EXHAUSTED`). Google does not bill it: 0 cents. */
   quota?: true;
+  /** HTTP 400 or 500 with no usageMetadata, not cut off by the timeout: Google does not charge it. 0 cents. */
+  unbilled?: true;
 }
 
 /** One metadata line per HTTP attempt. Numbers and enums only; never the prompt, the response text or the key. */
@@ -293,6 +302,11 @@ function usageOf(envelope: unknown): AttemptReport['usage'] {
   };
 }
 
+function modelVersionOf(envelope: unknown): string | undefined {
+  const value = (envelope as { modelVersion?: unknown } | null)?.modelVersion;
+  return typeof value === 'string' && value !== '' ? value : undefined;
+}
+
 /**
  * Task 95: Gemini resilience. Default model `gemini-3.6-flash`; on 503/429/404
  * try the next model in GEMINI_MODEL_FALLBACKS before paw-core's retry/fallback.
@@ -305,7 +319,8 @@ function usageOf(envelope: unknown): AttemptReport['usage'] {
  *
  * Free tier (Requirement 13): a 429, or any non-200 answer whose error body says
  * `RESOURCE_EXHAUSTED`, is a quota attempt. The body of every non-200 answer is read
- * (at most 64 KB, under the attempt's timeout) only to decide that, then dropped. A quota
+ * (at most 64 KB, under the attempt's timeout) only to decide that, whether a 400 or 500 is
+ * billed, and its token counts, then dropped. A quota
  * shared by all models stops the chain; a per-model quota tries the next model. When the
  * chain ends without a success and any attempt was a quota attempt, the call throws
  * `QuotaExhaustedError`.
@@ -477,6 +492,19 @@ export class GeminiModelClient implements ModelClient {
             report.quota = true;
             return { kind: 'next', error, quota: true, stop: quotaScopeOf(errorBody) === 'shared' };
           }
+          if (UNBILLED_STATUSES.has(status) && !abortController.signal.aborted) {
+            if (isRecord(errorBody) && errorBody.usageMetadata != null) {
+              // usage reported: charged by it; unreadable usage keeps the ceiling
+              const usage = usageOf(errorBody);
+              if (usage) {
+                report.usage = usage;
+                const version = modelVersionOf(errorBody); // only to price that usage; never logged
+                if (version) report.modelVersion = version;
+              }
+            } else {
+              report.unbilled = true;
+            }
+          }
           if (NEXT_MODEL_STATUSES.has(status)) {
             return { kind: 'next', error, quota: false, stop: false };
           }
@@ -505,8 +533,8 @@ export class GeminiModelClient implements ModelClient {
       // The tokens are billed whatever the text turns out to be.
       const usage = usageOf(envelope);
       if (usage) report.usage = usage;
-      const modelVersion = (envelope as { modelVersion?: unknown } | null)?.modelVersion;
-      if (typeof modelVersion === 'string' && modelVersion !== '') report.modelVersion = modelVersion;
+      const modelVersion = modelVersionOf(envelope);
+      if (modelVersion) report.modelVersion = modelVersion;
       finishReason = finishReasonOf(envelope);
 
       // Cut off by maxOutputTokens: a failed attempt, charged by its usage. The next model

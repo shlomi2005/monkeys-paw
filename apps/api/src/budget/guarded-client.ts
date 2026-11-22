@@ -38,19 +38,21 @@ const IN_FLIGHT = new WeakMap<GlobalState, number>();
  * 1. `ceiling` is the most the call can cost: the sum over the whole fallback
  *    chain (`plan`) of input tokens at the input rate plus the output cap at the
  *    output rate, each at its requested model's price. The whole chain, because
- *    a 503, 429 or 404 moves on to the next model and every attempt may be billed.
+ *    a 503, 429 or 404 moves on to the next model and any attempt may be billed, until its answer says otherwise.
  * 2. If `spentCents + reservedCents + ceiling` is above the budget, the call is
  *    refused. Otherwise the ceiling is reserved in the same synchronous tick (no
  *    `await` between the check and the reservation), so parallel calls cannot all
  *    pass the check and then overspend.
- * 3. After the call, in a `finally` (a failed call is billed too), the reservation
+ * 3. After the call, in a `finally` (a failed attempt can be billed), the reservation
  *    is released and the real cost is charged: for each attempt the token usage at
  *    the price of the model that answered, or the attempt's own ceiling when the
  *    attempt reported no usage. When no attempt reported at all, the whole ceiling.
  *    A quota attempt (`report.quota`: a 429 or `RESOURCE_EXHAUSTED`) is charged 0
  *    cents, because Google does not bill it (Requirement 13.6). The reservation
  *    above is not changed by that: it cannot know which attempts will be quota
- *    answers, so the worst-case numbers stay an upper bound.
+ *    answers, so the worst-case numbers stay an upper bound. An unbilled attempt
+ *    (`report.unbilled`: HTTP 400 or 500 with no token counts) is charged 0 cents too,
+ *    and the reservation is unchanged for the same reason.
  * 4. When the call threw `QuotaExhaustedError` (the free quota is spent), the guard
  *    sets `quotaSpent` and `denied`, then rethrows. Every later `generate` on this
  *    guard throws `BudgetExhaustedError` at once, before the day roll and before any
@@ -146,7 +148,8 @@ export class BudgetedModelClient implements ModelClient {
 
   /**
    * What one attempt really cost: 0 for a quota attempt, else its usage at the answering
-   * model's price, else its ceiling.
+   * model's price, else 0 for an unbilled attempt (400 or 500 without token counts), else
+   * its ceiling.
    */
   private chargeOf(report: AttemptReport): number {
     if (report.quota) return 0;
@@ -158,6 +161,7 @@ export class BudgetedModelClient implements ModelClient {
       );
       if (Number.isFinite(cost) && cost >= 0) return cost;
     }
+    if (report.unbilled && !report.usage) return 0;
     return this.ceilingOf(report);
   }
 

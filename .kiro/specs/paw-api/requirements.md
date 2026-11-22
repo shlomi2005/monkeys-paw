@@ -549,7 +549,8 @@ refusals do not rest the paw for a day.
 4. **THE SYSTEM SHALL** leave unchanged the reservation before the call, the worst-case numbers and the chain: 400 and
    500 do not try the next model. The per-IP limit and Google's quota still bound repeated failures.
 5. **THE SYSTEM SHALL** log, put in a message or keep nothing of the upstream text: only the flag and numeric token
-   counts, under the existing log limits.
+   counts, under the existing log limits, and, beside valid usage, the answering model's name, used only for the
+   price (7.10) and never logged.
 6. **THE SYSTEM SHALL** test, with a stubbed `fetch` only: 400 and 500 with no usage, with valid usage, with unreadable
    usage, cut off by the timeout, and every other status. The example and property tests SHALL fail on the previous
    commit.

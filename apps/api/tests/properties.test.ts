@@ -202,7 +202,7 @@ const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 type Outcome =
   | { kind: 'ok' | 'maxTokens'; promptFrac: number; outFrac: number; split: number }
-  | { kind: 'status'; code: 503 | 429 | 404 }
+  | { kind: 'status'; code: 503 | 429 | 404 | 400 | 500 }
   | { kind: 'network' };
 
 const fraction = fc.double({ min: 0, max: 1, noNaN: true });
@@ -221,7 +221,7 @@ const outcomeArb: fc.Arbitrary<Outcome> = fc.oneof(
     weight: 5,
     arbitrary: fc.record({
       kind: fc.constant('status' as const),
-      code: fc.constantFrom(503 as const, 429 as const, 404 as const),
+      code: fc.constantFrom(503 as const, 429 as const, 404 as const, 400 as const, 500 as const),
     }),
   },
   { weight: 1, arbitrary: fc.constant({ kind: 'network' as const }) },
@@ -547,6 +547,96 @@ describe('Property 10: a quota answer stops the guard (paw-api task 114)', () =>
         }
       }),
       { numRuns: 200 },
+    );
+  });
+});
+
+describe('Property 13: refused calls are not billed (paw-api task 123, Req 16)', () => {
+  const MODEL = 'gemini-3.6-flash';
+  const PROMPT = 'Task: JUDGE_VERDICT ask the judge';
+  type BodyKind = 'none' | 'text' | 'error' | 'usage' | 'unreadable' | 'exhausted';
+  const USAGE = { promptTokenCount: 1234, candidatesTokenCount: 321, thoughtsTokenCount: 100 };
+
+  const bodyOf = (kind: BodyKind): string | null => {
+    switch (kind) {
+      case 'none':
+        return null;
+      case 'text':
+        return 'plain text';
+      case 'error':
+        return JSON.stringify({ error: { code: 400, status: 'FAILED_PRECONDITION', message: 'refused' } });
+      case 'usage':
+        return JSON.stringify({ error: { message: 'x' }, usageMetadata: USAGE });
+      case 'unreadable':
+        return JSON.stringify({ error: { message: 'x' }, usageMetadata: 'many' });
+      case 'exhausted':
+        return JSON.stringify({ error: { status: 'RESOURCE_EXHAUSTED', message: 'quota' } });
+    }
+  };
+
+  const clientOf = (fetchStub: typeof fetch) =>
+    new GeminiModelClient({ apiKey: 'test-key-not-real', models: [MODEL], timeoutMs: 1000, fetch: fetchStub, log: () => {} });
+
+  it('P13a: the charge equals an independent oracle', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.oneof(fc.constantFrom(400, 500), fc.constantFrom(200, 404, 429, 503), fc.integer({ min: 200, max: 599 })),
+        fc.constantFrom<BodyKind>('none', 'text', 'error', 'usage', 'unreadable', 'exhausted'),
+        async (status, kind) => {
+          const nullBody = status === 204 || status === 205 || status === 304;
+          const text = nullBody ? null : bodyOf(kind);
+          const fetchStub = (async () => new Response(text, { status })) as typeof fetch;
+          const client = clientOf(fetchStub);
+          const plan = client.plan(PROMPT)[0];
+          const price = priceFor(DEFAULT_PRICE_TABLE, MODEL);
+          const ceiling = attemptCostCents(price, plan.inputTokens, plan.maxOutputTokens);
+          const usagePrice = attemptCostCents(price, USAGE.promptTokenCount, USAGE.candidatesTokenCount + USAGE.thoughtsTokenCount);
+
+          const hasUsage = !nullBody && kind === 'usage';
+          const quota = status === 429 || (status !== 200 && !nullBody && kind === 'exhausted');
+          let expected: number;
+          if (quota) expected = 0;
+          else if (hasUsage && (status === 200 || status === 400 || status === 500)) expected = usagePrice;
+          else if ((status === 400 || status === 500) && (nullBody || kind !== 'unreadable') && !(hasUsage)) expected = 0;
+          else expected = ceiling;
+
+          const state = createGlobalState(0);
+          const config: BudgetConfig = { perIpLimit: 100, windowMs: 60_000, dailyBudgetCents: ceiling * 10 + 1000 };
+          const guard = new BudgetedModelClient(client, state, config, () => 0);
+          await guard.generate(PROMPT).catch(() => undefined);
+          expect(state.spentCents).toBeCloseTo(expected, 9);
+          expect(state.reservedCents).toBe(0);
+        },
+      ),
+      { numRuns: 300 },
+    );
+  });
+
+  it('P13b: 1 to 80 refused attempts with a budget of one chain ceiling all reach fetch and spend nothing', async () => {
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.constantFrom(400, 500), { minLength: 1, maxLength: 80 }),
+        async (statuses) => {
+          let fetched = 0;
+          const fetchStub = (async () => {
+            const code = statuses[fetched++];
+            return new Response(JSON.stringify({ error: { message: 'refused' } }), { status: code });
+          }) as typeof fetch;
+          const client = clientOf(fetchStub);
+          const ceiling = client.plan(PROMPT).reduce((sum, p) => sum + attemptCostCents(priceFor(DEFAULT_PRICE_TABLE, p.model), p.inputTokens, p.maxOutputTokens), 0);
+          const state = createGlobalState(0);
+          const config: BudgetConfig = { perIpLimit: 100, windowMs: 60_000, dailyBudgetCents: ceiling };
+          const guard = new BudgetedModelClient(client, state, config, () => 0);
+          for (let i = 0; i < statuses.length; i += 1) {
+            const error = await guard.generate(PROMPT).then(() => undefined, (e: unknown) => e);
+            expect(error).not.toBeInstanceOf(BudgetExhaustedError);
+          }
+          expect(fetched).toBe(statuses.length);
+          expect(state.spentCents).toBe(0);
+          expect(state.reservedCents).toBe(0);
+        },
+      ),
+      { numRuns: 50 },
     );
   });
 });

@@ -41,7 +41,7 @@ Names match [`.env.example`](.env.example). `pnpm start` loads no `.env` file. S
 
 ### How the budget guard charges
 
-Every model call goes through the guard. Before the call it reserves a ceiling: for each model of the fallback chain, the estimated input tokens at the input rate plus the output cap (`MAX_OUTPUT_TOKENS`, 4096, thinking included) at the output rate. If the day's spend plus what is already reserved plus this ceiling is above `DAILY_BUDGET_CENTS`, the call is refused and the model is not called. After the call it releases the reservation and charges the real cost from the token counts in the response, at the price of the model that answered. An attempt that reported no token counts (a timeout, a network error, an HTTP error) is charged its ceiling, except a quota attempt (HTTP 429, or any error answer with `RESOURCE_EXHAUSTED`), which is charged 0 cents because Google does not bill it. The reservation of the whole chain before the call does not change. Cents are fractional and never rounded in the state. The prices are the ones that apply from 1.1.2027 (see `src/budget/prices.ts`). They are higher than today's, so the guard over-counts today and never under-counts. An unknown model is priced at the most expensive row.
+Every model call goes through the guard. Before the call it reserves a ceiling: for each model of the fallback chain, the estimated input tokens at the input rate plus the output cap (`MAX_OUTPUT_TOKENS`, 4096, thinking included) at the output rate. If the day's spend plus what is already reserved plus this ceiling is above `DAILY_BUDGET_CENTS`, the call is refused and the model is not called. After the call it releases the reservation and charges the real cost from the token counts in the response, at the price of the model that answered. An attempt with token counts costs them. An HTTP 400 or 500 without token counts costs 0 cents, because Google does not charge it for tokens, though it still counts against the quota ([billing FAQ](https://ai.google.dev/gemini-api/docs/billing), read 2026-11-22). A quota attempt (HTTP 429, or any error answer with `RESOURCE_EXHAUSTED`) costs 0 cents too. A timeout (also while the error body is read), no response, unreadable token counts and any other status keep the ceiling. The reservation of the whole chain before the call does not change. Cents are fractional and never rounded in the state. The prices are the ones that apply from 1.1.2027 (see `src/budget/prices.ts`). They are higher than today's, so the guard over-counts today and never under-counts. An unknown model is priced at the most expensive row.
 
 ## Running on the free tier
 
@@ -52,7 +52,7 @@ The website runs on Gemini's free tier. No bill is possible if the key comes fro
 
 When the day's free quota ends, Gemini answers 429 `RESOURCE_EXHAUSTED`. The paw rests: `POST /api/grant` and `POST /api/bind` answer 503 "The paw is resting. Browse the examples until it wakes." and the site serves the ready examples. `/api/health` still says `normal`, and the next request tries the model again. A quota shared by all models stops the chain after one call. A quota of one model tries the next model. Daily free quotas reset at midnight Pacific time.
 
-A quota attempt costs 0 cents. The budget guard still counts paid-tier prices on paper, as a second fence.
+A quota attempt costs 0 cents. So does a 400 or 500 without token counts, so refused calls do not rest the paw; the per-IP limit and Google's quota bound them. The budget guard still counts paid-tier prices on paper, as a second fence.
 
 ## Who may make live wishes
 
@@ -112,7 +112,7 @@ cents         = input tokens x input USD per 1M / 10 000  +  4096 x output USD p
 ceiling       = the sum of cents over the four models
 ```
 
-The whole chain is reserved because a 503, 429 or 404 moves on to the next model and every attempt can be billed. Reserving one attempt only would let parallel calls overspend. After the call the reservation is released and the real cost is charged, so a call that succeeds on the first model costs far less than its ceiling.
+The whole chain is reserved because a 503, 429 or 404 moves on to the next model and it cannot be known beforehand which attempts are billed. Reserving one attempt only would let parallel calls overspend. After the call the reservation is released and the real cost is charged, so a call that succeeds on the first model costs far less than its ceiling.
 
 **Ceiling of each prompt kind, at its maximum size.** The input caps are 500 characters of wish text and 200 of context, and 1000 for a clause and for a loophole. A curse `story` is at most 360 characters (`CurseSchema`). The longest curse type tag is `accessibility` and the longer binding kind is `ears-clause`. Each line is chars, input tokens, then cents as input + output = total, per model.
 

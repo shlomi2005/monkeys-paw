@@ -382,6 +382,37 @@ describe('createApp', () => {
     });
   });
 
+  describe('refused calls are not billed (paw-api task 123, Req 16)', () => {
+    const REFUSED_400 =
+      '{"error":{"code":400,"status":"FAILED_PRECONDITION","message":"User location is not supported for the API use."}}';
+
+    it.each([
+      [400, REFUSED_400],
+      [500, '{"error":{"code":500,"status":"INTERNAL","message":"Internal error."}}'],
+    ])('40 grants from 40 addresses, each answered %i, never rest the paw', async (code, body) => {
+      const fetchMock = vi.fn<typeof fetch>(async () => new Response(body, { status: code }));
+      const client = new GeminiModelClient({
+        apiKey: 'test-key',
+        models: ['model-a'],
+        timeoutMs: 1000,
+        fetch: fetchMock,
+        log: () => {},
+      });
+      const app = makeApp(client, { budget: { dailyBudgetCents: 200 } });
+      for (let i = 0; i < 40; i += 1) {
+        const res = await post(app, '/api/grant', grantBody, `203.0.113.${i + 1}`);
+        expect(res.status, `grant ${i}`).not.toBe(503);
+      }
+      expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(40);
+      expect(await health(app)).toMatchObject({
+        mode: 'normal',
+        budget: { spentCents: 0, remainingCents: 200 },
+      });
+      const live = await app.request('http://localhost/api/live', { headers: GATE_HEADERS });
+      expect(await live.json()).not.toHaveProperty('resting');
+    });
+  });
+
   describe('without an API key (Req 6.2, 8)', () => {
     it('starts in examples-only mode, refuses grant and bind, still serves examples and export', async () => {
       const model = new FakeModel({ available: false });

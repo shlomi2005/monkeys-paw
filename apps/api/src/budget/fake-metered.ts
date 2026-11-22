@@ -5,7 +5,7 @@ import type { MeteredModelClient } from './guarded-client';
 /**
  * A fake `MeteredModelClient` for tests. It makes no HTTP call. Each
  * `generateMetered` runs `answer`, then reports one attempt, whether `answer`
- * returned or threw (a failed call is billed too).
+ * returned or threw (a failed attempt can be billed).
  *
  * Tests that are about settling a real fallback chain use the real
  * `GeminiModelClient` with a stubbed `fetch` instead.
@@ -32,6 +32,8 @@ export interface FakeMeteredOptions {
   silent?: boolean;
   /** Report the one attempt as a quota attempt (`quota: true`, no usage). */
   quota?: boolean;
+  /** Report the one attempt as unbilled (`unbilled: true`, no usage): a 400 or 500 without token counts. */
+  unbilled?: boolean;
 }
 
 export class FakeMeteredModel implements MeteredModelClient {
@@ -90,6 +92,10 @@ export class FakeMeteredModel implements MeteredModelClient {
     if (this.options.quota) {
       delete report.usage;
       report.quota = true;
+    }
+    if (this.options.unbilled) {
+      delete report.usage;
+      report.unbilled = true;
     }
     return report;
   }

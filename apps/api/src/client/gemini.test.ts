@@ -1032,3 +1032,105 @@ describe('GeminiModelClient quota answers (paw-api task 113, Req 13.1-13.4)', ()
     expect(writes.join('')).not.toContain(FAKE_KEY);
   });
 });
+
+describe('unbilled attempts: HTTP 400 and 500 without token counts (paw-api task 123, Req 16)', () => {
+  const metered = async (response: Response | (() => Promise<Response>), timeoutMs = 1000) => {
+    const queue = [response];
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      const next = queue.shift();
+      if (!next) throw new Error('unexpected extra fetch');
+      return typeof next === 'function' ? next() : next;
+    });
+    const logs: ModelCallLogEntry[] = [];
+    const client = new GeminiModelClient({
+      apiKey: FAKE_KEY,
+      models: MODELS,
+      timeoutMs,
+      fetch: fetchMock,
+      log: (entry) => logs.push(entry),
+    });
+    const reports: AttemptReport[] = [];
+    const error = await client.generateMetered('x', (r) => reports.push(r)).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+    return { reports, error, logs, fetchMock };
+  };
+  const usageBody = (usageMetadata: unknown, extra: object = {}) => ({
+    error: { code: 400, status: 'FAILED_PRECONDITION', message: 'refused' },
+    usageMetadata,
+    ...extra,
+  });
+
+  it.each([400, 500])('a %i with an error body is unbilled', async (code) => {
+    const { reports, error } = await metered(answer(code, { error: { message: 'details' } }));
+    expect(error?.message).toContain(`HTTP ${code}`);
+    expect(reports).toHaveLength(1);
+    expect(reports[0].unbilled).toBe(true);
+    expect(reports[0].usage).toBeUndefined();
+    expect(reports[0].quota).toBeUndefined();
+  });
+
+  it.each([400, 500])('a %i with valid usageMetadata gives usage and modelVersion, not unbilled', async (code) => {
+    const body = usageBody(
+      { promptTokenCount: 120, candidatesTokenCount: 5, thoughtsTokenCount: 7 },
+      { modelVersion: 'gemini-3.6-flash' },
+    );
+    const { reports } = await metered(answer(code, body));
+    expect(reports[0].unbilled).toBeUndefined();
+    expect(reports[0].usage).toEqual({ promptTokens: 120, outputTokens: 12 });
+    expect(reports[0].modelVersion).toBe('gemini-3.6-flash');
+  });
+
+  it.each([
+    ['a string', 'many'],
+    ['an empty object', {}],
+    ['a negative count', { promptTokenCount: -1 }],
+  ])('a 400 with unreadable usageMetadata (%s) gives neither usage nor unbilled', async (_name, meta) => {
+    const { reports } = await metered(answer(400, usageBody(meta)));
+    expect(reports[0].unbilled).toBeUndefined();
+    expect(reports[0].usage).toBeUndefined();
+  });
+
+  it.each([
+    ['null usageMetadata', answer(500, { usageMetadata: null })],
+    ['absent usageMetadata', answer(500, { error: { message: 'x' } })],
+    ['an empty body', new Response('', { status: 400 })],
+    ['a text body', new Response('plain text', { status: 400 })],
+    ['a body over 64 KB', new Response(' '.repeat(MAX_ERROR_BODY_BYTES + 10) + '{}', { status: 500 })],
+  ])('%s is unbilled', async (_name, response) => {
+    const { reports } = await metered(response);
+    expect(reports[0].unbilled).toBe(true);
+    expect(reports[0].usage).toBeUndefined();
+  });
+
+  it('RESOURCE_EXHAUSTED stays a quota attempt and is not unbilled', async () => {
+    const { reports, error } = await metered(answer(400, quotaBody([PER_PROJECT])));
+    expect(error).toBeInstanceOf(QuotaExhaustedError);
+    expect(reports[0].quota).toBe(true);
+    expect(reports[0].unbilled).toBeUndefined();
+  });
+
+  it.each([401, 403, 404, 499, 501, 502, 503, 504])('a %i is never unbilled', async (code) => {
+    const { reports } = await metered(answer(code, { error: { message: 'x' } }));
+    expect(reports.length).toBeGreaterThan(0);
+    for (const report of reports) expect(report.unbilled).toBeUndefined();
+  });
+
+  it.each([400, 500])('a %i whose body never ends gives neither unbilled nor usage at the timeout', async (code) => {
+    const hanging = new ReadableStream<Uint8Array>({ start() {} });
+    const { reports, error } = await metered(new Response(hanging, { status: code }), 10);
+    expect(error?.message).toBe('Model call timed out');
+    expect(reports).toHaveLength(1);
+    expect(reports[0].unbilled).toBeUndefined();
+    expect(reports[0].usage).toBeUndefined();
+  });
+
+  it('keeps the error body out of logs, reports and the thrown message', async () => {
+    const canary = 'canary-words-that-must-not-leak';
+    const { reports, error, logs } = await metered(answer(400, { error: { message: canary } }));
+    const seen = JSON.stringify({ reports, logs, message: error?.message });
+    expect(seen).not.toContain(canary);
+    expect(seen).not.toContain(FAKE_KEY);
+  });
+});

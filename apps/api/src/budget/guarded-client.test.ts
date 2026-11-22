@@ -624,9 +624,9 @@ describe('quota attempts: charged 0 cents, and the guard stops after one (paw-ap
     await expect(guard.generate(PROMPT)).rejects.toBeInstanceOf(QuotaExhaustedError);
     expect(state.spentCents).toBeCloseTo(firstCeiling, 9);
 
-    const server = () => Promise.resolve(new Response('{}', { status: 500 }));
+    const server = () => Promise.resolve(new Response('{}', { status: 502 }));
     const failing = realSetup([server], { models: MODELS });
-    await expect(failing.guard.generate(PROMPT)).rejects.toThrow('HTTP 500');
+    await expect(failing.guard.generate(PROMPT)).rejects.toThrow('HTTP 502');
     expect(failing.state.spentCents).toBeCloseTo(attemptCeiling(failing.client.plan(PROMPT)[0].inputTokens, 1.5, 7.5), 9);
     expect(failing.guard.quotaSpent).toBe(false);
   });
@@ -742,5 +742,73 @@ describe('quota attempts: charged 0 cents, and the guard stops after one (paw-ap
     await expect(guard.generate('x')).resolves.toEqual({ ok: true });
     expect(inner.calls).toBe(1);
     expect(guard.quotaSpent).toBe(false);
+  });
+});
+
+describe('unbilled attempts are charged 0 (paw-api task 123, Req 16)', () => {
+  const PROMPT = 'Task: JUDGE_VERDICT ask the judge';
+  const MODELS = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite'];
+  const refusal = (status: number, extra: object = {}) => () =>
+    Promise.resolve(new Response(JSON.stringify({ error: { message: 'refused' }, ...extra }), { status }));
+
+  it.each([400, 500])('a %i costs 0, with the chain reservation unchanged during the call', async (code) => {
+    let reservedDuring = -1;
+    const setup = realSetup(
+      [
+        () => {
+          reservedDuring = setup.state.reservedCents;
+          return refusal(code)();
+        },
+      ],
+      { models: MODELS },
+    );
+    const n = setup.client.plan(PROMPT)[0].inputTokens;
+    await expect(setup.guard.generate(PROMPT)).rejects.toThrow(`HTTP ${code}`);
+    expect(reservedDuring).toBeCloseTo(
+      attemptCeiling(n, 1.5, 7.5) + attemptCeiling(n, 1.5, 7.5) + attemptCeiling(n, 0.3, 2.5),
+      9,
+    );
+    expect(setup.state.spentCents).toBe(0);
+    expect(setup.guard.costCents).toBe(0);
+    expect(setup.state.reservedCents).toBe(0);
+  });
+
+  it.each([400, 500])('a %i with usage costs that usage', async (code) => {
+    const usageMetadata = { promptTokenCount: 1000, candidatesTokenCount: 1000 };
+    const { guard, state } = realSetup([refusal(code, { usageMetadata })]);
+    await expect(guard.generate(PROMPT)).rejects.toThrow(`HTTP ${code}`);
+    // 1000 x 1.50 / 10000 + 1000 x 7.50 / 10000
+    expect(state.spentCents).toBeCloseTo(0.9, 12);
+  });
+
+  it('unreadable usage costs the ceiling', async () => {
+    const { guard, state, client } = realSetup([refusal(400, { usageMetadata: 'many' })]);
+    const ceiling = attemptCeiling(client.plan(PROMPT)[0].inputTokens, 1.5, 7.5);
+    await expect(guard.generate(PROMPT)).rejects.toThrow('HTTP 400');
+    expect(state.spentCents).toBeCloseTo(ceiling, 9);
+  });
+
+  it('a timeout while the error body is read costs the ceiling', async () => {
+    const hanging = () => Promise.resolve(new Response(new ReadableStream<Uint8Array>({ start() {} }), { status: 400 }));
+    const { guard, state, client } = realSetup([hanging], { timeoutMs: 10 });
+    const ceiling = attemptCeiling(client.plan(PROMPT)[0].inputTokens, 1.5, 7.5);
+    await expect(guard.generate(PROMPT)).rejects.toThrow('timed out');
+    expect(state.spentCents).toBeCloseTo(ceiling, 9);
+  });
+
+  it('a network error costs the ceiling', async () => {
+    const down = () => Promise.reject(new TypeError('network down'));
+    const { guard, state, client } = realSetup([down]);
+    const ceiling = attemptCeiling(client.plan(PROMPT)[0].inputTokens, 1.5, 7.5);
+    await expect(guard.generate(PROMPT)).rejects.toThrow();
+    expect(state.spentCents).toBeCloseTo(ceiling, 9);
+  });
+
+  it('a 503 then a 400 costs only the first ceiling', async () => {
+    const { guard, state, client } = realSetup([refusal(503), refusal(400)], { models: MODELS });
+    const first = attemptCeiling(client.plan(PROMPT)[0].inputTokens, 1.5, 7.5);
+    await expect(guard.generate(PROMPT)).rejects.toThrow('HTTP 400');
+    expect(state.spentCents).toBeCloseTo(first, 9);
+    expect(state.reservedCents).toBe(0);
   });
 });
