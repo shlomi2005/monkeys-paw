@@ -1,17 +1,23 @@
 /*
  * App layout (design.md sections 1 and 7).
  *
- * The DOM order is the tab order: wish line, examples, circles, binding card, Stop, export slot, sound slot. This file
- * only decides where each piece is drawn, with grid areas and positioning. There is no `order` and no positive tabindex.
+ * The DOM order is the tab order. This file only decides where each piece is drawn, with grid areas and positioning.
+ * There is no `order` and no positive tabindex. There are two orders (paw-web design.md A12 and "Mobile"):
+ *   - usual (desktop always; a phone before a Grant, while granting, after Rewrite): wish line, examples, circles,
+ *     binding card, Stop, export slot, sound slot;
+ *   - result first (a phone with a Grant, `data-result-first` on .layout): circles, binding card, Stop or export slot,
+ *     wish line, examples, sound slot. use-result-first.ts moves the two nodes in the DOM; the grid areas below follow.
  *
  * Plate polish (the stamp, the empty band, the size of the paw): the "Granted." stamp never lies on the paw, the stage
  * has no empty band between the ring and the wish line, and the paw is the clear centre of the plate.
  *
  * Mobile (under 768 px): one column. The visual order is the tab order: the paw (200 px at 390 px wide) with its state
- * text, the stamp and the narration, the wish line, the examples, then the circle list, then the medal and the actions.
- * The stamp is an ordinary row under the state text, so it never covers the wrist cord, and the narration takes the
- * height it needs (no reserved lines): the one layout shift is the Grant arriving, right after the user pressed "Make the
- * wish". Before a Grant the stamp slot has no height. The phone braziers stand beside the paw box (Brazier.module.css).
+ * text, the stamp and the narration, then, before a Grant, the wish line, the examples, the circle list, the medal and
+ * the actions. With a Grant (result first) the wish line and the examples go to the end, after the actions, so the curse
+ * list comes directly under the narration and its first row is on the first screen. The stamp is an ordinary row under
+ * the state text, so it never covers the wrist cord, and the narration takes the height it needs (no reserved lines):
+ * the one layout shift is the Grant arriving, right after the user pressed "Make the wish". Before a Grant the stamp slot
+ * has no height. The phone braziers stand beside the paw box (Brazier.module.css).
  *
  * From 768 px: ONE grid area ("stage") holds the paw, the decoration, the circle ring, the stamp, the narration, the
  * medal and the actions, stacked in the same cell. The wish line and the examples follow. There is no stamp row and no
@@ -191,6 +197,25 @@
   bottom: 1rem;
   z-index: 3;
   min-width: 0;
+}
+
+/*
+ * Result first (a phone with a Grant). Only the grid areas change, and the room at the bottom: the sound toggle is drawn
+ * bottom right on the plate, so the last row (the examples) leaves its height (48 px) plus its offset (1 rem) free.
+ * The order of the DOM changes with it (use-result-first.ts), so the tab order is still the visual order.
+ */
+@media (max-width: 767.98px) {
+  .layout[data-result-first] {
+    grid-template-areas:
+      'paw'
+      'stamp'
+      'ring'
+      'medal'
+      'actions'
+      'wish'
+      'examples';
+    padding-bottom: calc(48px + 1rem);
+  }
 }
 
 @media (min-width: 768px) {

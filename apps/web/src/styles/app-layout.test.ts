@@ -11,6 +11,7 @@ const tokensCss = readText('./tokens.css', import.meta.url);
 const MOBILE = null;
 const DESKTOP = '(min-width: 768px)';
 const WIDE = '(min-width: 1024px)';
+const PHONE = '(max-width: 767.98px)';
 
 // parseCss keeps a grouped selector (`.a, .b`) as one rule: split it, so each selector is found on its own.
 const rules = parseCss(appCss).flatMap((rule) =>
@@ -25,7 +26,7 @@ function areaRows(value: string | undefined): string[][] {
 
 const firstRow = (rows: string[][], name: string): number => rows.findIndex((row) => row.includes(name));
 
-describe('App layout: mobile grid (under 768 px)', () => {
+describe('App layout: mobile grid (under 768 px), the usual order: before a Grant, while granting, after Rewrite', () => {
   const rows = areaRows(layout(MOBILE)['grid-template-areas']);
   const at = (name: string) => firstRow(rows, name);
 
@@ -55,6 +56,49 @@ describe('App layout: mobile grid (under 768 px)', () => {
     expect(narration['-webkit-line-clamp']).toBeUndefined();
     expect(narration['overflow']).toBeUndefined();
     expect(narration['position']).toBeUndefined();
+  });
+});
+
+describe('App layout: mobile grid, result first (a phone with a Grant, data-result-first)', () => {
+  const resultFirst = declarationsFor(rules, '.layout[data-result-first]', PHONE);
+  const rows = areaRows(resultFirst['grid-template-areas']);
+
+  it('lists the areas in the visual order: paw, stamp, ring, medal, actions, wish, examples', () => {
+    expect(rows.map((row) => row[0])).toEqual(['paw', 'stamp', 'ring', 'medal', 'actions', 'wish', 'examples']);
+    for (const row of rows) expect(row).toHaveLength(1);
+  });
+
+  it('has the same areas as the usual order, so no child loses its place', () => {
+    const usual = areaRows(layout(MOBILE)['grid-template-areas']).map((row) => row[0]);
+    expect([...rows.map((row) => row[0])].sort()).toEqual([...usual].sort());
+  });
+
+  it('comes directly under the narration: the circle list is the row after the stamp slot', () => {
+    expect(firstRow(rows, 'ring')).toBe(firstRow(rows, 'stamp') + 1);
+    expect(firstRow(rows, 'ring')).toBeLessThan(firstRow(rows, 'wish'));
+    expect(firstRow(rows, 'actions')).toBeLessThan(firstRow(rows, 'wish'));
+    expect(firstRow(rows, 'wish')).toBeLessThan(firstRow(rows, 'examples'));
+  });
+
+  it('keeps the paw and the stamp rows at the top, so the decoration layer (paw-start to stamp-end) is unchanged', () => {
+    expect(rows.slice(0, 2).map((row) => row[0])).toEqual(['paw', 'stamp']);
+  });
+
+  it('leaves room at the bottom for the sound toggle: its height (48 px) plus its offset (1 rem)', () => {
+    expect(resultFirst['padding-bottom']).toBe('calc(48px + 1rem)');
+    const toggle = declarationsFor(rules, '.soundSlot', null);
+    expect(toggle['bottom']).toBe('1rem');
+    expect(declarationsFor(rules, '.soundSlot', DESKTOP)['bottom']).toBe('auto');
+  });
+
+  it('only exists inside the phone media query, and never for the desktop layout', () => {
+    const resultFirstRules = rules.filter((rule) => rule.selector.includes('data-result-first'));
+    expect(resultFirstRules.length).toBeGreaterThan(0);
+    for (const rule of resultFirstRules) expect(rule.media, rule.selector).toBe(PHONE);
+  });
+
+  it('does not touch the desktop grid areas', () => {
+    expect(areaRows(layout(DESKTOP)['grid-template-areas']).map((row) => row[0])).toEqual(['stage', 'wish', 'examples']);
   });
 });
 

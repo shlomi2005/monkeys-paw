@@ -18,7 +18,10 @@ import { RewriteButton } from './components/RewriteButton';
 import { SoundToggle } from './components/SoundToggle';
 import { StopButton } from './components/StopButton';
 import { WishLine } from './components/WishLine';
+import { PHONE_QUERY, useMediaQuery } from './hooks/use-media-query';
+import { usePhoneFocus } from './hooks/use-phone-focus';
 import { useReducedMotion } from './hooks/use-reduced-motion';
+import { useResultFirst } from './hooks/use-result-first';
 import { PawStage } from './scene/PawStage';
 import { projectGrant } from './state/paw-selectors';
 import { useSession } from './state/SessionProvider';
@@ -27,9 +30,14 @@ import { removeStaticShell } from './static-shell';
 /**
  * The page. It must be rendered inside a `SessionProvider`.
  *
- * DOM order is the tab order (design.md section 7, Req 8.1): wish input, "for…", "Make the wish", example cards,
- * circles, binding card, Stop, export slot, sound slot. CSS grid places the pieces (App.module.css); there is no
- * positive tabindex. The decoration, the paw, the stamp and the medal are not focusable, so they can sit anywhere.
+ * DOM order is the tab order (design.md section 7, Req 8.1). There are two orders, and the JSX holds only the first:
+ *   - usual (desktop always; a phone before a Grant, while granting, after Rewrite): wish input, "for…", "Make the
+ *     wish", example cards, circles, binding card, Stop, export slot, sound slot;
+ *   - result first (a phone with a Grant, A12): circles, binding card, Stop or export slot, then the wish line and the
+ *     example cards, then the sound slot.
+ * `useResultFirst` moves the wish slot and the examples slot by ref between the two, before paint; `usePhoneFocus` then
+ * scrolls and focuses (phone only). CSS grid places the pieces (App.module.css); there is no `order` and no positive
+ * tabindex. The decoration, the paw, the stamp and the medal are not focusable, so they can sit anywhere.
  */
 export function App() {
   const {
@@ -84,9 +92,29 @@ export function App() {
     setDimmed(false);
   }
 
-  // After a rewrite the wish input takes focus. It waits for the commit: from the binding card the dialog is still
-  // modal until it closes, and the button that was clicked on the end screen is gone by then.
+  // Result first (A12): a phone with a Grant. The order of these two hooks matters: the move, then scroll and focus. Both
+  // are layout effects, so both run before the passive effect below that focuses the wish input after a rewrite.
+  const phone = useMediaQuery(PHONE_QUERY);
+  const resultFirst = phone && ctx.grant !== null;
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const examplesSlotRef = useRef<HTMLDivElement>(null);
+  const ringSlotRef = useRef<HTMLDivElement>(null);
+  const soundSlotRef = useRef<HTMLDivElement>(null);
   const wishSlotRef = useRef<HTMLDivElement>(null);
+  useResultFirst(resultFirst, { wish: wishSlotRef, examples: examplesSlotRef, ring: ringSlotRef, sound: soundSlotRef });
+  usePhoneFocus({
+    phone,
+    phase: ctx.phase,
+    grantedSeq,
+    showExport: view.showExport,
+    root: layoutRef,
+    wish: wishSlotRef,
+    examples: examplesSlotRef,
+  });
+
+  // After a rewrite the wish input takes focus. It waits for the commit: from the binding card the dialog is still
+  // modal until it closes, and the button that was clicked on the end screen is gone by then. Result first ends with a
+  // rewrite (no Grant), so the layout effect above has moved the wish slot back before this runs.
   const focusWishNext = useRef(false);
   useEffect(() => {
     if (!focusWishNext.current) return;
@@ -111,7 +139,7 @@ export function App() {
   return (
     <main className={styles.page}>
       <PlateFrame>
-        <div className={styles.layout}>
+        <div className={styles.layout} ref={layoutRef} data-result-first={resultFirst ? 'true' : undefined}>
           <div className={styles.decorLayer} aria-hidden="true">
             <Curtain side="left" />
             <Curtain side="right" />
@@ -143,7 +171,8 @@ export function App() {
 
           <LiveRegion text={liveText} seq={liveSeq} />
 
-          {/* From here on, DOM order is the tab order. */}
+          {/* From here on, DOM order is the tab order. The wish slot and the examples slot are moved by ref when result
+              first (use-result-first.ts), so nothing conditional may be rendered right before them. */}
           <div className={styles.wishSlot} ref={wishSlotRef}>
             <WishLine
               text={text}
@@ -162,12 +191,12 @@ export function App() {
             />
           </div>
 
-          <div className={styles.examplesSlot} onKeyDown={handleExamplesKeyDown}>
+          <div className={styles.examplesSlot} ref={examplesSlotRef} onKeyDown={handleExamplesKeyDown}>
             <ExampleCards state={examples} selectedIndex={selectedIndex} dimmed={dimmed} onSelect={selectExample} />
           </div>
 
           {/* Same centre as the paw box, so the desktop ring (a zero-size anchor) surrounds the paw. */}
-          <div className={styles.ringSlot}>
+          <div className={styles.ringSlot} ref={ringSlotRef}>
             <CircleRing
               circles={view.circles}
               curses={ctx.grant?.curses ?? []}
@@ -194,7 +223,7 @@ export function App() {
           </div>
 
           {/* Last in the DOM, shown in a corner. */}
-          <div className={styles.soundSlot} data-slot="sound">
+          <div className={styles.soundSlot} data-slot="sound" ref={soundSlotRef}>
             <SoundToggle sound={sound} />
           </div>
         </div>

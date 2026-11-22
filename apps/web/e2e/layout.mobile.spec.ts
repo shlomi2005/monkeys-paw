@@ -1,7 +1,7 @@
 // Task 48: the mobile project, 390 px wide (Req 2.2, 9.1 to 9.4, 10.5). Only `*.mobile.spec.ts` files run here.
 
 import type { Page } from '@playwright/test';
-import { LONGEST_NARRATION } from './support/fixtures';
+import { LONGEST_NARRATION, WISH_TEXT } from './support/fixtures';
 import {
   boundsOf,
   boxPixels,
@@ -18,7 +18,9 @@ import {
   unionOf,
   width,
 } from './support/layout';
-import { OPEN_IN_KIRO, TAKE_SCROLL } from './support/paw-page';
+import { MAKE_WISH, OPEN_IN_KIRO, REWRITE, STOP, TAKE_SCROLL } from './support/paw-page';
+import type { PawPage } from './support/paw-page';
+import { inVisualOrder, namesOf, walkTabStops } from './support/tab-order';
 import { expect, test } from './support/test';
 import { eventsOf, readTimeline } from './support/timeline';
 
@@ -267,11 +269,12 @@ test('@layout 390x844: a 200 px paw, the stamp under its text, the longest narra
   const landedRects = await plateRects(page);
   const landedStamp = await stampRect(page);
   const landedWish = await rectOf(page, '[data-wish-line]');
+  const landedFirstCurse = await rectOf(page, 'li[data-index="0"]');
 
   await closeAll(paw);
   const rested = await paintSilhouette(page);
   const restedRects = await plateRects(page);
-  const restedWish = await rectOf(page, '[data-wish-line]');
+  const restedFirstCurse = await rectOf(page, 'li[data-index="0"]');
   const union = unionOf([idleSilhouette, curled, rested]);
   const box = union.box;
 
@@ -307,9 +310,452 @@ test('@layout 390x844: a 200 px paw, the stamp under its text, the longest narra
   // (g) The longest narration (260 characters) is shown whole, with no clipping.
   expect((await narrationIsWhole(page)).whole, 'the narration is clipped').toBe(true);
 
-  // (h) After the Grant, the page moves no more: the wish line is where it was when the curses landed.
-  expect(restedWish.y0, 'the wish line did not move when the paw rested').toBeCloseTo(landedWish.y0, 0);
-  expect(landedWish.y0, 'the Grant pushes the wish line down by the narration').toBeGreaterThan(idleWish.y0);
+  // (h) After the Grant, what is above the curse list moves no more: the first curse is where it was when the curses
+  // landed. (The wish line is under the actions now, and the medal and the export buttons grow the page below the list.)
+  expect(restedFirstCurse.y0, 'the first curse did not move when the paw rested').toBeCloseTo(landedFirstCurse.y0, 0);
+  expect(landedWish.y0, 'the Grant puts the wish line under the curses, below where it was').toBeGreaterThan(idleWish.y0);
   const [scroll, client] = await noSidewaysScroll(page);
   expect(scroll, 'no sideways scroll at 390 px').toBeLessThanOrEqual(client);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Result first (paw-web design.md A12, "Mobile" A to C, "Focus order"): on a phone with a Grant the curse list comes
+// directly under the narration, and the wish line and the examples come after the actions, on screen and in the DOM.
+// ---------------------------------------------------------------------------------------------------------------------
+
+const VIEW_HEIGHT = 844;
+const EXAMPLES_LIST = '[aria-label="Example wishes"]';
+const WISH_STOPS = ['input:I wish that', 'button:for… (optional context)', `button:${MAKE_WISH}`];
+const EXAMPLE_STOPS = [
+  'button:Example. Only the owner can delete a project. a team workspace app',
+  'button:Example. Refunds are instant. an online shop',
+  'button:Example. Free for students',
+];
+const OPEN_CIRCLE_STOPS = [
+  'button:Permissions curse, open, click to bind',
+  'button:Time curse, open, click to bind',
+  'button:Abuse curse, open, click to bind',
+  'button:Privacy curse, open, click to bind',
+  'button:Edge input curse, open, click to bind',
+];
+
+/** A box in page coordinates (top, bottom) and in viewport coordinates (vTop, vBottom). */
+interface Placed {
+  readonly top: number;
+  readonly bottom: number;
+  readonly vTop: number;
+  readonly vBottom: number;
+}
+
+async function placedOf(page: Page, selector: string): Promise<Placed> {
+  return page.locator(selector).first().evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { top: rect.top + window.scrollY, bottom: rect.bottom + window.scrollY, vTop: rect.top, vBottom: rect.bottom };
+  });
+}
+
+const scrollY = async (page: Page): Promise<number> => page.evaluate(() => window.scrollY);
+
+/** What has focus, as `tag:name`, or `(body)`. */
+async function activeName(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const element = document.activeElement;
+    if (element === null || element === document.body || element === document.documentElement) return '(body)';
+    const label = element.getAttribute('aria-label');
+    return `${element.tagName.toLowerCase()}:${label ?? (element.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)}`;
+  });
+}
+
+async function expectFocusNotOnBody(page: Page, when: string): Promise<void> {
+  expect(await activeName(page), `focus is on the body ${when}`).not.toBe('(body)');
+}
+
+/** True when `first` comes before `second` in the DOM (the DOM order is the tab order). */
+async function domBefore(page: Page, first: string, second: string): Promise<boolean> {
+  return page.evaluate(
+    ([a, b]) => {
+      const [one, two] = [document.querySelector(a!), document.querySelector(b!)];
+      return one !== null && two !== null && Boolean(one.compareDocumentPosition(two) & Node.DOCUMENT_POSITION_FOLLOWING);
+    },
+    [first, second] as const,
+  );
+}
+
+const WISH_LINE = '[data-wish-line]';
+const RING = '[data-circle-ring]';
+const STATUS_LINE = `${WISH_LINE} [role="status"]`;
+
+/** The Grant has landed on a phone: where everything is, in page and in viewport coordinates. */
+async function expectResultFirst(paw: PawPage): Promise<void> {
+  const { page } = paw;
+  const narration = await placedOf(page, '[data-narration]');
+  const curses: Placed[] = [];
+  for (let index = 0; index < 5; index += 1) curses.push(await placedOf(page, `li[data-index="${index}"]`));
+  const stop = await placedOf(page, '[data-actions] button');
+  const wish = await placedOf(page, WISH_LINE);
+  const examples = await placedOf(page, EXAMPLES_LIST);
+  const first = curses[0]!;
+
+  expect(await scrollY(page), 'the page is at the top after the Grant').toBe(0);
+  expect(first.top, 'page: the first curse starts under the narration').toBeGreaterThanOrEqual(narration.bottom);
+  expect(first.vTop, 'viewport: the first curse starts under the narration').toBeGreaterThanOrEqual(narration.vBottom);
+  expect(first.top, `page: the first curse starts within the first ${VIEW_HEIGHT} px`).toBeLessThan(VIEW_HEIGHT);
+  expect(first.vTop, `viewport: the first curse starts within the first ${VIEW_HEIGHT} px`).toBeLessThan(VIEW_HEIGHT);
+  expect(first.top, 'page: the first curse is above the wish line').toBeLessThan(wish.top);
+  expect(first.vTop, 'viewport: the first curse is above the wish line').toBeLessThan(wish.vTop);
+
+  const chain: [string, Placed][] = [
+    ['curse 1', curses[0]!],
+    ['curse 2', curses[1]!],
+    ['curse 3', curses[2]!],
+    ['curse 4', curses[3]!],
+    ['curse 5', curses[4]!],
+    ['Stop', stop],
+    ['the wish line', wish],
+    ['the examples', examples],
+  ];
+  for (let i = 1; i < chain.length; i += 1) {
+    const [name, box] = chain[i]!;
+    const [previousName, previous] = chain[i - 1]!;
+    expect(box.top, `${name} follows ${previousName}`).toBeGreaterThanOrEqual(previous.bottom - 0.5);
+  }
+
+  // The DOM says the same, so the tab order is the visual order.
+  expect(await domBefore(page, RING, WISH_LINE), 'the circle list is before the wish line in the DOM').toBe(true);
+  expect(await domBefore(page, '[data-actions]', WISH_LINE), 'the actions are before the wish line in the DOM').toBe(true);
+  expect(await domBefore(page, WISH_LINE, EXAMPLES_LIST), 'the wish line is before the examples in the DOM').toBe(true);
+  expect(await domBefore(page, EXAMPLES_LIST, '[data-slot="sound"]'), 'the examples are before the sound toggle').toBe(true);
+}
+
+test('@result-first normal narration: the first curse is on the first screen, under the narration and above the wish line', async ({ paw }) => {
+  test.setTimeout(90_000);
+  await paw.open();
+  await paw.makeWish();
+  await paw.expectCurled(5);
+  await expectResultFirst(paw);
+});
+
+test('@result-first longest narration: the first curse is still on the first screen, and the narration is whole', async ({ paw }) => {
+  test.setTimeout(90_000);
+  const { page } = paw;
+  paw.stub.grantWithNarration(LONGEST_NARRATION);
+  await paw.open();
+  await page.evaluate(() => document.fonts.ready);
+  await paw.makeWish();
+  await paw.expectCurled(5);
+  await page.evaluate(() => document.fonts.ready);
+  expect((await narrationIsWhole(page)).whole, 'the narration is clipped').toBe(true);
+  await expectResultFirst(paw);
+});
+
+test('@result-first a page scrolled to the bottom before the wish is sent with Enter: the Grant brings it back to the top', async ({ paw }) => {
+  test.setTimeout(90_000);
+  const { page } = paw;
+  await paw.open();
+  await paw.wishInput.fill(WISH_TEXT);
+  // Scroll to the bottom with the wish input still focused (without scrolling it back into view), then press Enter.
+  await page.evaluate(() => {
+    document.querySelector<HTMLInputElement>('input[aria-label="I wish that"]')!.focus({ preventScroll: true });
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  await expect.poll(() => scrollY(page), { message: 'the page is scrolled before the wish is sent' }).toBeGreaterThan(50);
+  await expect(paw.wishInput).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(paw.stamp).toHaveText('Granted.');
+  await paw.expectCurled(5);
+  await expectResultFirst(paw);
+});
+
+test('before any Grant the whole wish line, up to "Make the wish", is on the first screen and before the list', async ({ paw }) => {
+  const { page } = paw;
+  await paw.open();
+  const line = await placedOf(page, WISH_LINE);
+  const label = await placedOf(page, `${WISH_LINE} label`);
+  const input = await placedOf(page, `${WISH_LINE} input`);
+  const disclosure = await placedOf(page, `${WISH_LINE} button[aria-expanded]`);
+  const seal = await placedOf(page, `button[aria-label="${MAKE_WISH}"]`);
+
+  expect(line.vTop, 'the wish line starts on the screen').toBeGreaterThanOrEqual(0);
+  for (const [name, box] of [['the label', label], ['the input', input], ['the disclosure', disclosure], ['"Make the wish"', seal]] as const) {
+    expect(box.vTop, `${name} starts on the screen`).toBeGreaterThanOrEqual(0);
+    expect(box.vBottom, `${name} ends within the first ${VIEW_HEIGHT} px`).toBeLessThanOrEqual(VIEW_HEIGHT);
+  }
+  // The order of the wish line itself, top to bottom.
+  expect(input.top).toBeGreaterThanOrEqual(label.bottom - 0.5);
+  expect(disclosure.top).toBeGreaterThanOrEqual(input.bottom - 0.5);
+  expect(seal.top).toBeGreaterThanOrEqual(disclosure.bottom - 0.5);
+
+  // Before the list, on screen and in the DOM. The empty list may have no height, then it is under everything anyway.
+  expect(await domBefore(page, WISH_LINE, EXAMPLES_LIST), 'the wish line is before the examples').toBe(true);
+  expect(await domBefore(page, EXAMPLES_LIST, RING), 'the examples are before the list').toBe(true);
+  expect(await domBefore(page, WISH_LINE, RING), 'the wish line is before the list').toBe(true);
+  const ring = await page.locator(RING).boundingBox();
+  if (ring !== null) expect(ring.y + (await scrollY(page)), 'the list starts under the wish line').toBeGreaterThanOrEqual(seal.bottom - 0.5);
+});
+
+test('Tab order equals visual order: before the Grant, with the curses landed, and at the end', async ({ paw }) => {
+  test.setTimeout(180_000);
+  const { page } = paw;
+  await paw.open();
+
+  // Before the Grant: the wish line, the examples, the sound toggle. No circle is a tab stop yet.
+  const idle = await walkTabStops(page);
+  expect(namesOf(idle), 'tab stops before the Grant').toEqual([...WISH_STOPS, ...EXAMPLE_STOPS, 'button:Sound']);
+  expect(namesOf(inVisualOrder(idle)), 'before the Grant: tab order is visual order').toEqual(namesOf(idle));
+
+  // The curses landed: the five circles and Stop first, then the wish line, the examples and the sound toggle.
+  await paw.makeWish();
+  await paw.expectCurled(5);
+  const landed = await walkTabStops(page);
+  expect(namesOf(landed), 'tab stops with the curses landed').toEqual([
+    ...OPEN_CIRCLE_STOPS,
+    `button:${STOP}`,
+    ...WISH_STOPS,
+    ...EXAMPLE_STOPS,
+    'button:Sound',
+  ]);
+  expect(namesOf(inVisualOrder(landed)), 'curses landed: tab order is visual order').toEqual(namesOf(landed));
+
+  // At the end: the circles, then the export buttons and Rewrite, the wish line, the examples, the sound toggle.
+  await closeAll(paw);
+  const ended = await walkTabStops(page);
+  const endedNames = namesOf(ended);
+  expect(endedNames, 'tab stops at the end').toHaveLength(5 + 3 + WISH_STOPS.length + EXAMPLE_STOPS.length + 1);
+  for (const name of endedNames.slice(0, 5)) expect(name, 'the first five stops are the circles').toMatch(/^button:.+ curse, closed/);
+  expect(endedNames.slice(5)).toEqual([
+    `button:${TAKE_SCROLL}`,
+    `button:${OPEN_IN_KIRO}`,
+    `button:${REWRITE}`,
+    ...WISH_STOPS,
+    ...EXAMPLE_STOPS,
+    'button:Sound',
+  ]);
+  expect(namesOf(inVisualOrder(ended)), 'at the end: tab order is visual order').toEqual(endedNames);
+});
+
+/** Holds back the answer to `POST /api/grant` until `release` is called. */
+async function holdGrant(page: Page): Promise<() => void> {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  // This handler runs before the stub's: `fallback` hands the request on to it once the gate opens.
+  await page.route('**/api/grant', async (route) => {
+    await gate;
+    await route.fallback();
+  });
+  return release;
+}
+
+test('focus is never on the body: while granting, after the Grant, and then Tab reaches the first circle', async ({ paw }) => {
+  test.setTimeout(90_000);
+  const { page } = paw;
+  const release = await holdGrant(page);
+  await paw.open();
+  await paw.wishInput.fill(WISH_TEXT);
+  await page.keyboard.press('Enter');
+
+  // While granting the wish controls are disabled: focus is on the status line.
+  const status = page.locator(STATUS_LINE);
+  await expect(status).toHaveText(/stirs/);
+  await expect(status).toBeFocused();
+  await expectFocusNotOnBody(page, 'while granting');
+  expect(await scrollY(page)).toBe(0);
+
+  release();
+  await expect(paw.stamp).toHaveText('Granted.');
+  const narration = page.locator('[data-narration]');
+  await expect(narration).toBeFocused();
+  await paw.expectCurled(5);
+  await expect(narration).toBeFocused();
+  await expectFocusNotOnBody(page, 'after the Grant');
+  await expect(status, 'the status line is no tab stop afterwards').not.toHaveAttribute('tabindex', /.*/);
+  expect(await scrollY(page)).toBe(0);
+
+  await page.keyboard.press('Tab');
+  await expect(paw.circle(0), 'the next Tab from the narration reaches the first circle').toBeFocused();
+  await expect(narration, 'the narration is not a tab stop').not.toHaveAttribute('tabindex', /.*/);
+});
+
+test('focus is never on the body after a failed Grant: it goes back to the wish input', async ({ paw }) => {
+  test.setTimeout(90_000);
+  const { page, stub } = paw;
+  const release = await holdGrant(page);
+  await paw.open();
+  await paw.wishInput.fill(WISH_TEXT);
+  await page.keyboard.press('Enter');
+  const status = page.locator(STATUS_LINE);
+  await expect(status).toBeFocused();
+
+  stub.behavior.failWith.grant = 503;
+  release();
+  // Over: the wish line is free again and shows the resting message. Only then is "focused" a statement about the end.
+  await expect(paw.wishInput).toBeEnabled();
+  await expect(paw.wishInput).toBeFocused();
+  await expectFocusNotOnBody(page, 'after a failed Grant');
+  await expect(paw.stamp).toHaveCount(0);
+  await expect(status).not.toHaveAttribute('tabindex', /.*/);
+  expect(await domBefore(page, WISH_LINE, RING), 'a failed Grant keeps the usual order').toBe(true);
+});
+
+test('focus is never on the body after a Stop by keyboard: it goes to "Take the scroll"', async ({ paw }) => {
+  test.setTimeout(90_000);
+  const { page } = paw;
+  await paw.open();
+  await paw.wishInput.fill(WISH_TEXT);
+  await page.keyboard.press('Enter');
+  await expect(paw.stamp).toHaveText('Granted.');
+  await paw.expectCurled(5);
+  await expect(page.locator('[data-narration]')).toBeFocused();
+
+  // Five circles, then Stop: six Tab presses from the narration.
+  for (let press = 0; press < 6; press += 1) await page.keyboard.press('Tab');
+  await expect(paw.stopButton).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(paw.stopButton).toHaveCount(0);
+  await expect(page.getByRole('button', { name: TAKE_SCROLL })).toBeFocused();
+  await expectFocusNotOnBody(page, 'after Stop');
+  await expect(paw.medal).toBeVisible();
+});
+
+test('focus is never on the body after Rewrite, from the end screen and from the card', async ({ paw }) => {
+  test.setTimeout(240_000);
+  const { page } = paw;
+  await paw.open();
+  await paw.makeWish();
+  await paw.expectCurled(5);
+  await closeAll(paw);
+
+  // From the end screen, with the keyboard.
+  const rewrite = page.getByRole('button', { name: REWRITE });
+  await rewrite.focus();
+  await page.keyboard.press('Enter');
+  await expect(paw.wishInput).toBeFocused();
+  await expectFocusNotOnBody(page, 'after Rewrite from the end screen');
+  await expect(paw.wishInput).toHaveValue('');
+  expect(await domBefore(page, WISH_LINE, RING), 'after Rewrite the wish line is first again').toBe(true);
+  await expect(page.locator('[data-result-first]')).toHaveCount(0);
+
+  // From the card: a new Grant, a card open, "Rewrite the whole wish".
+  await paw.makeWish();
+  await paw.expectCurled(5);
+  await expect(page.locator('[data-result-first]')).toHaveCount(1);
+  await paw.openCard(1);
+  const inCard = paw.dialog.getByRole('button', { name: 'Rewrite the whole wish' });
+  await inCard.focus();
+  await page.keyboard.press('Enter');
+  await expect(paw.dialog).toBeHidden();
+  await expect(paw.wishInput).toBeFocused();
+  await expectFocusNotOnBody(page, 'after Rewrite from the card');
+  await expect(paw.wishInput).toHaveValue('');
+  expect(await domBefore(page, WISH_LINE, RING), 'after Rewrite from the card the wish line is first again').toBe(true);
+  await expect(page.locator('[data-result-first]')).toHaveCount(0);
+});
+
+test('rotation 390x844 to 844x390 and back keeps the focused wish input, the same element, the same caret', async ({ paw }) => {
+  test.setTimeout(90_000);
+  const { page } = paw;
+  await paw.open();
+  await paw.makeWish();
+  await paw.expectCurled(5);
+  await expect(page.locator('[data-result-first]')).toHaveCount(1);
+
+  // Real focus and a real caret, four characters before the end (Home does not move the caret on every platform).
+  await paw.wishInput.focus();
+  for (let press = 0; press < 4; press += 1) await page.keyboard.press('ArrowLeft');
+  const at = WISH_TEXT.length - 4;
+  await page.evaluate(() => {
+    document.querySelector<HTMLInputElement>('input[aria-label="I wish that"]')!.dataset['probe'] = 'same-element';
+  });
+  const caret = (): Promise<{ probe: string | undefined; start: number | null; end: number | null }> =>
+    page.evaluate(() => {
+      const element = document.activeElement as HTMLInputElement | null;
+      return { probe: element?.dataset?.['probe'], start: element?.selectionStart ?? null, end: element?.selectionEnd ?? null };
+    });
+  expect(await caret(), 'the caret before the rotation').toEqual({ probe: 'same-element', start: at, end: at });
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(page.locator('[data-result-first]')).toHaveCount(0);
+  expect(await domBefore(page, WISH_LINE, RING), 'landscape: the usual order').toBe(true);
+  expect(await caret(), 'landscape: the same element, the same caret').toEqual({ probe: 'same-element', start: at, end: at });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('[data-result-first]')).toHaveCount(1);
+  expect(await domBefore(page, RING, WISH_LINE), 'portrait: result first again').toBe(true);
+  expect(await caret(), 'portrait: the same element, the same caret').toEqual({ probe: 'same-element', start: at, end: at });
+});
+
+test('rotation with a card open: it stays modal, focus stays inside, Escape closes it and focus returns to its circle', async ({ paw }) => {
+  test.setTimeout(90_000);
+  const { page } = paw;
+  await paw.open();
+  await paw.makeWish();
+  await paw.expectCurled(5);
+  await paw.openCard(2);
+
+  const modal = (): Promise<boolean> => paw.dialog.evaluate((dialog) => dialog.matches(':modal'));
+  const focusInside = (): Promise<boolean> => paw.dialog.evaluate((dialog) => dialog.contains(document.activeElement));
+  expect(await modal(), 'modal before the rotation').toBe(true);
+
+  for (const size of [{ width: 844, height: 390 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(size);
+    // The order follows the screen: result first only on the phone.
+    await expect(page.locator('[data-result-first]')).toHaveCount(size.width === 390 ? 1 : 0);
+    await expect(paw.dialog).toBeVisible();
+    expect(await modal(), `still :modal at ${size.width}x${size.height}`).toBe(true);
+    expect(await focusInside(), `focus is still inside the card at ${size.width}x${size.height}`).toBe(true);
+  }
+
+  await page.keyboard.press('Escape');
+  await expect(paw.dialog).toBeHidden();
+  await expect(paw.circle(2), 'focus returns to the circle that opened the card').toBeFocused();
+});
+
+/** Scrolls to the bottom and lists the shown controls that the sound toggle covers. */
+async function coveredByToggle(page: Page): Promise<{ covered: string[]; checked: number }> {
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect
+    .poll(() => page.evaluate(() => Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 1), {
+      message: 'the page is scrolled to the bottom',
+    })
+    .toBe(true);
+  return page.evaluate(() => {
+    const toggle = document.querySelector<HTMLElement>('button[aria-label="Sound"]')!;
+    const box = toggle.getBoundingClientRect();
+    const covered: string[] = [];
+    let checked = 0;
+    for (const element of document.querySelectorAll<HTMLElement>('main button, main input, main textarea, main select, main a[href]')) {
+      if (element === toggle) continue;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      if (rect.width <= 0 || rect.height <= 0 || style.visibility === 'hidden' || style.display === 'none') continue;
+      checked += 1;
+      const across = Math.min(rect.right, box.right) - Math.max(rect.left, box.left);
+      const down = Math.min(rect.bottom, box.bottom) - Math.max(rect.top, box.top);
+      if (across > 0.5 && down > 0.5) {
+        covered.push(`${element.tagName.toLowerCase()}:${element.getAttribute('aria-label') ?? (element.textContent ?? '').trim().slice(0, 30)}`);
+      }
+    }
+    return { covered, checked };
+  });
+}
+
+test('the sound toggle covers no card and no button when the page is scrolled to the bottom', async ({ paw }) => {
+  test.setTimeout(180_000);
+  const { page } = paw;
+  await paw.open();
+  const idle = await coveredByToggle(page);
+  expect(idle.checked, 'controls checked before the Grant').toBeGreaterThanOrEqual(6);
+  expect(idle.covered, 'before the Grant').toEqual([]);
+
+  await paw.makeWish();
+  await paw.expectCurled(5);
+  const landed = await coveredByToggle(page);
+  expect(landed.checked, 'controls checked with the curses landed').toBeGreaterThanOrEqual(12);
+  expect(landed.covered, 'with the curses landed').toEqual([]);
+
+  await closeAll(paw);
+  const ended = await coveredByToggle(page);
+  expect(ended.checked, 'controls checked at the end').toBeGreaterThanOrEqual(14);
+  expect(ended.covered, 'at the end').toEqual([]);
 });

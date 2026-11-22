@@ -16,7 +16,10 @@ const emptyView = (index: CircleIndex): CircleView => ({ index, status: 'empty',
 
 /**
  * The five curse circles. Desktop (768 px and up): a pentagon around the paw centre, three above its centre line and
- * two below. Mobile: a vertical list under the paw. The DOM order is index 0 to 4 in both, so it is also the tab order.
+ * two below. Mobile: a vertical list under the paw, directly under the narration once a Grant has arrived (the wish line
+ * and the examples then sit after the actions, see App.tsx). The DOM order is index 0 to 4 in both, so it is also the
+ * tab order. The ring is never moved in the DOM or remounted: rotating the phone changes only the CSS and where the
+ * wish line and the examples sit.
  *
  * The ring anchors at the centre of its positioned parent, as RayDisc does, so put it in the same box as the paw stage.
  */

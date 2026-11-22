@@ -14,7 +14,7 @@ import type { FakeApi } from './state/paw-session-test-support';
 
 vi.mock('./scene/webgl-support', () => ({ hasWebGL: () => false }));
 
-/** A `matchMedia` for the reduced-motion query only. `set` flips the value and fires the listeners. */
+/** A `matchMedia` that knows the reduced-motion query only. `set` flips the value and fires the listeners. */
 function mockMatchMedia(initial: boolean): { set(reduced: boolean): void } {
   let matches = initial;
   const listeners = new Set<(event: { matches: boolean }) => void>();
@@ -26,7 +26,12 @@ function mockMatchMedia(initial: boolean): { set(reduced: boolean): void } {
     addEventListener: (_type: string, listener: (event: { matches: boolean }) => void) => listeners.add(listener),
     removeEventListener: (_type: string, listener: (event: { matches: boolean }) => void) => listeners.delete(listener),
   };
-  vi.stubGlobal('matchMedia', () => list);
+  // Any other query (the phone query of the page layout) is false: this page is a desktop.
+  vi.stubGlobal('matchMedia', (query: string) =>
+    query === REDUCED_MOTION_QUERY
+      ? list
+      : { matches: false, media: query, addEventListener: () => undefined, removeEventListener: () => undefined },
+  );
   return {
     set(reduced) {
       matches = reduced;
