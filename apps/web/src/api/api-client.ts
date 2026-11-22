@@ -64,7 +64,7 @@ export interface ExportRequest {
 export interface ApiClient {
   getExamples(signal?: AbortSignal): Promise<ApiResult<ExampleEntry[]>>;
   /** `GET /api/live`: does the server grant live wishes here (paw-web Req 13.1)? 5 s timeout. */
-  getLive(signal?: AbortSignal): Promise<ApiResult<{ live: boolean }>>;
+  getLive(signal?: AbortSignal): Promise<ApiResult<{ live: boolean; resting?: boolean }>>;
   /** `adult` is the real state of the 18+ checkbox. The header `X-Paw-Adult-Confirmed: yes` is sent only when it is true. */
   postGrant(wish: GrantRequest, signal?: AbortSignal, adult?: boolean): Promise<ApiResult<{ wish: Wish; grant: Grant }>>;
   postBind(req: BindRequest, signal?: AbortSignal, adult?: boolean): Promise<ApiResult<{ grant: Grant; verdict: Verdict }>>;
@@ -109,7 +109,7 @@ const fail = (
 });
 
 /** The whole body of `GET /api/live`, and nothing else. */
-const LiveResponseSchema = z.object({ live: z.boolean() }).strict();
+const LiveResponseSchema = z.object({ live: z.boolean(), resting: z.boolean().optional() }).strict();
 
 /** The `code` of an error body, when the body is JSON with a string `code`. */
 function codeOf(text: string | undefined): string | undefined {
@@ -278,7 +278,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
 
   return {
     getExamples: (signal) => call<ExampleEntry[]>('examples', undefined, signal),
-    getLive: (signal) => call<{ live: boolean }>('live', undefined, signal),
+    getLive: (signal) => call<{ live: boolean; resting?: boolean }>('live', undefined, signal),
     postGrant: (wish, signal, adult) =>
       call<{ wish: Wish; grant: Grant }>(
         'grant',

@@ -12,6 +12,7 @@ import { GrantedStamp } from './components/GrantedStamp';
 import { IntegrityMedal } from './components/IntegrityMedal';
 import { LiveRegion } from './components/LiveRegion';
 import { PawStateText } from './components/PawStateText';
+import { EXAMPLE_NOTE_MESSAGE } from './api/api-messages';
 import { PlateFrame } from './components/PlateFrame';
 import { RayDisc } from './components/RayDisc';
 import { RewriteButton } from './components/RewriteButton';
@@ -91,6 +92,7 @@ export function App() {
   // From the Grant until Rewrite the machine takes no new wish (A14, Req 13.11). Granting keeps its native disabling.
   const sealed = ctx.phase !== 'idle' && ctx.phase !== 'granting';
   const readyReplay = replayed !== null && isReadyRound(replayed);
+  const exampleNote = readyReplay ? EXAMPLE_NOTE_MESSAGE : undefined;
 
   function typed(): void {
     setSelectedIndex(null);
@@ -159,6 +161,7 @@ export function App() {
 
   return (
     <main className={styles.page}>
+      {exampleNote ? <p className={styles.exampleNote} data-example-note>{exampleNote}</p> : null}
       <PlateFrame>
         <div className={styles.layout} ref={layoutRef} data-result-first={resultFirst ? 'true' : undefined}>
           <div className={styles.decorLayer} aria-hidden="true">
@@ -241,6 +244,7 @@ export function App() {
             liveOnly={replayed !== null && !readyReplay}
             readyClause={view.card === null ? undefined : readyClauseOf(replayed, view.card.curse.id)}
             notice={notice}
+            exampleNote={exampleNote}
             onAccept={(clause) => dispatch({ type: 'bind_submitted', kind: 'ears-clause', clause })}
             onRewrite={rewrite}
             onCancel={() => dispatch({ type: 'card_closed' })}
@@ -249,7 +253,7 @@ export function App() {
           <div className={styles.actions} data-actions>
             <StopButton show={view.showStop} onStop={() => dispatch({ type: 'stop' })} />
             <div className={styles.exportSlot} data-slot="export">
-              <ExportButtons show={view.showExport} wish={ctx.wish} grant={projectGrant(ctx)} api={api} />
+              <ExportButtons show={view.showExport} wish={ctx.wish} grant={projectGrant(ctx)} api={api} note={exampleNote} />
             </div>
             {/* Tab order on the end screen: Take the scroll, Open in Kiro, Rewrite, then the sound toggle. */}
             <RewriteButton show={view.showExport} onRewrite={rewrite} />

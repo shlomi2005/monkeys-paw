@@ -15,7 +15,7 @@ import type { Grant, SpecExport, Wish } from 'paw-core';
 import type { ApiClient } from '../api/api-client';
 import { NETWORK_MESSAGE, SCROLL_LOST_MESSAGE, SCROLL_SAVED_MESSAGE } from '../api/api-messages';
 import { downloadZip } from '../export/download';
-import { buildScrollZip, scrollFileName } from '../export/spec-files';
+import { buildScrollZip, scrollFileName, withExampleNote } from '../export/spec-files';
 import { useStatusLine } from '../hooks/use-status-line';
 import { cx } from './class-names';
 import styles from './ExportButtons.module.css';
@@ -34,9 +34,11 @@ export interface ExportButtonsProps {
   /** `projectGrant(ctx)`: the Grant with each curse's status set from the closed ids. */
   readonly grant: Grant | null;
   readonly api: Pick<ApiClient, 'postExport'>;
+  /** The example note of a ready round: written into both files and shown in the dialog. */
+  readonly note?: string | undefined;
 }
 
-export function ExportButtons({ show, wish, grant, api }: ExportButtonsProps) {
+export function ExportButtons({ show, wish, grant, api, note }: ExportButtonsProps) {
   const [pending, setPending] = useState<Kind | null>(null);
   const [spec, setSpec] = useState<SpecExport | null>(null);
   const [status, say] = useStatusLine();
@@ -81,12 +83,13 @@ export function ExportButtons({ show, wish, grant, api }: ExportButtonsProps) {
       say(result.error.message);
       return;
     }
+    const value = note ? withExampleNote(result.value, note) : result.value;
     if (kind === 'kiro') {
-      setSpec(result.value);
+      setSpec(value);
       return;
     }
     try {
-      downloadZip(buildScrollZip(result.value), scrollFileName(result.value.wishId));
+      downloadZip(buildScrollZip(value), scrollFileName(value.wishId));
       say(SCROLL_SAVED_MESSAGE);
     } catch {
       say(SCROLL_LOST_MESSAGE);
@@ -121,7 +124,7 @@ export function ExportButtons({ show, wish, grant, api }: ExportButtonsProps) {
       <p className={styles.status} role="status" aria-live="polite">
         {status}
       </p>
-      <OpenInKiroDialog spec={spec} wishText={wish?.text ?? ''} onClose={() => setSpec(null)} />
+      <OpenInKiroDialog spec={spec} note={note} wishText={wish?.text ?? ''} onClose={() => setSpec(null)} />
     </div>
   );
 }

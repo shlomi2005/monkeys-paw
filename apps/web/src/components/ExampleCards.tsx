@@ -2,7 +2,6 @@
 // Fed by the session's `ExamplesState`. The region has one fixed height in every state, so loading, ready and
 // unavailable never shift the layout. The parent owns the selection and fills the wish line (task 27).
 
-import { EXAMPLES_SLEEPING_MESSAGE } from '../api/api-messages';
 import type { ExampleEntry, ExamplesState } from '../api/api-schemas';
 import { cx } from './class-names';
 import { ExampleCard } from './ExampleCard';
@@ -24,23 +23,13 @@ const GHOST_CARDS = [0, 1, 2];
 export function ExampleCards({ state, selectedIndex, dimmed, onSelect, locked = false }: ExampleCardsProps) {
   const className = cx(styles.region, dimmed && styles.dimmed);
 
-  if (state.kind === 'loading') {
+  if (state.kind === 'loading' || state.kind === 'unavailable') {
     return (
-      <div className={className} data-state="loading" aria-busy="true">
+      <div className={className} data-state={state.kind} aria-busy={state.kind === 'loading' ? 'true' : undefined}>
         <div className={styles.row} aria-hidden="true">
           {GHOST_CARDS.map((key) => (
             <div key={key} className={cx(styles.item, styles.ghost)} />
           ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (state.kind === 'unavailable') {
-    return (
-      <div className={className} data-state="unavailable">
-        <div className={styles.row}>
-          <p className={cx(styles.item, styles.placeholder)}>{EXAMPLES_SLEEPING_MESSAGE}</p>
         </div>
       </div>
     );

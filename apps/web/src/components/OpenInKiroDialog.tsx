@@ -26,10 +26,11 @@ export interface OpenInKiroDialogProps {
   readonly spec: SpecExport | null;
   /** `wish.text`. The folder name is `monkeys-paw-<slugify(wishText)>`. */
   readonly wishText: string;
+  readonly note?: string | undefined;
   readonly onClose: () => void;
 }
 
-export function OpenInKiroDialog({ spec, wishText, onClose }: OpenInKiroDialogProps) {
+export function OpenInKiroDialog({ spec, wishText, note, onClose }: OpenInKiroDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const isOpen = spec !== null;
   const labelId = useId();
@@ -46,10 +47,10 @@ export function OpenInKiroDialog({ spec, wishText, onClose }: OpenInKiroDialogPr
       ref={dialogRef}
       className={styles.dialog}
       aria-labelledby={isOpen ? labelId : undefined}
-      aria-describedby={isOpen ? describedId : undefined}
+      aria-describedby={isOpen ? (note ? `${describedId}-note ${describedId}` : describedId) : undefined}
     >
       {spec !== null && (
-        <Body spec={spec} wishText={wishText} labelId={labelId} describedId={describedId} onClose={onClose} />
+        <Body spec={spec} wishText={wishText} note={note} labelId={labelId} describedId={describedId} onClose={onClose} />
       )}
     </dialog>
   );
@@ -58,12 +59,13 @@ export function OpenInKiroDialog({ spec, wishText, onClose }: OpenInKiroDialogPr
 interface BodyProps {
   readonly spec: SpecExport;
   readonly wishText: string;
+  readonly note?: string | undefined;
   readonly labelId: string;
   readonly describedId: string;
   readonly onClose: () => void;
 }
 
-function Body({ spec, wishText, labelId, describedId, onClose }: BodyProps) {
+function Body({ spec, wishText, note, labelId, describedId, onClose }: BodyProps) {
   const folder = specFolderName(wishText);
   const command = kiroCommand(folder);
   const [status, say] = useStatusLine();
@@ -98,6 +100,7 @@ function Body({ spec, wishText, labelId, describedId, onClose }: BodyProps) {
       <h2 id={labelId} className={styles.title}>
         Open in Kiro
       </h2>
+      {note ? <p id={`${describedId}-note`}>{note}</p> : null}
 
       <ol id={describedId} className={styles.steps}>
         <li>

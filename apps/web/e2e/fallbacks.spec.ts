@@ -4,9 +4,10 @@
 // The no-WebGL test carries the tag `@no-webgl`. It runs only in the `desktop-no-webgl` project, whose browser is
 // launched with `--disable-3d-apis` (playwright.config.ts). The other tests run in the `desktop` project.
 
-import { EXAMPLES_SLEEPING_MESSAGE, JUDGE_RESTING_MESSAGE, RESTING_MESSAGE } from '../src/api/api-messages';
+import { READY_ROUNDS } from '../src/state/ready-rounds';
+import { EXAMPLE_NOTE_MESSAGE, RESTING_MESSAGE } from '../src/api/api-messages';
 import { CURL_MS, OPEN_MS } from '../src/scene/anim-sampler';
-import { grantFixture, WISH_TEXT } from './support/fixtures';
+import { WISH_TEXT } from './support/fixtures';
 import { clearanceOf, plateRects, rectOf, tagged } from './support/layout';
 import { OPEN_IN_KIRO, REWRITE, TAKE_SCROLL } from './support/paw-page';
 import { expect, test } from './support/test';
@@ -155,29 +156,57 @@ test('no WebGL: the poster stays, the text state shows, and the whole UI works',
   expect(paw.stub.to('bind')).toHaveLength(5);
 });
 
-test('GET /api/examples 503 shows the placeholder and leaves the wish line usable', async ({ paw }) => {
-  test.setTimeout(90_000);
+test('GET /api/examples 503 shows the ready rounds, which play with no tick', async ({ paw }) => {
+  test.setTimeout(120_000);
   const { page, stub } = paw;
   stub.behavior.failWith.examples = 503;
 
   await page.goto('/');
-  const region = page.locator('[data-state="unavailable"]');
-  await expect(region).toBeVisible();
-  await expect(region).toContainText(EXAMPLES_SLEEPING_MESSAGE);
-  await paw.expectScene();
-  expect(stub.to('examples').map((request) => request.status)).toEqual([503]);
-
-  // Not shown as an error: no alert, no example card, and the resting line of the API is not on the page.
+  await expect(page.locator('[data-state="ready"]')).toBeVisible();
+  const cards = page.getByRole('list', { name: 'Example wishes' }).getByRole('button');
+  await expect(cards).toHaveCount(3);
   await expect(page.getByRole('alert')).toHaveCount(0);
-  await expect(page.getByRole('list', { name: 'Example wishes' })).toHaveCount(0);
-  await expect(page.getByText(RESTING_MESSAGE)).toHaveCount(0);
 
-  // The wish line is not blocked.
-  await expect(paw.wishInput).toBeEnabled();
-  await paw.makeWish();
+  await cards.nth(0).click();
+  await paw.seal.click();
+  await expect(paw.adultBox).not.toBeChecked();
   await expect(paw.stamp).toHaveText('Granted.');
-  await paw.expectCurled(5);
-  expect(stub.to('grant')).toHaveLength(1);
+  const note = page.locator('[data-example-note]');
+  await expect(note).toHaveText(EXAMPLE_NOTE_MESSAGE);
+  await expect(note).toBeInViewport();
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(note).toBeInViewport();
+
+  const round = READY_ROUNDS[0];
+  if (round === undefined) throw new Error('no ready round');
+  for (let index = 0; index < round.grant.curses.length; index++) {
+    await paw.openCard(index);
+    await expect(paw.dialog.getByText(EXAMPLE_NOTE_MESSAGE)).toBeVisible();
+    await paw.dialog.getByRole('button', { name: 'Accept this clause' }).click();
+    await expect(paw.dialog).toBeHidden();
+  }
+
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Take the scroll/ }).click()]);
+  const chunks: Buffer[] = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk as Buffer);
+  expect(Buffer.concat(chunks).toString('utf8').split(EXAMPLE_NOTE_MESSAGE)).toHaveLength(3);
+  expect(stub.to('grant')).toHaveLength(0);
+  expect(stub.to('bind')).toHaveLength(0);
+});
+
+test('resting on arrival with a valid list shows the first ready round and sends no grant', async ({ paw }) => {
+  test.setTimeout(90_000);
+  const { page, stub } = paw;
+  stub.behavior.resting = true;
+  await page.goto('/');
+  const round = READY_ROUNDS[0];
+  if (round === undefined) throw new Error('no ready round');
+  const first = page.getByRole('list', { name: 'Example wishes' }).getByRole('button').nth(0);
+  await expect(first).toContainText(round.wish.text);
+  await first.click();
+  await paw.seal.click();
+  await expect(paw.stamp).toHaveText('Granted.');
+  expect(stub.to('grant')).toHaveLength(0);
 });
 
 test('a 503 on grant shows the resting message, then an untouched example replays without a request', async ({ paw }) => {
@@ -207,41 +236,40 @@ test('a 503 on grant shows the resting message, then an untouched example replay
   await expect(paw.stamp).toHaveCount(0);
   expect(stub.to('grant'), 'a typed wish sends no request in examples-only mode').toHaveLength(1);
 
-  // An example that is picked and then edited is a typed wish too.
+  // The ready rounds replace the row. One that is picked and then edited is a typed wish too.
+  const round = READY_ROUNDS[1];
+  const count = round.grant.curses.length;
   const cards = page.getByRole('list', { name: 'Example wishes' }).getByRole('button');
   await cards.nth(1).click();
-  await expect(paw.wishInput).toHaveValue('Refunds are instant');
-  await paw.wishInput.fill('Refunds are instant, mostly');
+  await expect(paw.wishInput).toHaveValue(round.wish.text);
+  await paw.wishInput.fill(`${round.wish.text}, mostly`);
   await page.getByRole('button', { name: 'Make the wish' }).click();
   await expect(message).toBeVisible();
   await expect(paw.stamp).toHaveCount(0);
   expect(stub.to('grant')).toHaveLength(1);
 
-  // An untouched example replays its cached Grant: five curses, no grant request.
+  // An untouched ready round replays its Grant: its curses, no grant request.
   await cards.nth(1).click();
   await expect(cards.nth(1)).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Make the wish' }).click();
   await expect(paw.stamp).toHaveText('Granted.');
-  await expect(page.locator('[data-narration]')).toHaveText(grantFixture(5, 'example-2').narration);
-  await paw.expectCurled(5);
+  await expect(page.locator('[data-narration]')).toHaveText(round.grant.narration);
+  await paw.expectCurled(count);
   await expect(paw.stopButton).toBeVisible();
   expect(stub.to('grant'), 'the replay sends no POST /api/grant').toHaveLength(1);
 
-  // The Judge rests too: the card opens, Accept does nothing, and no bind request leaves the page.
+  // The Judge's line is the example note: the card opens, Accept is live, and Cancel sends no bind request.
   await paw.openCard(0);
-  await expect(paw.dialog.getByText(JUDGE_RESTING_MESSAGE)).toBeVisible();
-  await expect(paw.dialog.getByRole('button', { name: 'Accept this clause' })).toHaveAttribute('aria-disabled', 'true');
-  // Playwright does not click an aria-disabled button by itself: force it, as a user who ignores the state would.
-  await paw.dialog.getByRole('button', { name: 'Accept this clause' }).click({ force: true });
-  await expect(paw.dialog).toBeVisible();
-  await expect(paw.slot(0)).toHaveAttribute('data-status', 'open');
-  expect(stub.to('bind')).toHaveLength(0);
+  await expect(paw.dialog.getByText(EXAMPLE_NOTE_MESSAGE)).toBeVisible();
+  await expect(paw.dialog.getByRole('button', { name: 'Accept this clause' })).not.toHaveAttribute('aria-disabled', 'true');
   await paw.dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(paw.dialog).toBeHidden();
+  await expect(paw.slot(0)).toHaveAttribute('data-status', 'open');
+  expect(stub.to('bind')).toHaveLength(0);
 
   // Stop still ends the round, with the medal and no closed curse.
   await paw.stopButton.click();
-  await expect(paw.medal).toContainText('Integrity 0/5: 0 closed, 5 open');
+  await expect(paw.medal).toContainText(`Integrity 0/5: 0 closed, ${count} open`);
   expect(stub.to('grant')).toHaveLength(1);
   expect(stub.to('bind')).toHaveLength(0);
 });

@@ -62,6 +62,12 @@
   --poster-size: var(--paw-size);
 }
 
+@media (max-width: 767px) and (max-height: 700px) {
+  :root {
+    --paw-size: clamp(150px, 46vw, 172px);
+  }
+}
+
 /* Base size: 16 px under 768 px, 18 px from 768 px. max() keeps these as floors and still honours a larger browser setting. */
 :root {
   font-size: max(16px, 100%);
@@ -110,4 +116,8 @@ body {
 :focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring-color);
   outline-offset: var(--focus-ring-offset);
+}
+
+:root:has([data-example-note]) {
+  scroll-padding-bottom: 6rem;
 }

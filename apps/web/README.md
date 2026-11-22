@@ -91,4 +91,4 @@ The app keeps one item in the browser: `localStorage["pawSoundEnabled"]`, the so
 The page asks `GET /api/live` once. Where live wishes are offered, a live wish needs the unticked "I am 18 or older"
 box, kept in memory only and sent as the `X-Paw-Adult-Confirmed` header. It is not proof of age. Where they are not,
 the box is gone and the example row shows three ready rounds (`src/state/ready-rounds.ts`): written in advance, no model,
-no `/api/grant` or `/api/bind`, each with its clauses and verdicts, ready to export.
+no `/api/grant` or `/api/bind`, each with its clauses and verdicts, ready to export. They also stand in when `/api/examples` fails or is empty, or when `/api/live` says `resting`. A note says so on screen and in the export.

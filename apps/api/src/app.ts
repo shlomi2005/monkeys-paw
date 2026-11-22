@@ -101,7 +101,7 @@ export function createApp(deps: AppDeps): Hono {
   };
 
   createHealthRoute(app, globalState, budget, () => model.available, clock);
-  createLiveRoute(app, gate);
+  createLiveRoute(app, gate, () => !isModelCallAllowed(getCurrentMode(model.available, globalState, budget, clock())));
   createGrantRoute(app, createClient);
   createBindRoute(app, createClient);
   createExportRoute(app);

@@ -8,6 +8,7 @@ import {
   NO_LIVE_WISH_MESSAGE,
   OUTSIDE_NOTE_MESSAGE,
   RESTING_MESSAGE,
+  EXAMPLE_NOTE_MESSAGE,
 } from '../api/api-messages';
 import type { ExampleEntry } from '../api/api-schemas';
 import { sampleWish, withCurseStatus } from '../api/api-test-support';
@@ -381,5 +382,56 @@ describe('storage', () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('the ready rounds stand in for the examples', () => {
+  it.each([
+    ['examples 503', (api: FakeApi) => api.getExamples.mockResolvedValue(RESTING)],
+    ['examples empty', (api: FakeApi) => api.getExamples.mockResolvedValue(ok([]))],
+    [
+      'live and resting with a valid list',
+      (api: FakeApi) => {
+        api.getExamples.mockResolvedValue(ok([plain()]));
+        api.getLive.mockResolvedValue(ok({ live: true, resting: true }));
+      },
+    ],
+  ])('%s: the list is the ready rounds, and a ready round replays with the note and no request', async (_title, arrange) => {
+    const api = fakeApi();
+    arrange(api);
+    const r = rig(api, { adult: false });
+    r.session.start();
+    await settle();
+    expect(snap(r).examples).toEqual({ kind: 'ready', entries: READY_ROUNDS });
+    const texts: string[] = [];
+    r.session.subscribe(() => {
+      const text = snap(r).liveText;
+      if (text && texts[texts.length - 1] !== text) texts.push(text);
+    });
+    r.session.submitWish(wishOf(READY));
+    expect(snap(r).replayed).toBe(READY);
+    expect(api.postGrant).toHaveBeenCalledTimes(0);
+    expect(api.postBind).toHaveBeenCalledTimes(0);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(texts.filter((text) => text === EXAMPLE_NOTE_MESSAGE)).toEqual([EXAMPLE_NOTE_MESSAGE]);
+  });
+
+  it('a live grant with the tick never announces the example note', async () => {
+    const api = fakeApi();
+    api.getExamples.mockResolvedValue(ok([plain()]));
+    api.getLive.mockResolvedValue(ok({ live: true }));
+    api.postGrant.mockResolvedValue(failure('outside', 'Not from here.', 403));
+    const r = rig(api, { adult: true });
+    r.session.start();
+    await settle();
+    const texts: string[] = [];
+    r.session.subscribe(() => {
+      const text = snap(r).liveText;
+      if (text) texts.push(text);
+    });
+    r.session.submitWish({ text: 'A wish of my own', context: '' });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(api.postGrant).toHaveBeenCalledTimes(1);
+    expect(texts).not.toContain(EXAMPLE_NOTE_MESSAGE);
   });
 });

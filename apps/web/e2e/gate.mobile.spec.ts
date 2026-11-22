@@ -7,6 +7,7 @@ import { expect, test } from './support/test';
 const SIZES = [
   { width: 390, height: 844 },
   { width: 360, height: 740 },
+  { width: 375, height: 667 },
 ] as const;
 
 test('(a) the confirmation screen on a phone', async ({ paw }) => {
@@ -45,7 +46,12 @@ for (const size of SIZES) {
     const seal = await paw.seal.boundingBox();
     const disclosure = await page.getByRole('button', { name: 'for… (optional context)' }).boundingBox();
     expect(box!.y).toBeGreaterThanOrEqual(disclosure!.y + disclosure!.height - 0.5);
-    expect(box!.y + box!.height).toBeLessThanOrEqual(seal!.y + 0.5);
+    if (size.height > 700) {
+      expect(box!.y + box!.height).toBeLessThanOrEqual(seal!.y + 0.5);
+    } else {
+      // On a small phone the box and the seal share a row.
+      expect(box!.y + box!.height).toBeGreaterThan(seal!.y);
+    }
 
     await paw.adultTarget.tap();
     await expect(paw.adultBox).toBeChecked();
@@ -68,3 +74,12 @@ for (const size of SIZES) {
     expect(scrollWidth, 'no sideways scroll').toBeLessThanOrEqual(clientWidth);
   });
 }
+
+test('(f) the seal ends on the first screen at 375x667 with reduced motion', async ({ paw }) => {
+  const { page } = paw;
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 375, height: 667 });
+  await paw.open();
+  await expect(paw.adultBox).toBeVisible();
+  expect(await sealBottom(paw)).toBeLessThanOrEqual(667);
+});

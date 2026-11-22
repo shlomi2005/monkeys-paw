@@ -234,3 +234,17 @@ describe('the outside screen', () => {
     expect(screen.getAllByRole('button', { name: /^Example\./ })).toHaveLength(3);
   });
 });
+
+describe('the example note', () => {
+  it('is absent before a Grant and after a live Grant', async () => {
+    const api = newApi();
+    renderApp(api);
+    expect(document.querySelector('[data-example-note]')).toBeNull();
+    type('A wish of my own');
+    await waitFor(() => expect(box().disabled).toBe(false));
+    fireEvent.click(box());
+    fireEvent.click(seal());
+    await waitFor(() => expect(api.postGrant).toHaveBeenCalledTimes(1));
+    expect(document.querySelector('[data-example-note]')).toBeNull();
+  });
+});

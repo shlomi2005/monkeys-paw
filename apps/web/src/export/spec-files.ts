@@ -39,3 +39,16 @@ export function kiroCommand(folder: string): string {
 export function buildFolderZip(folder: string, spec: SpecExport, clock: () => Date = now): Uint8Array {
   return buildZip(filesOf(spec, `${folder}/`), clock);
 }
+
+/** Puts the example note as a quoted paragraph right under each file's title (or at the top). Pure. */
+export function withExampleNote(spec: SpecExport, note: string): SpecExport {
+  const put = (md: string): string => {
+    const lines = md.split('\n');
+    const at = lines.findIndex((line) => line.startsWith('# '));
+    if (at < 0) return `> ${note}\n\n${md}`;
+    const after = lines[at + 1];
+    lines.splice(at + 1, 0, '', `> ${note}`, ...(after === undefined || after === '' ? [] : ['']));
+    return lines.join('\n');
+  };
+  return { ...spec, requirementsMd: put(spec.requirementsMd), propertiesMd: put(spec.propertiesMd) };
+}

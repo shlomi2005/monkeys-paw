@@ -4,7 +4,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type { Grant } from 'paw-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EXAMPLES_SLEEPING_MESSAGE } from '../api/api-messages';
 import type { ExampleEntry, ExamplesState } from '../api/api-schemas';
 import { declarationsFor, parseCss, readText } from '../styles/css-test-support';
 import { ExampleCards } from './ExampleCards';
@@ -76,9 +75,9 @@ describe('loading', () => {
 });
 
 describe('unavailable', () => {
-  it('shows one placeholder card that is text, not a button and not an error', () => {
+  it('renders like loading: no button and no text, not busy', () => {
     setup({ kind: 'unavailable' });
-    expect(screen.getByText(EXAMPLES_SLEEPING_MESSAGE)).toBeTruthy();
+    expect(document.querySelector('[data-state="unavailable"]')?.textContent).toBe('');
     expect(screen.queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryByRole('alert')).toBeNull();
   });

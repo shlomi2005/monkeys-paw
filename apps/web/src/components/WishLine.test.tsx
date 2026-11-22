@@ -333,6 +333,7 @@ describe('stylesheet', () => {
       "'prefix' 'wish' 'note' 'message' 'context' 'adult' 'seal' 'status'",
       "'prefix wish seal' 'note note note' 'message message message' 'context context adult' 'status status status'",
       "'prefix wish adult seal' 'note note note note' 'message message message message' 'context context context context' 'status status status status'",
+      "'prefix prefix' 'wish wish' 'note note' 'message message' 'context context' 'adult seal' 'status status'",
     ]);
     const note = declarationsFor(css, '.note', null);
     expect(note['grid-area']).toBe('note');

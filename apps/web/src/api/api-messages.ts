@@ -84,8 +84,9 @@ export const JUDGE_LIVE_ONLY_MESSAGE = 'The Judge weighs only live wishes.';
 /** Status text on the wish line while a Grant is on its way. */
 export const PAW_STIRS_MESSAGE = 'The Paw stirs…';
 
-/** Placeholder card when `GET /api/examples` is not available (Req 3.7). Not an error. */
-export const EXAMPLES_SLEEPING_MESSAGE = 'The examples are sleeping. Write your own wish.';
+/** The fixed note shown and announced while a ready round plays (paw-web Req 13.12). */
+export const EXAMPLE_NOTE_MESSAGE =
+  'The paw recites an example. Its curses and verdicts were written in advance. No live model is judging.';
 
 /** Status line in the binding card while the Judge weighs a clause (paw-web Req 4.3). */
 export const JUDGE_STIRS_MESSAGE = 'The Judge stirs…';

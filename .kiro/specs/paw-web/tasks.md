@@ -360,3 +360,5 @@ Design: A13, A14, "Live gate and ready rounds", "Seal after the Grant"; Requirem
   Done: ran apps/web `vitest run` (91 files, 1400 tests), `typecheck` and `lint`, all clean; the new e2e specs are written, not run.
 - [x] 57. End to end (`apps/web/e2e`, API stubbed with `page.route`): the open screen (confirmation, header sent, no header on examples and export, the inert seal after the Grant and Rewrite) and the outside screen (no checkbox, ready round played through verdicts, medal and export with no grant or bind request). Write the specs; the reviewer runs them once. (Req 13)
   Done: ran apps/web `vitest run` (91 files, 1400 tests), `typecheck` and `lint`, all clean; the new e2e specs are written, not run.
+- [x] 58. Ready rounds as the fallback, the example note, and the 375×667 phone (Req 3.7, 13.7, 13.10, 13.12; paw-api 14.8).
+  Done: typecheck and the touched test files; e2e and api tests written, not run.

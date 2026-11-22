@@ -472,7 +472,7 @@ to improve its products and human reviewers may read it.
    to those who confirm they are 18 or older." A refusal costs 0, reserves nothing, makes no model call and does not
    count against the IP.
 8. **THE SYSTEM SHALL** serve `GET /api/live` and answer 200 `{ "live": boolean }`, `true` only when the country is
-   allowed. It ignores age, budget and mode, sets `cache-control: no-store`, makes no model call and counts nothing.
+   allowed, plus `"resting": true` when it is allowed and the model cannot be called (mode or budget). It ignores age, sets `cache-control: no-store`, makes no model call and counts nothing.
 9. **THE SYSTEM SHALL NOT** gate or change `/api/examples`, `/api/export` and `/api/health`.
 10. **THE SYSTEM SHALL** have `createApp` take the gate config; **WHEN** it is omitted the config is the free tier with
     no country header, so the gate fails closed. `server.ts` reads the environment. The eval CLI is an operator tool, not

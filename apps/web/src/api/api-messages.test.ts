@@ -18,7 +18,9 @@ describe('api-messages lines', () => {
   it('uses the wish line and example lines', () => {
     expect(messages.EMPTY_WISH_MESSAGE).toBe('The paw waits for a wish. Write one first.');
     expect(messages.PAW_STIRS_MESSAGE).toBe('The Paw stirs…');
-    expect(messages.EXAMPLES_SLEEPING_MESSAGE).toBe('The examples are sleeping. Write your own wish.');
+    expect(messages.EXAMPLE_NOTE_MESSAGE).toBe(
+      'The paw recites an example. Its curses and verdicts were written in advance. No live model is judging.',
+    );
   });
 
   it('uses the binding card lines', () => {

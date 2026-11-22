@@ -1,6 +1,7 @@
 // Session runner: aborts, scene hand-off, examples and examples-only play (A9).
 // Fake ApiClient, fake timers, no network.
 
+import { READY_ROUNDS } from './ready-rounds';
 import type { Grant } from 'paw-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiResult } from '../api/api-errors';
@@ -231,26 +232,26 @@ describe('examples', () => {
     expect(api.getExamples).toHaveBeenCalledTimes(1);
   });
 
-  it('is unavailable on a 503, and that is not shown as an error', async () => {
+  it('is the ready rounds on a 503, and that is not shown as an error', async () => {
     const api = fakeApi();
     api.getExamples.mockResolvedValue(RESTING);
     const r = rig(api);
     r.session.start();
     await flush();
     const snap = r.session.getSnapshot();
-    expect(snap.examples).toEqual({ kind: 'unavailable' });
+    expect(snap.examples).toEqual({ kind: 'ready', entries: READY_ROUNDS });
     expect(snap.notice).toBeNull();
     expect(snap.examplesOnly).toBe(false);
     expect(snap.liveText).toBe('');
   });
 
-  it('is unavailable on any other error', async () => {
+  it('is the ready rounds on any other error', async () => {
     const api = fakeApi();
     api.getExamples.mockResolvedValue(failure('network', 'The line to the paw is cut.'));
     const r = rig(api);
     r.session.start();
     await flush();
-    expect(r.session.getSnapshot().examples).toEqual({ kind: 'unavailable' });
+    expect(r.session.getSnapshot().examples).toEqual({ kind: 'ready', entries: READY_ROUNDS });
   });
 
   it('a selected example calls the API as usual while the paw is awake', async () => {

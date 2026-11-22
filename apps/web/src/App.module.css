@@ -410,3 +410,28 @@
     margin-bottom: 0.75rem;
   }
 }
+
+.exampleNote {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  margin: 0;
+  padding: 0.25rem 1rem max(0.25rem, env(safe-area-inset-bottom));
+  font: 1rem/1.35 var(--font-body);
+  text-align: center;
+  color: var(--ink);
+  background: var(--parchment);
+  border-top: 2px solid var(--ink);
+}
+
+.page:has(> .exampleNote) {
+  padding-bottom: 6rem;
+}
+
+@media (min-width: 768px) {
+  .page:has(> .exampleNote) {
+    padding-bottom: 3rem;
+  }
+}

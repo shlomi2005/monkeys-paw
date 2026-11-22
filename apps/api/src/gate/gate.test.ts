@@ -608,11 +608,11 @@ describe('GET /api/live (Req 14.8)', () => {
     expect(await (await get(build(FREE).app, { 'x-test-country': 'FR' })).json()).toEqual({ live: false });
   });
 
-  it('ignores mode and budget, calls no model and counts nothing', async () => {
+  it('tells resting from mode and budget, calls no model and counts nothing', async () => {
     const model = new FakeMeteredModel({ available: false, answer });
     const { app } = build(FREE, { model, budget: { dailyBudgetCents: 0, perIpLimit: 1 } });
     for (let i = 0; i < 5; i++) {
-      expect(await (await get(app, { 'x-test-country': 'US' })).json()).toEqual({ live: true });
+      expect(await (await get(app, { 'x-test-country': 'US' })).json()).toEqual({ live: true, resting: true });
     }
     expect(model.calls).toBe(0);
     await expectNothingSpentOrReserved(app);

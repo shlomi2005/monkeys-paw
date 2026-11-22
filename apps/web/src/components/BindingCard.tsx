@@ -31,6 +31,8 @@ export interface BindingCardProps {
   readonly readyClause?: string | undefined;
   /** The session's in-character line, shown inside the card as text only. */
   readonly notice: Notice | null;
+  /** The example note of a ready round. First child of the described block. */
+  readonly exampleNote?: string | undefined;
   /** A non-blank clause, trimmed. The parent sends `bind_submitted` with kind `ears-clause`. */
   readonly onAccept: (clause: string) => void;
   /** The parent sends `rewrite`. */
@@ -39,7 +41,7 @@ export interface BindingCardProps {
   readonly onCancel: () => void;
 }
 
-export function BindingCard({ card, judgeResting, liveOnly = false, readyClause, notice, onAccept, onRewrite, onCancel }: BindingCardProps) {
+export function BindingCard({ card, judgeResting, liveOnly = false, readyClause, notice, exampleNote, onAccept, onRewrite, onCancel }: BindingCardProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const isOpen = card !== null;
   const judging = card?.judging ?? false;
@@ -71,6 +73,7 @@ export function BindingCard({ card, judgeResting, liveOnly = false, readyClause,
           card={card}
           labelId={labelId}
           describedId={describedId}
+          exampleNote={exampleNote}
           judgeResting={judgeResting}
           liveOnly={liveOnly}
           readyClause={readyClause}
@@ -98,6 +101,7 @@ function CardBody({
   liveOnly = false,
   readyClause,
   notice,
+  exampleNote,
   onAccept,
   onRewrite,
   onCancel,
@@ -140,6 +144,7 @@ function CardBody({
       </h2>
 
       <div id={describedId} className={styles.described}>
+        {exampleNote ? <p className={styles.resting}>{exampleNote}</p> : null}
         <p className={styles.story}>{curse.story}</p>
         <blockquote className={styles.loophole}>{curse.loophole}</blockquote>
       </div>

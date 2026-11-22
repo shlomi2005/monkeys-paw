@@ -113,7 +113,7 @@ curl/open animations.
    `GET /api/examples`; outside the live region, the three ready rounds of Requirement 13.7.
 5. **EACH EXAMPLE CARD:** wish snippet (~50 chars, ellipsis), context snippet, "Example" label.
 6. **CLICK EXAMPLE:** populate input, highlight card (border glow). Modify text → highlight clears.
-7. **EXAMPLES NOT READY (503):** show placeholder, allow user wish, no block.
+7. **EXAMPLES NOT READY (503):** show the three ready rounds of Requirement 13.7 (no placeholder), allow user wish, no block.
 8. **KEYBOARD:** example cards focusable, Enter to select.
 9. **WISH PRIVACY LINE:** near the wish input, one short note in the page's voice (tone.md: dry, eerie, short). Unless
    live wishes are outside (Requirement 13.6), its text is "Wishes and clauses go to Google's Gemini. Google may use them
@@ -356,7 +356,7 @@ or proof of age.
 6. **OUTSIDE:** there is no checkbox, and the note of 3.9 is replaced by "The paw grants no live wishes where you stand.
    Its examples still play the full round." The line is announced. A typed or edited wish sends nothing and shows "No
    live wishes here. Choose an example."
-7. **READY ROUNDS:** outside, the example row shows three built-in ready rounds (`src/state/ready-rounds.ts`) and not
+7. **READY ROUNDS:** the example row shows the ready rounds in three cases: outside, examples-only play (the paw is resting, or `GET /api/live` says `resting: true`), and when `/api/examples` fails or is empty. It shows three built-in ready rounds (`src/state/ready-rounds.ts`) and not
    `/api/examples`, whose cache holds no verdicts. Each is written in advance, with no model: a wish from
    `docs/golden-wishes.json`, a Grant of 3 to 5 curses, and on every curse a closing EARS clause (`binding`) and its
    Judge verdict with reason and property (`verdict`). A ready round works with no `/api/grant` and no `/api/bind`.
@@ -369,9 +369,10 @@ or proof of age.
    `aria-disabled` with "The Judge weighs only live wishes." (while resting, the A9 line stays). Export still uses
    `/api/export`, which needs no gate.
 10. **LAYOUT:** at 390×844 the checkbox and everything above the seal's bottom edge sit within the first 844 px, and at
-    360×740 within 740 px if possible. From 1024 px the checkbox sits beside the seal, in the wish row; from 768 to 1023 px it shares the "for…" row. The plate does not grow in either.
+    360×740 within 740 px if possible, and at 375×667 the box and the seal share a row and the seal ends within 667 px. From 1024 px the checkbox sits beside the seal, in the wish row; from 768 to 1023 px it shares the "for…" row. The plate does not grow in either.
 11. **SEAL AFTER THE GRANT:** the machine accepts a wish only when idle, so from the Grant until Rewrite the seal has no
     red fill and no hover, is `aria-disabled`, stays focusable and is described by a visible "Granted already. Rewrite to
     wish again." The inputs are `readOnly`, and the checkbox and the example cards are `aria-disabled` and do nothing.
     Click, Space or Enter sends no request and changes no state. While granting, the controls stay natively disabled.
+12. **EXAMPLE NOTE:** while a ready round plays, a fixed note says "The paw recites an example. Its curses and verdicts were written in advance. No live model is judging." It is announced, shown in the binding card and the Open in Kiro dialog, and written as a quote under the title of both exported files.
 

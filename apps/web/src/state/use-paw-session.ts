@@ -31,6 +31,7 @@ import type { PawContext, PawEffect, PawEvent, Transition } from './paw-machine-
 import { selectView } from './paw-selectors';
 import type { PawView } from './paw-selectors';
 import { READY_ROUNDS, isReadyRound } from './ready-rounds';
+import { EXAMPLE_NOTE_MESSAGE } from '../api/api-messages';
 import { createSceneBridge, doneEventOf } from './scene-bridge';
 import type { SceneBridgeHost } from './scene-bridge';
 
@@ -67,8 +68,8 @@ export type LiveState = 'unknown' | 'open' | 'outside';
 /** What `submitWish` did. Only `adult-required` asks the UI to show the age alert and focus the checkbox. */
 export type SubmitOutcome = 'ignored' | 'replayed' | 'outside' | 'resting' | 'adult-required' | 'sent';
 
-/** The examples shown while live wishes are outside: the three ready rounds, whatever `/api/examples` said. */
-const OUTSIDE_EXAMPLES: ExamplesState = { kind: 'ready', entries: READY_ROUNDS };
+/** The examples shown when live wishes are outside, the examples are unavailable or empty, or the paw rests: the ready rounds. */
+const READY_EXAMPLES: ExamplesState = { kind: 'ready', entries: READY_ROUNDS };
 
 /** What the UI hands over when the user makes a wish. */
 export interface SubmitWishInput {
@@ -242,7 +243,13 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
       viewCtx = ctx;
       view = selectView(ctx);
     }
-    examples = live === 'outside' ? OUTSIDE_EXAMPLES : stored;
+    examples =
+      live === 'outside' ||
+      examplesOnly ||
+      stored.kind === 'unavailable' ||
+      (stored.kind === 'ready' && stored.entries.length === 0)
+        ? READY_EXAMPLES
+        : stored;
     snapshot = { ctx, view, examples, notice, examplesOnly, liveText, grantedSeq, liveSeq, live, adultConfirmed, replayed };
     for (const listener of [...listeners]) listener();
   }
@@ -349,6 +356,7 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
     liveProbed = true;
     // A failure leaves `unknown`: the server still decides. `outside` is sticky, so a late `true` changes nothing.
     if (result.ok) {
+      if (result.value.resting === true) examplesOnly = true;
       if (!result.value.live) becomeOutside();
       else if (live === 'unknown') live = 'open';
     }
@@ -499,6 +507,10 @@ export function createPawSession(options: PawSessionOptions): PawSessionRunner {
       offline: true,
     });
     enqueue({ event: { type: 'grant_received', wish, grant: normalizeGrant(grant) }, offline: true });
+    if (isReadyRound(entry) && ctx.phase !== 'idle') {
+      announce(EXAMPLE_NOTE_MESSAGE);
+      emit();
+    }
   }
 
   function say(text: string): void {

@@ -45,6 +45,8 @@ export interface StubBehavior {
   examples: ExamplesResponse;
   /** `GET /api/live`: `true` and `false` answer `{ live }`, `null` answers 500. The default is `true`. */
   live: boolean | null;
+  /** When true, the live answer adds `resting: true` (the server cannot call the model). The default is false. */
+  resting: boolean;
   /** When true, grant and bind answer 403 `live_region_unavailable` (the server's region check says no). */
   refuseRegion: boolean;
   /** Body of `POST /api/grant`. */
@@ -88,6 +90,7 @@ export async function installStubApi(page: Page, appOrigin: string): Promise<Stu
   const behavior: StubBehavior = {
     examples: examplesFixture(),
     live: true,
+    resting: false,
     refuseRegion: false,
     grant: grantResponseFixture(5),
     failWith: {},
@@ -143,7 +146,7 @@ export async function installStubApi(page: Page, appOrigin: string): Promise<Stu
       case 'live':
         return behavior.live === null
           ? answer(route, endpoint, 500, { message: 'The paw stumbles.' }, full, text)
-          : answer(route, endpoint, 200, { live: behavior.live }, full, text);
+          : answer(route, endpoint, 200, behavior.resting ? { live: behavior.live, resting: true } : { live: behavior.live }, full, text);
       case 'grant': {
         const wish = jsonBody(text) as { wish?: { text?: unknown } } | null;
         if (typeof wish?.wish?.text !== 'string' || wish.wish.text.trim() === '') {

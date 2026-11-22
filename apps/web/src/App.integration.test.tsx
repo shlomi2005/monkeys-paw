@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // The whole page in poster mode (no scene attached), inside StrictMode, against a fake ApiClient. No network.
 
+import { READY_ROUNDS } from './state/ready-rounds';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +13,7 @@ import {
   sampleWish,
   withCurseStatus,
 } from './api/api-test-support';
-import { RESTING_MESSAGE } from './api/api-messages';
+import { RESTING_MESSAGE, EXAMPLE_NOTE_MESSAGE } from './api/api-messages';
 import { App } from './App';
 import { readText } from './styles/css-test-support';
 import { SessionProvider } from './state/SessionProvider';
@@ -273,7 +274,7 @@ describe('App: wish line and examples', () => {
     expect(card.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('examples-only play: an untouched example replays from its cache, an edited one gets the resting line', async () => {
+  it('examples-only play: the ready rounds replace the row, an untouched one replays, an edited one gets the resting line', async () => {
     const api = newApi();
     api.postGrant.mockImplementationOnce(() => Promise.resolve(RESTING));
     renderApp(api);
@@ -285,28 +286,34 @@ describe('App: wish line and examples', () => {
     await waitFor(() => expect(screen.getAllByText(RESTING_MESSAGE).length).toBeGreaterThan(0));
     expect(api.postGrant).toHaveBeenCalledTimes(1);
 
-    // An edited example is not an example any more.
-    fireEvent.click(screen.getByRole('button', { name: EXAMPLE_NAME }));
-    await typeWish(`${EXAMPLE_TEXT} today`);
+    // The ready rounds replace the row. An edited one is not an example any more.
+    const row = () => within(screen.getByRole('list', { name: 'Example wishes' })).getAllByRole('button');
+    const ready = READY_ROUNDS[0];
+    await waitFor(() => expect(row()[0]).toBeTruthy());
+    fireEvent.click(row()[0]);
+    await typeWish(`${ready.wish.text} today`);
     tickAdult();
     fireEvent.click(makeButton());
     expect(api.postGrant).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: /curse, open/ })).toBeNull();
 
-    // The untouched example plays, with no API call.
-    fireEvent.click(screen.getByRole('button', { name: EXAMPLE_NAME }));
+    // The untouched ready round plays, with no API call.
+    fireEvent.click(row()[0]);
     tickAdult();
     fireEvent.click(makeButton());
-    await waitFor(() => expect(circle('Permissions curse, open, click to bind')).toBeTruthy());
+    const openCurses = () => screen.getAllByRole('button', { name: /curse, open, click to bind/ });
+    await waitFor(() => expect(openCurses().length).toBeGreaterThan(0));
     expect(api.postGrant).toHaveBeenCalledTimes(1);
 
-    // The Judge rests too: Accept is disabled and no bind request is sent.
-    fireEvent.click(circle('Permissions curse, open, click to bind'));
+    // The Judge's line is the example note, Accept works as a button and sends nothing.
+    fireEvent.click(openCurses()[0]);
     await waitFor(() => expect(dialogOpen()).toBe(true));
-    await waitFor(() =>
-      expect(within(dialog()).getByRole('button', { name: 'Accept this clause' }).getAttribute('aria-disabled')).toBe('true'),
-    );
+    expect(within(dialog()).getByText(EXAMPLE_NOTE_MESSAGE)).toBeTruthy();
+    const accept = within(dialog()).getByRole('button', { name: 'Accept this clause' });
+    expect(accept.getAttribute('aria-disabled')).toBe('false');
+    fireEvent.click(accept);
     expect(api.postBind).not.toHaveBeenCalled();
+    expect(api.postGrant).toHaveBeenCalledTimes(1);
   });
 });
 
