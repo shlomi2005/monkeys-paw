@@ -321,3 +321,15 @@ and are expected to fail until the matching implementation task lands. Property 
   change an e2e test or a receipt only if this line changes it. Do not run Playwright in an agent run (the owner runs the
   e2e suite). Run `pnpm -C apps/web exec vitest run` (one process) and `pnpm -C apps/web typecheck`. (Req 3.9, 8.3, 8.5)
   Done: `WISH_SENT_TO_GEMINI_MESSAGE` in `api-messages.ts`: "Your wish travels to Google's Gemini, which writes the curses. Keep personal details out of it." (two short sentences, no exclamation mark, none of the words tone.md avoids). `WishLine.tsx` renders it as `<p id={noteId}>` right after the wish input, in a new `note` grid row under the wish row (mobile and from 768 px; `.note` sets only the grid area, ink colour and no margin, so it keeps the band's 1rem). The wish input's `aria-describedby` is the note's id, or `"<messageId> <noteId>"` when a message shows. `WishLine.test.tsx` has the two updated expectations and new tests (the note is a `<p>` with the constant's text, described by it alone and by message then note, ids exist, not focusable, tab order unchanged, DOM position, grid areas and `.note` rule); `api-messages.test.ts` checks the text and tone. `contrast.test.ts` does not list the band, so it is unchanged. `apps/web/e2e` holds no `aria-describedby` and no check of the band's text or height: the tab-order, 48 px, no-sideways-scroll (390 px and 640 px) and `form`-scoped `RESTING_MESSAGE` checks are unaffected by one more non-focusable paragraph, so no e2e test or receipt was changed (receipt PNGs are gitignored; the wish band is one line taller in them). Playwright not run. `pnpm -C apps/web exec vitest run`: 1247 passed (82 files); typecheck, lint and build pass.
+- [ ] 54. Phone: the result comes first. On a viewport under 768 px with a Grant active (`ctx.grant` not null), order the page
+  paw, stamp, narration, circles, medal, actions, wish line, examples, sound toggle, on screen and in the DOM (design A12,
+  "Mobile" A–C, "Focus order"). Add `hooks/use-media-query.ts` (`useSyncExternalStore`, `(max-width: 767.98px)`, a missing or
+  throwing `matchMedia` means desktop), `hooks/use-result-first.ts` (moves the wish slot and the examples slot by ref in a
+  `useLayoutEffect`, keeps focus, caret and selection, never moves the ring, dialogs, actions or canvas) and
+  `hooks/use-phone-focus.ts` (the scroll-to-top and focus rules, temporary `tabindex="-1"`, focus ring on `:focus-visible`).
+  In `App.tsx` keep one JSX order and set `data-result-first`; in `App.module.css` add the result-first grid areas inside
+  `@media (max-width: 767.98px)` and the bottom room for the sound toggle. Jsdom tests for the three hooks. e2e in
+  `e2e/layout.mobile.spec.ts` at 390×844: the first curse's top is within the first 844 px after the Grant (page and viewport
+  coordinates, also with the longest narration and when the page was scrolled before submitting); Tab order equals visual
+  order before the Grant, after it and at the end; the focus rules; rotation across 768 px. Do not run Playwright or any
+  `apps/api` test in an agent run (the owner runs the e2e suite). (Req 1.4, 8.1, 9.1, 9.4, 8.5)

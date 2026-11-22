@@ -33,6 +33,7 @@ Three design choices shape everything else:
 | A9 | Req 3.3 says a 503 on grant shows an error and no Grant. iron-rules §5 says over budget serves cached examples. | After a 503 the client shows the error (Req 3.3), flags `examplesOnly`, and from then on an unmodified example card replays its cached Grant locally. Bind in this mode is not possible; the card shows a resting message. |
 | A10 | Req 6.2 names `monkeys-paw-<wishId>.zip` but `POST /api/export` returns JSON (`SpecExport`), not a zip. | The client builds the zip from `requirementsMd` and `propertiesMd` with its own store-only zip writer (`export/zip.ts`, no dependency). |
 | A11 | Req 7.3 and task 36 expect four CC0 or original MP3/WAV files (about 128 kbps, under 500 KB) under `public/audio/`, with an `ASSETS.md` licence note. | **The four cues are original and synthesized in code at runtime with the Web Audio API** (oscillators, noise buffers filled by our own seeded generator, filters and gain envelopes). There is no audio file, no base64 audio, no audio library and no download. Why: (1) originality and licence safety in a public repo and a contest video that forbids third-party copyrighted material, with nothing to attribute or audit; (2) zero download, so the Audio budget is 0 bytes and the player chunk is about 1.3 KB gz; (3) it still satisfies Req 7.3 "CC0/original" (code we wrote is original). Only the "~128kbps MP3 or WAV, total <500KB" format clause of Req 7.3 does not apply. `public/audio/` and `ASSETS.md` are not created. |
+| A12 | Req 8.1 lists the tab order of desktop and of a phone before a Grant: wish line first. Req 1.4 and 9.1 put the curse list "below paw". At 390×844 after a Grant the first curse starts at y 1000 (1135 with the longest narration), under the wish form and the examples, so the player does not see the result. | **Result first** is the viewport under 768 px with a Grant active (`ctx.grant` not null). Then the wish line and the examples come after the actions, on screen and in the DOM, so the tab order follows what is seen. Desktop, and a phone before a Grant, while granting and after Rewrite, keep the order of Req 8.1. See "Mobile" and "Focus order". |
 
 ## Architecture
 
@@ -101,7 +102,8 @@ apps/web/
     │                 BindingCard.tsx  StopButton.tsx  IntegrityMedal.tsx  ExportButtons.tsx
     │                 OpenInKiroDialog.tsx  SoundToggle.tsx  LiveRegion.tsx  GrantedStamp.tsx
     │                 PawStateText.tsx  ShareCard.tsx (optional, Req 6.3)
-    ├── hooks/        use-media-query.ts  use-reduced-motion.ts  use-dialog-focus.ts
+    ├── hooks/        use-media-query.ts  use-result-first.ts  use-phone-focus.ts
+    │                 use-reduced-motion.ts  use-dialog-focus.ts
     ├── audio/        sound-player.ts (lazy chunk)  sound-controller.ts  sound-preference.ts
     │                 cue-triggers.ts  sound-types.ts  fake-audio-context.ts (test support)
     └── styles/       tokens.css  fonts.css  *.module.css (CSS Modules, one approach for the whole app)
@@ -124,7 +126,8 @@ One full-viewport parchment plate (`PlateFrame`). Back to front:
 5. The paw stage (`PawStage`), a 1:1 box centred on the disc. Desktop 300–400 px, mobile 150–200 px, sized with
    `clamp()` from the viewport width (desktop: also from its height). The poster fills the box and the canvas sits on top of it (see section 2).
 6. Five `CurseCircle` buttons in `CircleRing`.
-7. The wish line band under the plate, then the example calling cards.
+7. The wish line band under the plate, then the example calling cards. (On a phone with a Grant they come after the
+   actions, see "Mobile".)
 8. `SoundToggle` top-right (desktop) or bottom-right (mobile, 48 px tap target). `LiveRegion` is visually hidden.
 
 #### Circle positions (desktop, ≥768 px)
@@ -197,23 +200,68 @@ label and caption at 1024, 1280 and 1440 wide.
 Checked by `e2e/layout.desktop.spec.ts` (1280×800 and 1440×900) and `e2e/layout.mobile.spec.ts` (390×844), which find
 the paw from two pictures of the paw box (with and without the canvas): the paw may cover at most 0.5% of any text box,
 the stamp is at least 8 px from the paw and off the cord, no two boxes overlap, the longest narration is not clipped,
-the wish line stays on the first screen and does not move when the Grant arrives. The 1440×900 receipts are
+the wish line is on the first screen and, on desktop, does not move when the Grant arrives (on a phone it moves under the
+actions, see "Mobile"). The 1440×900 receipts are
 `desktop-1440-curses-landed.png` and `desktop-1440-rested.png`.
 
 #### Mobile (<768 px)
 
-The visual order is the tab order: the paw with its state text, the stamp and the narration, the wish line, the
-examples, then the circle list, then the medal and the actions. The stamp is a row under the state text, never over the
-paw box. The stamp area has no height before a Grant, so the wish line sits right under the paw text and is on the first
-screen (360×740 and 390×844). When the Grant arrives the narration takes the height it needs (no reserved lines, no
-clipping): one layout shift, just after the user pressed "Make the wish". The braziers stand beside the paw box,
-centred on it, so no narration text runs over them.
+The visual order is the tab order (A12). The stamp is a row under the state text, never over the paw box. The braziers
+stand beside the paw box, centred on it, so no narration text runs over them. The stamp area has no height before a Grant.
+When the Grant arrives the narration takes the height it needs (no reserved lines, no clipping), and the wish line and
+the examples move below the actions: one layout shift, just after the user pressed "Make the wish". The paw shrinks to
+150–200 px (200 px from 385 px wide).
+`CircleRing` becomes a vertical list in index order 0 to 4, each row full width with margins, disc ~60 px with the
+caption beside it. Inputs stack. Examples become a horizontal scroll strip with three cards visible (Req 9.1). The
+binding card becomes an 80 vh bottom sheet.
 
-The paw shrinks to 150–200 px (200 px from 385 px wide). `CircleRing` becomes a vertical list under the examples, in index order 0 to 4, each
-row full width with margins, disc ~60 px with the caption beside it. Inputs stack. Examples become a horizontal
-scroll strip with three cards visible (Req 9.1). The binding card becomes an 80 vh bottom sheet. Orientation
-change reflows through CSS only, with no remount (Req 9.4). The breakpoint is read through `use-media-query.ts`
-only for things CSS cannot do (GLB choice, dialog variant).
+**A. Order.** "Result first" is `useMediaQuery('(max-width: 767.98px)')` AND `ctx.grant !== null`. There are two orders.
+
+| Case | Order, on screen and in the DOM |
+|------|----------------------------------|
+| Result first (a phone with a Grant) | paw and state text, stamp, narration, circle list, medal, actions (Stop, or the export buttons and Rewrite), wish line, examples, sound toggle |
+| Everything else: desktop always; a phone before a Grant, while granting, after Rewrite | paw and state text, stamp, narration, wish line, examples, circle list, medal, actions, sound toggle (unchanged) |
+
+So the wish line stays on the phone's first screen (360×740, 390×844) before any Grant, and the first curse is on the
+first screen after it. The medal is not focusable, so its place in the DOM is free, as before. The DOM order is the tab
+order, so the two change together: no CSS-only reorder, no `order`, no positive `tabindex`.
+
+**B. How the DOM order changes.** Only the wish slot and the examples slot ever move. They sit before the ring slot
+normally and before the sound slot when result first. All stay children of the same layout grid.
+
+- JSX keeps one constant child order. `hooks/use-result-first.ts` moves the two nodes by ref in a `useLayoutEffect`,
+  before paint, wish slot first, and does nothing when they are already in place. Nothing in the layout is conditional
+  right before a moved node in the JSX, so React's own inserts never use a moved node as their reference.
+- Reordering keyed children is not used. In one of the two directions React would move the ring and the actions nodes
+  instead, and a modal `<dialog>` removed from the document (`BindingCard`, `OpenInKiroDialog`) leaves the top layer, so
+  rotating with a card open would break it. The ring, both dialogs, the actions and the canvas never move or remount.
+  `WishLine` and `ExampleCards` keep their state, and so does the typed text.
+- If focus was inside a moved node it is restored with `preventScroll`, and the caret and selection with it.
+- The breakpoint is read live through `hooks/use-media-query.ts` (`useSyncExternalStore` on `(max-width: 767.98px)`; a
+  missing or throwing `matchMedia` means desktop). The CSS grid areas switch on `data-result-first` on the layout
+  grid, set from the same boolean, and only inside `@media (max-width: 767.98px)`. In result-first the areas are paw,
+  stamp, ring, medal, actions, wish, examples.
+- Phone, result first: the layout leaves room at the bottom (the sound toggle's height plus its offset) so the toggle
+  covers no example card.
+
+**C. Scroll and focus, phone only.** Desktop behaviour stays exactly as it is. `hooks/use-phone-focus.ts` holds these
+rules. "Focus is lost" means `document.activeElement` is null, the body, or a disabled control.
+
+| Moment | Rule |
+|--------|------|
+| Granting | If focus is lost (the wish controls are disabled), it goes to the wish line's "The Paw stirs…" status line. |
+| A Grant arrives (`grantedSeq` changed; also an instant cached replay; never on rotation) | After the move, the page scrolls to the top with no smooth scroll, whatever the reduced-motion setting. Focus goes, with `preventScroll`, to the narration if it was lost or was inside the wish line or the examples. The next Tab reaches the first circle. |
+| A Grant fails | If focus is lost or on the status line, it returns to the wish input. |
+| The round ends (the export buttons appear) | If focus is lost, as after Stop unmounts, it goes to "Take the scroll". |
+| Rewrite | The wish input takes focus, as today, after the move back (the layout effect runs before the focus effect in `App.tsx`). |
+| Rotation across 768 px | The order follows. The focused element keeps focus. An open dialog stays modal. The page does not jump to the top. The canvas is not remounted. |
+
+A focus target that is not interactive (the status line, the narration) gets a temporary `tabindex="-1"`. It is
+removed once the element is no longer `document.activeElement`, checked after `blur`, so switching windows does not
+strip it. The target shows the normal focus ring on `:focus-visible` and is never a tab stop.
+
+The breakpoint is read in JavaScript for the order and for the things CSS cannot do (GLB choice, dialog variant).
+Everything else reflows through CSS with no remount (Req 9.4).
 
 #### Wish line and examples (Req 3)
 
@@ -249,8 +297,8 @@ App
 │  │  ├─ CircleRing
 │  │  │  └─ CurseCircle ×5              (empty | filling | filled-open | closed | cracked)
 │  │  └─ IntegrityMedal                 (only in phase "ended" once the animation queue is empty)
-│  ├─ WishLine                          (input, context, seal button, status text)
-│  ├─ ExampleCards → ExampleCard ×n
+│  ├─ WishLine                          (input, context, seal button, status text; slot moves, see Mobile)
+│  ├─ ExampleCards → ExampleCard ×n    (slot moves with the wish line, see Mobile)
 │  ├─ StopButton                        (only while a Grant is active and a curse is open)
 │  ├─ ExportButtons                     (only in phase "ended")
 │  ├─ RewriteButton                     (only in phase "ended", after the export buttons)
@@ -842,15 +890,23 @@ with at least one curse still open (Req 6.7). Under reduced motion an open is a 
 
 #### Focus order (Req 8.1)
 
-The DOM order is the required tab order, and CSS grid places the pieces visually (no positive `tabindex`):
+The DOM order is the required tab order, and CSS grid places the pieces visually (no `order`, no positive `tabindex`).
+There are two orders (A12, "Mobile"). The usual one is Req 8.1: desktop always, and a phone before a Grant, while
+granting and after Rewrite:
 
 1. wish input → 2. "for…" context field (or its disclosure button when collapsed) → 3. "Make the wish" →
 4. example cards → 5. filled circles (index order 0 to 4) → 6. binding card (while open) →
 7. "Stop and take the scroll" → 8. "Take the scroll" → "Open in Kiro" → "Rewrite" (end screen only) →
-9. sound toggle (last in the DOM, shown top-right).
+9. sound toggle (last in the DOM, shown top-right on desktop, bottom-right on a phone).
+
+On a phone with a Grant (result first) the wish line and the examples move after the actions: filled circles →
+binding card (while open) → "Stop and take the scroll", or "Take the scroll" → "Open in Kiro" → "Rewrite" → wish input →
+context field → "Make the wish" → example cards → sound toggle. This is also the visual order. After a Grant, the
+first Tab from the narration reaches the first circle.
 
 So `SessionProvider` renders `WishLine`, `ExampleCards`, `CircleRing`, `BindingCard`, `StopButton`, `ExportButtons`,
-`RewriteButton`, `SoundToggle` in that DOM order inside the layout grid. The plate decoration, canvas and poster are not focusable.
+`RewriteButton`, `SoundToggle` in that JSX order inside the layout grid, and `use-result-first.ts` moves the wish slot
+and the examples slot before the sound slot while result first. The plate decoration, canvas and poster are not focusable.
 Empty circles have no tab stop. Cards are `<button>`s, so Enter and Space both work; Enter in the wish input submits
 the form; Escape closes the card (`card_closed`) and deselects the example card.
 
@@ -1104,6 +1160,13 @@ Model output is untrusted (iron-rules §6). The client validates every response 
 
 The API is stubbed in end-to-end tests so they are deterministic and cost nothing. One optional smoke test runs
 against a local `apps/api` in examples-only mode (no model key needed).
+
+Result first (A12): jsdom tests cover `use-media-query` (live change, missing or throwing `matchMedia`), `use-result-first`
+(the two moves, no move when in place, focus, caret and selection kept, the ring, dialogs and actions never moved) and
+`use-phone-focus` (each rule of "Mobile" C). `e2e/layout.mobile.spec.ts` at 390×844 checks that the first curse's top is
+within the first 844 px after the Grant, in page and in viewport coordinates, also with the longest narration and when the
+page was scrolled before submitting. Tab order equals visual order before the Grant, after it and at the end. The focus
+rules and the rotation across 768 px (focus kept, dialog still modal, no jump to the top, canvas not remounted) are checked too.
 
 Not designed here: the ink cross-hatching shader (Req 2.4). It is a separate spec. This design only fixes its seam,
 `usePawMaterial`, and the placeholder behind it.
