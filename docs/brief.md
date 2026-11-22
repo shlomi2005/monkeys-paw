@@ -28,7 +28,7 @@ Kiro-ready spec (EARS requirements + correctness properties for property-based t
 4. **Rest.** All fingers open (or user stops): show the "Wish Integrity" score 0–5 and export:
    - `requirements.md` in Kiro spec format (user story + EARS acceptance criteria),
    - `properties.md`: one correctness property per closed curse, ready for property-based tests,
-   - "Open in Kiro": download a zip laid out as `.kiro/specs/<name>/requirements.md`.
+   - "Open in Kiro": download a zip holding the folder `monkeys-paw-<name>/`, to unzip under the project's `.kiro/specs/`.
 5. **Share card.** Image of your paw + the funniest curse (virality, Social Blitz).
 
 ## 5. AI roles (prompted roles in the backend; also Kiro custom agents used to build/evaluate)

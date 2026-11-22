@@ -11,7 +11,7 @@ import { useId, useRef } from 'react';
 import type { RefObject } from 'react';
 import type { SpecExport } from 'paw-core';
 import { downloadZip } from '../export/download';
-import { buildFolderZip, kiroCommand, specFolderName } from '../export/spec-files';
+import { buildFolderZip, KIRO_COMMAND, specFolderName } from '../export/spec-files';
 import { useDialogFocus } from '../hooks/use-dialog-focus';
 import { useStatusLine } from '../hooks/use-status-line';
 import { SCROLL_LOST_MESSAGE } from '../api/api-messages';
@@ -67,7 +67,7 @@ interface BodyProps {
 
 function Body({ spec, wishText, note, labelId, describedId, onClose }: BodyProps) {
   const folder = specFolderName(wishText);
-  const command = kiroCommand(folder);
+  const command = KIRO_COMMAND;
   const [status, say] = useStatusLine();
   const folderRef = useRef<HTMLInputElement>(null);
   const commandRef = useRef<HTMLInputElement>(null);
@@ -103,11 +103,12 @@ function Body({ spec, wishText, note, labelId, describedId, onClose }: BodyProps
       {note ? <p id={`${describedId}-note`}>{note}</p> : null}
 
       <ol id={describedId} className={styles.steps}>
+        <li>Download the folder and unzip it.</li>
         <li>
-          Drop the folder <code>{folder}</code> into <code>.kiro/specs/</code>.
+          Put the folder <code>{folder}</code> in your project’s <code>.kiro/specs/</code> folder.
         </li>
         <li>
-          Run the command <code>{command}</code>.
+          From the project root, run <code>kiro .</code> (or open the project folder in Kiro).
         </li>
       </ol>
 

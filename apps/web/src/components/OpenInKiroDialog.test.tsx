@@ -16,7 +16,7 @@ const SPEC = { ...sampleSpecExport(), requirementsMd: '# R\n', propertiesMd: '# 
 const WISH = 'Only the owner can delete a Project!';
 // The slug is cut at 32 characters.
 const FOLDER = 'monkeys-paw-only-the-owner-can-delete-a-proj';
-const COMMAND = `kiro open ${FOLDER}`;
+const COMMAND = 'kiro .';
 
 function setup(onClose = vi.fn()) {
   render(<OpenInKiroDialog spec={SPEC} wishText={WISH} onClose={onClose} />);
@@ -41,7 +41,10 @@ describe('OpenInKiroDialog', () => {
     setup();
     const dialog = screen.getByRole('dialog', { name: 'Open in Kiro' });
     const steps = document.getElementById(dialog.getAttribute('aria-describedby') ?? '');
-    expect(steps?.textContent).toBe(`Drop the folder ${FOLDER} into .kiro/specs/.Run the command ${COMMAND}.`);
+    expect(steps?.textContent).toBe(
+      `Download the folder and unzip it.Put the folder ${FOLDER} in your project’s .kiro/specs/ folder.From the project root, run kiro . (or open the project folder in Kiro).`,
+    );
+    expect(dialog.textContent).not.toMatch(/kiro open/i);
     expect(field('Folder name').value).toBe(FOLDER);
     expect(field('Command').value).toBe(COMMAND);
     expect(field('Command').readOnly).toBe(true);

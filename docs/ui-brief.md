@@ -23,8 +23,8 @@ frames, one accent colour only: blood red. Reference: `docs/art/concept-victoria
 4. **The Judge's verdict** → closed: the seal holds, the finger opens with a sigh, the circle turns to a calm
    engraved laurel. Not closed: the seal cracks and a line appears: "The paw remembers."
 5. **The paw rests** (all open) → the paw lies down flat; a "Wish Integrity" medal (0–5 laurels) is engraved;
-   two buttons: "Take the scroll" (download `requirements.md` + `properties.md`) and "Open in Kiro" (zip with
-   `.kiro/specs/<name>/`). A share card renders the plate with the funniest curse.
+   two buttons: "Take the scroll" (download `requirements.md` + `properties.md`) and "Open in Kiro" (zip holding
+   `monkeys-paw-<name>/`, to unzip under `.kiro/specs/`). A share card renders the plate with the funniest curse.
 
 ## Type and colour
 - Display: an engraved Victorian serif (OFL, e.g. "IM Fell English" or "Playfair Display"); body: a readable serif.

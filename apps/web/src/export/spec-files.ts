@@ -30,10 +30,8 @@ export function specFolderName(wishText: string): string {
   return `monkeys-paw-${slugify(wishText)}`;
 }
 
-/** The command that opens the folder in Kiro. */
-export function kiroCommand(folder: string): string {
-  return `kiro open ${folder}`;
-}
+/** Opens the current folder in Kiro; run it from the project root. */
+export const KIRO_COMMAND = 'kiro .';
 
 /** The zip "Open in Kiro" offers: both files inside the folder `<folder>/`. */
 export function buildFolderZip(folder: string, spec: SpecExport, clock: () => Date = now): Uint8Array {

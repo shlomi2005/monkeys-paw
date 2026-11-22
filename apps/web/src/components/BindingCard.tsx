@@ -17,6 +17,7 @@ import { curseTypeLabel } from '../state/paw-selectors';
 import type { CardView } from '../state/paw-selectors';
 import type { Notice } from '../state/use-paw-session';
 import { cx } from './class-names';
+import { hasOwnQuotes } from './quote-marks';
 import styles from './BindingCard.module.css';
 import { suggestClause } from './suggest-clause';
 
@@ -146,7 +147,7 @@ function CardBody({
       <div id={describedId} className={styles.described}>
         {exampleNote ? <p className={styles.resting}>{exampleNote}</p> : null}
         <p className={styles.story}>{curse.story}</p>
-        <blockquote className={styles.loophole}>{curse.loophole}</blockquote>
+        <blockquote className={styles.loophole} data-own-quotes={hasOwnQuotes(curse.loophole) || undefined}>{curse.loophole}</blockquote>
       </div>
 
       {remembers && <p className={styles.remembers}>{PAW_REMEMBERS_MESSAGE}</p>}

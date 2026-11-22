@@ -84,11 +84,11 @@
   color: var(--ink);
 }
 
-.loophole::before {
+.loophole:not([data-own-quotes])::before {
   content: '\201C';
 }
 
-.loophole::after {
+.loophole:not([data-own-quotes])::after {
   content: '\201D';
 }
 

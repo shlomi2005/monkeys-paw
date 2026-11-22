@@ -220,7 +220,7 @@ and are expected to fail until the matching implementation task lands. Property 
   the session's live region: that one only announces machine transitions, and the dialog (task 38) is modal, so its
   status has to live inside it anyway. Unmounting or hiding the buttons aborts the request. The file name uses the
   server's `wishId` from the `SpecExport`.
-- [x] 38. `OpenInKiroDialog`: call `postExport`, show copy buttons for the folder name and `kiro open monkeys-paw-<slug>`,
+- [x] 38. `OpenInKiroDialog`: call `postExport`, show copy buttons for the folder name and `kiro .` (corrected by task 59),
   Clipboard API with select-and-copy fallback, and a download of the zip containing the `monkeys-paw-<slug>/` folder.
   (Req 6.2, 8.4)
   Done: the folder name and the command are in labelled read-only fields, each with a Copy button. When the clipboard
@@ -362,3 +362,5 @@ Design: A13, A14, "Live gate and ready rounds", "Seal after the Grant"; Requirem
   Done: ran apps/web `vitest run` (91 files, 1400 tests), `typecheck` and `lint`, all clean; the new e2e specs are written, not run.
 - [x] 58. Ready rounds as the fallback, the example note, and the 375×667 phone (Req 3.7, 13.7, 13.10, 13.12; paw-api 14.8).
   Done: typecheck and the touched test files; e2e and api tests written, not run.
+- [x] 59. Open in Kiro steps and quote marks (Req 6.2, 4.7): the dialog shows the three true steps and copies exactly `kiro .`; a pure helper and a data attribute on the blockquote so the card adds quote marks only when the loophole has none at an edge; tests for both; fix the zip lines in `docs/brief.md` and `docs/ui-brief.md` (the zip holds `monkeys-paw-<name>/`).
+  - Done: ran vitest on src/components, src/export and src/styles (27 files, 572 tests passed), pnpm typecheck and eslint (clean). Playwright specs edited, not run.

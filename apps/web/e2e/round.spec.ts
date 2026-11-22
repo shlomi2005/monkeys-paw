@@ -206,7 +206,9 @@ test('closes in a hurry queue their opens, and both export buttons deliver the s
   await expect(kiro).toBeVisible();
   const folder = 'monkeys-paw-only-the-owner-can-delete-a-proj';
   await expect(kiro.getByLabel('Folder name')).toHaveValue(folder);
-  await expect(kiro.getByLabel('Command')).toHaveValue(`kiro open ${folder}`);
+  await expect(kiro.getByLabel('Command')).toHaveValue('kiro .');
+  await expect(kiro).toContainText('.kiro/specs/');
+  await expect(kiro).not.toContainText('kiro open');
   const [folderDownload] = await Promise.all([
     page.waitForEvent('download'),
     kiro.getByRole('button', { name: 'Download the folder (.zip)' }).click(),

@@ -181,6 +181,8 @@ test('GET /api/examples 503 shows the ready rounds, which play with no tick', as
   if (round === undefined) throw new Error('no ready round');
   for (let index = 0; index < round.grant.curses.length; index++) {
     await paw.openCard(index);
+    const marks = await paw.dialog.locator('blockquote').evaluate((el) => [getComputedStyle(el, '::before').content, getComputedStyle(el, '::after').content]);
+    expect(marks).toEqual(['none', 'none']);
     await expect(paw.dialog.getByText(EXAMPLE_NOTE_MESSAGE)).toBeVisible();
     await paw.dialog.getByRole('button', { name: 'Accept this clause' }).click();
     await expect(paw.dialog).toBeHidden();

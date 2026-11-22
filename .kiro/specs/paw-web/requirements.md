@@ -145,6 +145,10 @@ card where I propose a fix.
 4. **CLICK "REWRITE":** close card, clear grant (curses disappear, paw→rest, circles empty), reset input.
 5. **MOBILE:** full-screen or large bottom sheet, scrollable.
 6. **KEYBOARD:** card focusable, navigate with Tab/Shift+Tab, Enter submits, Escape closes.
+7. **QUOTE MARKS:** THE SYSTEM SHALL put its own quote marks around the loophole on the card only when the
+   loophole, trimmed, has none at an edge: none of " ' “ ” ‘ ’ „ ‚ ‟ « » ‹ › 「 『 at the start and none of
+   " “ ” „ ‟ « » 」 』 at the end (a closing apostrophe, as in users', is not a quote). The text itself is
+   never edited.
 
 ### Requirement 5: Paw state machine (LIFO)
 
@@ -194,8 +198,10 @@ card where I propose a fix.
    - **"Take the scroll":** call `POST /api/export`, download ZIP with `requirements.md` +
      `properties.md` as `monkeys-paw-<wishId>.zip`. On success: confirm ("Scroll saved!"). On error: show
      error.
-   - **"Open in Kiro":** call `POST /api/export`, render modal with copy-to-clipboard: drop folder into
-     `.kiro/specs/`, run `kiro open monkeys-paw-<name>`.
+   - **"Open in Kiro":** call `POST /api/export`, render a modal with the true steps: (1) download the folder
+     and unzip it; (2) put the folder `monkeys-paw-<name>` under the project's `.kiro/specs/`; (3) from the
+     project root run `kiro .` (or open that project folder in Kiro). The copy button copies exactly `kiro .`;
+     the folder name keeps its own copy button.
 3. **OPTIONAL SHARE CARD:** render parchment plate image with all circles and one highlighted curse;
    buttons: "Copy image", "Tweet", "Copy link".
 4. **MOBILE:** buttons vertically stacked, larger tap targets (40px+).

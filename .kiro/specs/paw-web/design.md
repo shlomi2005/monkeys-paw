@@ -840,11 +840,12 @@ After `examplesOnly` is set, "Make the wish" with an unmodified selected example
   revokes the URL. Nothing is persisted.
 - "Take the scroll": zip of `requirements.md` and `properties.md` named `monkeys-paw-<safeId(wishId)>.zip`. On
   success the status line says "Scroll saved!".
-- "Open in Kiro": the same call, then `OpenInKiroDialog` shows copy buttons (Clipboard API, with a visible
-  fallback to select-and-copy) for the folder name `monkeys-paw-<slug>` and the command
-  `kiro open monkeys-paw-<slug>`, plus a button that downloads a zip containing the folder
-  `monkeys-paw-<slug>/` so the user can drop it into `.kiro/specs/`. The Req 6.2 text is the minimum; the zip is the
-  ui-brief's "zip with `.kiro/specs/<name>/`".
+- "Open in Kiro": the same call, then `OpenInKiroDialog` shows the true steps: (1) download the folder and unzip
+  it; (2) put the folder `monkeys-paw-<slug>` under the project's `.kiro/specs/`; (3) from the project root run
+  `kiro .` (or open that project folder in Kiro). `kiro --help` (1.4.236) is `kiro [options] [paths...]` with no
+  `open` subcommand. Copy buttons (Clipboard API, with a visible fallback to select-and-copy) copy the folder name
+  `monkeys-paw-<slug>` and exactly `kiro .`. A button downloads a zip containing the folder `monkeys-paw-<slug>/`,
+  not `.kiro/specs/<name>/`, so the user puts it under `.kiro/specs/` themselves.
 - Export is called only in phase `ended`, from the session's current `wish` and `grant`, so it can never include
   a stale medal state. The medal itself comes from `computeIntegrity` on the machine's projected grant
   (`projectGrant(ctx)`: the grant with each curse's `status` set from `closedIds`).
@@ -930,6 +931,8 @@ traps Tab and Shift+Tab inside the card, and `cancel` (Escape) is routed to `car
   the circle that now shows the laurel, so focus lands on it.
 - While `judging`, Escape and Cancel are ignored, the buttons are `aria-disabled`, and "The Judge stirs…" is shown
   in the card's status line.
+- Quote marks: a pure helper decides from the trimmed loophole whether it has a quote mark at an edge (Req 4.7).
+- The blockquote carries a data attribute when it has one; CSS pseudo-elements add quote marks only without it.
 - The OpenInKiroDialog uses the same hook and the same `<dialog>` approach.
 - **Chrome close watcher:** Chrome may close a modal dialog on a second Escape with no user activation between the two,
   even though `cancel` was prevented. The hook listens for the dialog's `close` event. If the dialog closed while the

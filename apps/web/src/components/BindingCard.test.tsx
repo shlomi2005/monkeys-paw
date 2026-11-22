@@ -194,6 +194,26 @@ describe('structure', () => {
     expect(quote?.textContent).toBe(CURSE.loophole);
   });
 
+  it.each([
+    ['starts with a quote', '\u201CNobody may delete it.', true],
+    ['only ends with a quote', 'Nobody may delete it.\u201D', true],
+    ['is plain', 'Nobody may delete it.', false],
+  ])('marks a loophole that %s with data-own-quotes only when it has its own', (_name, loophole, own) => {
+    const { container } = setup({ card: cardOf({ curse: { ...CURSE, loophole } }) });
+    const quote = container.querySelector('blockquote');
+    expect(quote?.textContent).toBe(loophole);
+    expect(quote?.hasAttribute('data-own-quotes')).toBe(own);
+  });
+
+  it('adds the quote marks in CSS only when the loophole has none of its own', () => {
+    const rules = parseCss(readText('./BindingCard.module.css', import.meta.url));
+    const selectors = rules.map((r) => r.selector);
+    expect(selectors).toContain('.loophole:not([data-own-quotes])::before');
+    expect(selectors).toContain('.loophole:not([data-own-quotes])::after');
+    expect(selectors).not.toContain('.loophole::before');
+    expect(selectors).not.toContain('.loophole::after');
+  });
+
   it('uses the label of the curse type in the heading', () => {
     setup({ card: cardOf({ curse: OTHER_CURSE }) });
     expect(screen.getByRole('heading', { name: 'Data loss' })).toBeTruthy();
