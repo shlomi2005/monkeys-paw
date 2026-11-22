@@ -382,3 +382,25 @@ or proof of age.
     Click, Space or Enter sends no request and changes no state. While granting, the controls stay natively disabled.
 12. **EXAMPLE NOTE:** while a ready round plays, a fixed note says "The paw recites an example. Its curses and verdicts were written in advance. No live model is judging." It is announced, shown in the binding card and the Open in Kiro dialog, and written as a quote under the title of both exported files.
 
+
+### Requirement 14: Running from a fresh clone
+
+**User story:** As a developer with a fresh clone, I want the API and the web app to work together locally, so that I
+can play the paw without deploying anything.
+
+#### Acceptance Criteria
+
+1. **WHILE** the Vite dev server runs (never build, preview or tests) **THE SYSTEM SHALL** forward paths that start with
+   `/api/` to `http://127.0.0.1:8787`. A set `VITE_API_BASE_URL` still wins, as before.
+2. **THE SYSTEM SHALL** never let the forwarded request carry a caller's own `x-paw-dev-country`. It gets that header
+   only **WHEN** the dev server's environment variable `PAW_DEV_COUNTRY` is exactly two uppercase letters **AND** the
+   request has no `Origin` or an `Origin` equal to `http://<its Host>`, so another web site open in the same browser
+   cannot borrow the country. Otherwise it gets no header, and the API's gate refuses as today (fail closed). The
+   value is never logged.
+3. **THE SYSTEM SHALL** leave the gate, the allow-lists and the 18+ check untouched. A live wish locally also needs the
+   developer's own key and `COUNTRY_HEADER=x-paw-dev-country` on the API, and the developer's real country.
+4. **THE SYSTEM SHALL** give the root README a quickstart that works as written from a fresh clone: prerequisites,
+   install, build, the API and the web app in two terminals, the address, what works with no key (the three ready
+   rounds, to the export), one's own key and the gate variables for a live local wish, and how to run the tests.
+5. **THE SYSTEM SHALL** test the proxy (paths, header deleted and set, origin check, bad value) and its absence from
+   build and preview.

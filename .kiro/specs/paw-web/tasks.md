@@ -364,3 +364,9 @@ Design: A13, A14, "Live gate and ready rounds", "Seal after the Grant"; Requirem
   Done: typecheck and the touched test files; e2e and api tests written, not run.
 - [x] 59. Open in Kiro steps and quote marks (Req 6.2, 4.7): the dialog shows the three true steps and copies exactly `kiro .`; a pure helper and a data attribute on the blockquote so the card adds quote marks only when the loophole has none at an edge; tests for both; fix the zip lines in `docs/brief.md` and `docs/ui-brief.md` (the zip holds `monkeys-paw-<name>/`).
   - Done: ran vitest on src/components, src/export and src/styles (27 files, 572 tests passed), pnpm typecheck and eslint (clean). Playwright specs edited, not run.
+
+
+## Running from a fresh clone (batch 18)
+
+- [ ] 60. `apps/web/scripts/dev-api.ts` plugin and its tests: proxy on serve only, header deleted and set in `bypass`, origin check, absent from build, preview and mode test. (Req 14.1, 14.2, 14.5)
+- [ ] 61. Root README quickstart, `apps/web/README.md` and `apps/api/README.md`: prerequisites, install, build, two terminals, address, no-key rounds, own key and gate variables, tests. (Req 14.3, 14.4)

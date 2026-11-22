@@ -235,12 +235,14 @@ so costs are capped and the service stays up (iron-rules.md §5).
    all pass the check. A refusal is treated as an exhausted budget (Requirements 1.4, 8.3).
 9. **THE SYSTEM SHALL** compute the ceiling as the sum, over every model of the fallback chain given by
    `plan(prompt)`, of `inputTokens × inputRate + maxOutputTokens × outputRate` at that model's price. The whole
-   chain is reserved because settling may charge every attempt of a fallback chain.
+   chain is reserved because settling may charge every attempt of a fallback chain. An unbilled attempt (Requirement 16)
+   is charged less, but the reservation does not change.
 10. **WHEN** a `generate` call ends **THE SYSTEM SHALL**, in a `finally`, subtract its ceiling from
     `reservedCents` and add its charge to `spentCents`. The charge is the sum over its attempt reports: an
     attempt with usage costs `promptTokens × inputRate + outputTokens × outputRate` at the price of the model
     that answered (`modelVersion` when present, else the requested model); an attempt without usage costs its
-    own ceiling, except a quota attempt (Requirement 13.1), which costs 0 cents because Google does not bill it.
+    own ceiling, except a quota attempt (Requirement 13.1) and an unbilled attempt (Requirement 16), which cost 0
+    cents because Google does not bill them.
     **IF** no report arrived at all **THE SYSTEM SHALL** charge the whole ceiling. The reservation of 7.8 and 7.9 is
     unchanged.
 11. **IF** the real charge is above the ceiling **THE SYSTEM SHALL** still charge it, because it is real money.
@@ -420,11 +422,12 @@ possible and, when the day's free quota ends, visitors get the ready examples.
    model and without reserving anything, so that paw-core's retry spends no more quota. No new state outlives the
    request.
 6. **WHEN** an attempt is a quota attempt **THE SYSTEM SHALL** charge it 0 cents, because Google does not bill it. The
-   reservation of the whole chain before the call is unchanged (7.8, 7.9), so the worst-case numbers do not change. A
-   404 and every other failure keep the rule of 7.10.
+   reservation of the whole chain before the call is unchanged (7.8, 7.9), so the worst-case numbers do not change. An
+   unbilled attempt (HTTP 400 or 500 without usage, Requirement 16) costs 0 too. A 404 and every other failure keep
+   the ceiling of 7.10.
 7. **THE SYSTEM SHALL** update every note that says otherwise: the design's "Cost accounting" (step 5 and "Why the whole
    chain is reserved") and the sentence of `apps/api/README.md` that says "An attempt that reported no token counts (a
-   timeout, a network error, an HTTP error) is charged its ceiling."
+   timeout, a network error, an HTTP error) is charged its ceiling," so that it names the quota and unbilled exceptions.
 8. **THE SYSTEM SHALL** give `apps/api/README.md` a section on running on the free tier: create the key in a Google AI
    Studio project with no billing account, so no bill is possible; when the day's free quota ends Gemini answers 429
    `RESOURCE_EXHAUSTED`, the paw rests (grant and bind answer 503 "The paw is resting..." and the site serves the ready
@@ -527,3 +530,29 @@ spend a visitor's quota.
 8. **THE SYSTEM SHALL** test, and the tests **SHALL** fail on the previous commit: a streamed body with no, a too
    low and a too high `Content-Length`, over real HTTP too, with the server staying up; nothing of it in a log; the
    largest legitimate bodies and all ready rounds pass; properties for 15.4 and 15.5; methods and pruning.
+
+### Requirement 16: A refused call costs nothing
+
+**User story:** As the operator, I want a call that Google refuses to cost nothing on paper, so that a few dozen
+refusals do not rest the paw for a day.
+
+#### Acceptance Criteria
+
+1. **WHEN** an attempt gets HTTP status exactly 400 or 500, its body was not cut off by the attempt's timeout, and the
+   body carries no `usageMetadata`, **THE SYSTEM SHALL** treat it as an unbilled attempt: the report has
+   `unbilled?: true` and the guard charges it 0 cents.
+2. **IF** such a body carries a valid `usageMetadata` **THE SYSTEM SHALL** charge the attempt by that usage (7.10).
+   **IF** it carries `usageMetadata` that cannot be read as usage **THE SYSTEM SHALL** keep the ceiling.
+3. **THE SYSTEM SHALL** keep the ceiling for a timeout (also while the error body is being read), for no response, and
+   for every other status (401, 403, 404, 499, 501, 502, 503, 504 and the rest). The quota rule (13.6) is unchanged
+   and is applied first. **IF** no report arrived at all **THE SYSTEM SHALL** charge the whole ceiling.
+4. **THE SYSTEM SHALL** leave unchanged the reservation before the call, the worst-case numbers and the chain: 400 and
+   500 do not try the next model. The per-IP limit and Google's quota still bound repeated failures.
+5. **THE SYSTEM SHALL** log, put in a message or keep nothing of the upstream text: only the flag and numeric token
+   counts, under the existing log limits.
+6. **THE SYSTEM SHALL** test, with a stubbed `fetch` only: 400 and 500 with no usage, with valid usage, with unreadable
+   usage, cut off by the timeout, and every other status. The example and property tests SHALL fail on the previous
+   commit.
+
+Source: Google's billing FAQ, https://ai.google.dev/gemini-api/docs/billing (read 2026-11-22): a request that fails
+with a 400 or 500 error is not charged for tokens, though it still counts against the quota.

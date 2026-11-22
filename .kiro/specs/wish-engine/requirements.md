@@ -135,8 +135,9 @@ are capped and the service stays up.
 4. **WHILE** in examples-only mode **THE SYSTEM SHALL** return pre-computed grants for the 25 example wishes without a
    model call.
 5. **WHEN** a model call ends **THE SYSTEM SHALL** charge the daily budget its real cost: the tokens the model
-   reported, at that model's price, summed over every attempt of the call. A fixed per-call estimate is not
-   used anywhere.
+   reported, at that model's price, summed over every attempt of the call. An attempt that Google does not bill (a quota answer, or HTTP 400 or 500
+   without usage, paw-api Requirement 16) costs 0; any other attempt without usage costs its ceiling. A fixed per-call
+   estimate is not used anywhere.
 6. **WHEN** a model call is requested **THE SYSTEM SHALL** reserve a ceiling for it first (the largest cost the
    call can reach, over its whole fallback chain) and refuse the call if the spend plus the reservations plus
    that ceiling would pass the daily budget, so parallel calls cannot pass the budget.

@@ -1183,3 +1183,8 @@ rules and the rotation across 768 px (focus kept, dialog still modal, no jump to
 
 Not designed here: the ink cross-hatching shader (Req 2.4). It is a separate spec. This design only fixes its seam,
 `usePawMaterial`, and the placeholder behind it.
+
+
+## Local development (Requirement 14)
+
+The module `apps/web/scripts/dev-api.ts` is a Vite plugin applied only to `serve`, and neither to preview nor in mode `test`. It adds a proxy for paths that start with `/api/` to `http://127.0.0.1:8787`. A set `VITE_API_BASE_URL` still wins, because the client then calls that address and not the dev server. The country header is deleted and then set in the proxy's `bypass` hook, before http-proxy copies the headers. The `proxyReq` event is not used, because it is skipped for requests with an `Expect` header. The header is set only when `PAW_DEV_COUNTRY` is two uppercase letters and the request has no `Origin` or an `Origin` equal to `http://<Host>`. The value is never logged. Tests call the plugin's config and `bypass` directly.

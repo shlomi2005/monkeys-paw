@@ -125,6 +125,7 @@ type AttemptReport = {
   modelVersion?: string;
   usage?: { promptTokens: number; outputTokens: number };
   quota?: true;   // the attempt was a quota answer (see "Quota answers"); charged 0 cents
+  unbilled?: true; // HTTP 400 or 500, body not cut off, no usageMetadata (Requirement 16); charged 0 cents
 };
 
 class QuotaExhaustedError extends Error {}   // exported from gemini.ts; fixed message, no body, no key
@@ -150,7 +151,7 @@ class GeminiModelClient implements ModelClient {
 - Returns parsed JSON; paw-core validates it with zod.
 - `plan(prompt)` returns one entry per model of the chain, in order. `inputTokens = ceil((prompt.length + JSON.stringify(responseSchema).length) / 3)`, with schema length 0 when there is no schema.
 - `generateMetered` calls `onAttempt(report)` exactly once per HTTP attempt, whatever happened (success, timeout, network error, any HTTP status, unreadable body, MAX_TOKENS, bad JSON), before the next attempt starts and before the promise settles. `usage` is `{ promptTokens: promptTokenCount, outputTokens: candidatesTokenCount + thoughtsTokenCount }` (a missing count is 0), present only when the response carried `usageMetadata` with a finite, non-negative `promptTokenCount`. Thoughts are billed at the output rate. `modelVersion` is copied from the response when present.
-- `finishReason: "MAX_TOKENS"` on the first candidate, or text that is not complete JSON, is a failed attempt: it throws (for example "Model call failed (<model>: output cut off)"), so paw-core's retry-once-then-fallback runs. It is charged by its usage. It does not move on to the next model; only 503, 429 and 404 do. A quota answer can stop the chain early (next section).
+- `finishReason: "MAX_TOKENS"` on the first candidate, or text that is not complete JSON, is a failed attempt: it throws (for example "Model call failed (<model>: output cut off)"), so paw-core's retry-once-then-fallback runs. It is charged by its usage. It does not move on to the next model; only 503, 429 and 404 do. A quota answer can stop the chain early (next section). An attempt with status exactly 400 or 500, a complete body and no `usageMetadata` is reported with `unbilled: true`; 400 and 500 do not move on to the next model.
 - On timeout or network error, throws; caller (paw-core) retries once then falls back (iron-rules §6).
 - Logs metadata only: model name, duration, status, `promptTokens`, `outputTokens`, `finishReason`, success/failure. Numbers and enums only. Never logs prompt or response text, an error body or the key (Requirement 6.5).
 
@@ -194,14 +195,14 @@ The guard uses the 1.1.2027 rates. They are conservative: it over-counts today a
 
 **Ceiling.** For one `generate`, `ceiling = Σ over plan(prompt) of (inputTokens × inputRate + maxOutputTokens × outputRate)`, in cents, each entry at its requested model's price.
 
-**Why the whole chain is reserved.** A `generate` can make several HTTP attempts: 503, 429 and 404 move on to the next model, and each attempt may be billed, except a quota attempt, which Google does not bill and which is charged 0 (step 5). A 503 or 404 attempt that reported no usage is still charged its ceiling, so settling may charge every attempt of the chain except the quota ones. Reserving one attempt only would let parallel calls overspend, so the guard reserves the sum. The reservation is made before the call and cannot know which attempts will be quota answers, so it does not change, and the worst-case numbers below do not change either (they stay an upper bound).
+**Why the whole chain is reserved.** A `generate` can make several HTTP attempts: 503, 429 and 404 move on to the next model, and each attempt may be billed, except a quota attempt and an unbilled attempt (HTTP 400 or 500 without usage, Requirement 16), which Google does not bill and which are charged 0 (step 5). A 503 or 404 attempt that reported no usage is still charged its ceiling, so settling may charge every attempt of the chain except those. Reserving one attempt only would let parallel calls overspend, so the guard reserves the sum. The reservation is made before the call and cannot know which attempts will be quota answers or unbilled, so it does not change, and the worst-case numbers below do not change either (they stay an upper bound).
 
 **Reserve and settle, in order.**
 1. Roll the day. If the client is not available, mark `denied` and throw `BudgetExhaustedError`.
 2. Compute the ceiling from `plan(prompt)`.
 3. If `spentCents + reservedCents + ceiling > dailyBudgetCents`, mark `denied` and throw `BudgetExhaustedError`. No inner call.
 4. In the same synchronous tick (no `await` between 3 and 4): `reservedCents += ceiling`, `calls += 1`.
-5. `await inner.generateMetered(prompt, collect)`. In a `finally`: `reservedCents -= ceiling`, then charge the sum over the collected reports. With usage, an attempt costs `promptTokens × inputRate + outputTokens × outputRate` at `priceFor(modelVersion ?? model)`. Without usage, it costs its own ceiling, **except a quota attempt (`report.quota`), which costs 0 cents** because Google does not bill it (Requirement 13.6). A 404 and every other failure keep the rule. If no report arrived at all, the charge is the whole ceiling. `spentCents += charge`; the guard's own `costCents += charge`.
+5. `await inner.generateMetered(prompt, collect)`. In a `finally`: `reservedCents -= ceiling`, then charge the sum over the collected reports. With usage, an attempt costs `promptTokens × inputRate + outputTokens × outputRate` at `priceFor(modelVersion ?? model)`. Without usage, it costs its own ceiling, **except a quota attempt (`report.quota`), which costs 0 cents** because Google does not bill it (Requirement 13.6), and an unbilled attempt (`report.unbilled`), which costs 0 (Requirement 16). A 404 and every other failure keep the ceiling. If no report arrived at all, the charge is the whole ceiling. `spentCents += charge`; the guard's own `costCents += charge`.
 6. If the inner call threw `QuotaExhaustedError`, the guard sets its `quotaSpent` flag and `denied = true`, then rethrows. The next `generate` on the same guard checks `quotaSpent` first, before the day roll and before any reservation, throws `BudgetExhaustedError` and makes no call. So paw-core's retry after a quota answer makes no second HTTP call and spends no more quota.
 
 paw-core swallows errors from `generate`, so a refusal inside `grantWish` or `judgeBinding` turns into retries and the fallback result. The callers read the guard's `denied` flag afterwards and answer 503 (routes) or exit 1 (eval). A spent free quota takes the same path: `denied` is set by step 6.
@@ -384,6 +385,8 @@ The eval CLI prints the same error line for an unknown error; `EvalAbortError` k
 
 **Property 12 (Only the named header counts):** For any request, the gate's decision is the same whatever the headers other than `COUNTRY_HEADER` and `X-Paw-Adult-Confirmed` hold.
 
+**Property 13 (A refused attempt costs nothing):** For any HTTP status and any body, an attempt without priced usage costs 0 cents iff it is a quota attempt or an unbilled attempt (status exactly 400 or 500, body not cut off by the timeout, no `usageMetadata`). With valid usage it costs the usage formula; every other attempt costs its ceiling.
+
 **Test location:** `apps/api/tests/properties.test.ts` (uses Vitest + fast-check).
 
 ## Free tier (Requirement 13)
@@ -392,7 +395,7 @@ The eval CLI prints the same error line for an unknown error; `EvalAbortError` k
 
 **Tests, stubbed `fetch` only.** In `gemini.test.ts`: a 429 on the primary with a per-model `QuotaFailure` tries the next model (two HTTP calls); a per-project `QuotaFailure` stops the chain after one attempt and throws `QuotaExhaustedError`; a 429 with an unreadable body, or no violation, tries the next model; `RESOURCE_EXHAUSTED` in a body with status 403 or 503 counts as a quota attempt; a body above 64 KB is cut and does not hang; every model answering 429 throws `QuotaExhaustedError`; a 429 on the primary and a success on the next model succeeds; a 500 still throws its own error; the log lines and the thrown message hold neither the key nor any part of the body. In `guarded-client.test.ts`: a quota attempt is charged 0 and `spentCents` does not move; reservations are released; after a quota answer `denied` is true and a second `generate` makes no inner call (counted), including through `grantWish` and `judgeBinding`, so paw-core's retry makes no second HTTP call; a budget refusal does not set the quota flag. In `app.test.ts`: a 429 on every model gives 503 with `RESTING_MESSAGE` on `/api/grant` and `/api/bind`, and `/api/health` still says `normal`. In the eval tests: a quota answer exits 1, writes no files, prints no pass. In `properties.test.ts`: properties 9 and 10.
 
-**Docs.** `apps/api/README.md`: the sentence "An attempt that reported no token counts (a timeout, a network error, an HTTP error) is charged its ceiling." gets the quota exception, and a new section "Running on the free tier" holds the steps and behaviour of Requirement 13.8.
+**Docs.** `apps/api/README.md`: the sentence "An attempt that reported no token counts (a timeout, a network error, an HTTP error) is charged its ceiling." gets the quota and unbilled exceptions, and a new section "Running on the free tier" holds the steps and behaviour of Requirement 13.8.
 
 ## Live-call gate (Requirement 14)
 
@@ -435,3 +438,11 @@ number keeps the entry. The IP key is the right-most 64 characters. A bad `RATE_
 
 **Linear trims.** `stripTrailingPunctuation` and the guardrail's apostrophe trim walk back from the end of the
 string in one loop, instead of a regex with a quantifier that backtracks. Their output equals the old expressions.
+
+## Refused calls (Requirement 16)
+
+**Where.** `apps/api/src/client/gemini.ts` decides: after the quota check it sets `unbilled: true` on the report when the status is exactly 400 or 500, the body was read (up to the 64 KB cap) inside the attempt's timeout, and the body has no `usageMetadata`. `apps/api/src/budget/guarded-client.ts` charges: an `unbilled` report costs 0, a report with usage costs by usage, any other report costs its ceiling. The reservation, the chain and the worst-case numbers do not change.
+
+**Edge cases.** A timeout, also while the error body is read, keeps the ceiling. `usageMetadata` that is valid is charged by usage; one that cannot be read as usage keeps the ceiling. 401, 403, 404, 499, 501, 502, 503, 504 and a missing response keep the ceiling. A quota answer is decided first (Requirement 13.6). No report at all costs the whole ceiling. Only the flag and numeric counts are logged or kept.
+
+**Tests, stubbed `fetch` only.** `gemini.test.ts`: the flag over the statuses and bodies above. `guarded-client.test.ts`: 0 cents, usage charge, ceiling. `app.test.ts`: many 400s leave the paw awake. `properties.test.ts`: property 13. They fail on the previous commit.

@@ -304,7 +304,8 @@ without calling the model.
 day boundary. The cost of each model call is not an estimate. The API guard reserves a ceiling before every
 `generate` (the sum, over the whole fallback chain, of input tokens × input price + output cap × output price),
 refuses the call if spent + reserved + ceiling would pass `dailyBudgetCents`, and afterwards settles to the real
-cost from the reported tokens, at the price of the model that answered, summed over every attempt. If the real
+cost from the reported tokens, at the price of the model that answered, summed over every attempt. An attempt that Google does not bill (a quota answer, or HTTP 400 or 500 without usage,
+paw-api Requirement 16) costs 0; any other attempt without usage costs its ceiling. If the real
 cost passes the ceiling it is still charged and every later call is refused, so the spend can pass the cap only
 by that excess. Cents are fractional. The fixed per-call estimate is gone. Details: paw-api design,
 "Cost accounting".
