@@ -5,6 +5,9 @@ import { errorResult, renderVerdict, textResult, type ToolResult } from './rende
 import { describeInputError } from './issue';
 import type { ToolDeps } from './tool-curse';
 
+/** Fixed text: the handle the caller sent is not repeated. */
+export const MSG_UNKNOWN_CURSE = 'Unknown curse. Call paw_curse first; handles last only while this server runs.';
+
 export const inputShape = {
   curse: z
     .string()
@@ -18,7 +21,9 @@ export const inputShape = {
     .min(1, 'amendment must not be empty')
     .max(500, 'amendment must be at most 500 characters')
     .describe('The EARS clause or the rewritten requirement that should close the loophole. At most 500 characters.'),
-  kind: BindingKindSchema.default('ears-clause').describe(
+  kind: z
+    .enum(BindingKindSchema.options, { errorMap: () => ({ message: 'kind must be "ears-clause" or "rewrite"' }) })
+    .default('ears-clause').describe(
     "'ears-clause' (default) adds a clause; 'rewrite' replaces the requirement.",
   ),
 };
@@ -42,9 +47,7 @@ export async function handleBind(deps: ToolDeps, args: unknown): Promise<ToolRes
 
   const found = deps.memory.resolve(ref);
   if (!found) {
-    return errorResult(
-      `Unknown curse "${ref.slice(0, 60)}". Call paw_curse first; handles last only while this server runs.`,
-    );
+    return errorResult(MSG_UNKNOWN_CURSE);
   }
 
   const body = { grant: found.grant, curseId: found.curse.id, kind, clause: amendment };

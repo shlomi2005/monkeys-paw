@@ -313,7 +313,20 @@ z.array(z.object({
 - Full prompt or model response.
 - API key.
 
-**Structured logging:** Use Hono logger middleware with JSON output. Log level: INFO in production, DEBUG in dev.
+**Structured logging:** `src/logger.ts` is our own middleware, not `hono/logger` (which prints the method, the path and the
+query string, twice). One JSON line per request: `event`, `timestamp`, `method` (an allow-list, else `OTHER`), `path` (a
+known route by exact match, else `other`), `status`, `duration`, `modelCall` (true only for a POST on a live route whose
+guard made a call; each guard registers itself for the request through `AsyncLocalStorage`).
+
+**Errors:** `src/error-log.ts` writes `{"event":"error","code":<fixed code>,"error":<class>}` and nothing else. The class is
+chosen by `instanceof` against SyntaxError, TypeError, RangeError, ZodError, HTTPException, BudgetExhaustedError and
+QuotaExhaustedError, else `Error`, or `NonError` for a value that is not an Error; never `err.name` or
+`constructor.name`, which can be forged. An unreadable body (not JSON, cut short, aborted) is a 400 with the route's
+existing invalid-format message, not a 500. `app.onError` answers a fixed 500 and logs code and class. `server.ts` wraps
+`fetch` at the edge, and handles the server `error` event, `uncaughtException` and `unhandledRejection` the same way
+(synchronous write to fd 2, then exit 1). The Gemini log entry carries `finishReason` only from Gemini's list (else
+`OTHER`), token counts only as safe integers from 0 to 1,000,000, and `status` only as an integer from 100 to 599 (else 0).
+The eval CLI prints the same error line for an unknown error; `EvalAbortError` keeps its own fixed text.
 
 ## Eval Script Design
 

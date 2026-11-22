@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { API_MESSAGES } from '../src/api-client';
 import { makeGrant } from './fixtures';
 import { connectPaw, sendJson, startStub, textOf, type Connected, type Stub } from './stub-api';
 
+const RESTING = 'The paw is resting. Browse the examples until it wakes.';
+const MSG_RESTING = API_MESSAGES.get(RESTING) as string;
 const WISH_ID = '3f2a9c1e-0000-4000-8000-000000000001';
 
 let stub: Stub | undefined;
@@ -25,20 +28,29 @@ async function callCurse(
 }
 
 describe('API failures are tool results', () => {
-  it('400: returns the API message unchanged', async () => {
+  it('400 with a message that is not one of the API\'s own: only the status is told', async () => {
     const r = await callCurse((_q, res) => sendJson(res, 400, { message: 'Wish text cannot be empty' }));
-    expect(r).toEqual({ text: 'Wish text cannot be empty', isError: true });
+    expect(r).toEqual({ text: 'The Paw API answered HTTP 400.', isError: true });
   });
 
-  it('503: keeps "The paw is resting"', async () => {
-    const r = await callCurse((_q, res) => sendJson(res, 503, { message: 'The paw is resting. Try the examples.' }));
-    expect(r.isError).toBe(true);
-    expect(r.text).toBe('The paw is resting. Try the examples.');
+  it.each([...API_MESSAGES])('the API message %j becomes our own sentence', async (upstream, ours) => {
+    const r = await callCurse((_q, res) => sendJson(res, 400, { message: upstream }));
+    expect(r).toEqual({ text: ours, isError: true });
   });
 
-  it('500 with a JSON message', async () => {
+  it('503: the resting message of the API becomes our own sentence; another one is not repeated', async () => {
+    const resting = await callCurse((_q, res) => sendJson(res, 503, { message: RESTING }));
+    expect(resting.isError).toBe(true);
+    expect(resting.text).toBe(MSG_RESTING);
+    await connected?.close();
+    await stub?.close();
+    const other = await callCurse((_q, res) => sendJson(res, 503, { message: 'The paw is resting. Try the examples.' }));
+    expect(other.text).toBe('The Paw API answered HTTP 503.');
+  });
+
+  it('500 with a JSON message is not repeated', async () => {
     const r = await callCurse((_q, res) => sendJson(res, 500, { message: 'The paw slipped.' }));
-    expect(r).toEqual({ text: 'The paw slipped.', isError: true });
+    expect(r).toEqual({ text: 'The Paw API answered HTTP 500.', isError: true });
   });
 
   it('non-JSON error body', async () => {
@@ -120,7 +132,7 @@ describe('API failures are tool results', () => {
   });
 
   it('an unexpected failure becomes one sentence and the server keeps working', async () => {
-    stub = await startStub((_q, res) => sendJson(res, 400, { message: 'x' }));
+    stub = await startStub((_q, res) => sendJson(res, 400, { message: 'Invalid wish format' }));
     let calls = 0;
     connected = await connectPaw({
       mode: 'remote',
@@ -133,7 +145,7 @@ describe('API failures are tool results', () => {
     expect(first.isError).toBe(true);
     expect(textOf(first)).toBe('The Paw tool failed unexpectedly.');
     const second = await connected.client.callTool({ name: 'paw_curse', arguments: { requirement: 'R' } });
-    expect(textOf(second)).toBe('x');
+    expect(textOf(second)).toBe('The Paw API did not accept the requirement.');
   });
 });
 
@@ -144,12 +156,12 @@ describe('paw_bind with an unknown curse', () => {
     const result = await connected.client.callTool({ name: 'paw_bind', arguments: { curse, amendment: 'A.' } });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toBe(
-      `Unknown curse "${curse}". Call paw_curse first; handles last only while this server runs.`,
+      'Unknown curse. Call paw_curse first; handles last only while this server runs.',
     );
     expect(stub.requests).toHaveLength(0);
   });
 
-  it('a handle of another grant is unknown and cuts a long id to 60 characters', async () => {
+  it('a handle of another grant is unknown and the handle is not repeated', async () => {
     stub = await startStub((req, res) =>
       sendJson(res, 200, { wish: { id: 'w', text: 't', createdAt: 1 }, grant: makeGrant(WISH_ID) }),
     );
@@ -157,7 +169,7 @@ describe('paw_bind with an unknown curse', () => {
     await connected.client.callTool({ name: 'paw_curse', arguments: { requirement: 'R' } });
     const long = 'z'.repeat(90);
     const result = await connected.client.callTool({ name: 'paw_bind', arguments: { curse: long, amendment: 'A.' } });
-    expect(textOf(result)).toContain(`"${'z'.repeat(60)}".`);
+    expect(textOf(result)).toBe('Unknown curse. Call paw_curse first; handles last only while this server runs.');
     expect(stub.requests).toHaveLength(1);
   });
 });
@@ -183,12 +195,12 @@ describe('input limits: error names the field and the limit, no API call', () =>
   });
 
   it('accepts exactly 500 and 200 characters', async () => {
-    const r = await callCurse((_q, res) => sendJson(res, 400, { message: 'reached the API' }));
-    expect(r.text).toBe('reached the API');
+    const r = await callCurse((_q, res) => sendJson(res, 400, { message: 'Invalid wish format' }));
+    expect(r.text).toBe('The Paw API did not accept the requirement.');
     const result = await connected!.client.callTool({
       name: 'paw_curse',
       arguments: { requirement: 'x'.repeat(500), context: 'c'.repeat(200) },
     });
-    expect(textOf(result)).toBe('reached the API');
+    expect(textOf(result)).toBe('The Paw API did not accept the requirement.');
   });
 });

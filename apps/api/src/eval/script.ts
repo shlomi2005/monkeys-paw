@@ -10,6 +10,7 @@ import { BudgetedModelClient } from '../budget/guarded-client';
 import type { MeteredModelClient } from '../budget/guarded-client';
 import { createGlobalState } from '../budget/state';
 import type { GoldenWish, WishEvalResult, EvalResult } from './types';
+import { errorLine } from '../error-log';
 
 /** The eval cannot run: no API key, or the budget guard refused a model call. */
 export class EvalAbortError extends Error {
@@ -372,12 +373,9 @@ export async function runEvalCli(
 
     return result.pass ? 0 : 1;
   } catch (err) {
-    // One line, no stack: it must not echo prompts or secrets.
-    error(
-      err instanceof EvalAbortError
-        ? err.message
-        : `Eval script error: ${err instanceof Error ? err.message : 'unknown'}`,
-    );
+    // One line, no stack. EvalAbortError has fixed text of ours; any other error is a fixed code
+    // and a class, never its message (it can hold prompts, wishes or upstream text).
+    error(err instanceof EvalAbortError ? err.message : errorLine('eval_failed', err));
     return 1;
   }
 }

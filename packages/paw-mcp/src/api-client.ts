@@ -32,17 +32,43 @@ export interface ApiClient {
   ): Promise<ApiResult<T>>;
 }
 
+/**
+ * The fixed messages of the Paw API that this tool knows, by the exact text the API sends
+ * (`apps/api/src/routes/grant.ts`, `bind.ts` and `budget/messages.ts`; a test reads those files, so a
+ * change there fails here). The value is our own sentence. Any other message is not repeated: it
+ * could carry text of the wish, a model or a proxy.
+ */
+export const API_MESSAGES: ReadonlyMap<string, string> = new Map([
+  ['Invalid wish format', 'The Paw API did not accept the requirement.'],
+  [
+    'The paw trembles and refuses. Such wishes are beyond its power \u2014 and its mercy.',
+    'The paw refuses a requirement that is about harming people.',
+  ],
+  ['Invalid bind request', 'The Paw API did not accept the amendment.'],
+  ['The paw has no memory of this curse.', 'The paw has no memory of this curse. Call paw_curse again.'],
+  [
+    'The paw is resting. Browse the examples until it wakes.',
+    'The paw is resting. Try again later; the three local tools still work.',
+  ],
+]);
+
+/** Our own sentence for a message of the API that is on the list, else null. Reads nothing else from the body. */
 function messageOf(text: string): string | null {
   try {
     const parsed: unknown = JSON.parse(text);
     if (parsed && typeof parsed === 'object' && 'message' in parsed) {
       const { message } = parsed as { message: unknown };
-      if (typeof message === 'string' && message.trim() !== '') return message;
+      if (typeof message === 'string') return API_MESSAGES.get(message) ?? null;
     }
   } catch {
     // not JSON
   }
   return null;
+}
+
+/** A status that may be written into a sentence or a log line: an integer from 100 to 599, else 0. */
+function safeStatus(status: unknown): number {
+  return typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? status : 0;
 }
 
 /** The fixed text for a 403 whose JSON body has a known gate code. Reads nothing else from the body. */
@@ -82,7 +108,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
           signal: AbortSignal.timeout(timeoutMs),
           redirect: 'error',
         });
-        status = res.status;
+        status = safeStatus(res.status);
         const text = await res.text();
         if (!res.ok) {
           const gate = status === 403 ? gateMessageOf(text) : null;

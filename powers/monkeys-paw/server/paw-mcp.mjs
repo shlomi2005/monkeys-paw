@@ -7256,6 +7256,9 @@ var require_dist = __commonJS({
   }
 });
 
+// src/index.ts
+import { writeSync } from "node:fs";
+
 // ../../node_modules/.pnpm/@modelcontextprotocol+sdk@1.32.2_supports-color@7.2.0_zod@3.25.76/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js
 import process2 from "node:process";
 
@@ -13392,40 +13395,6 @@ var StdioServerTransport = class {
   }
 };
 
-// src/mode.ts
-var LOCAL = { mode: { kind: "local" }, ignored: false };
-var LOCAL_IGNORED = { mode: { kind: "local" }, ignored: true };
-function resolveMode(raw) {
-  if (raw === void 0) return LOCAL;
-  const text = raw.trim();
-  if (text === "" || text.includes("${")) return LOCAL;
-  let url;
-  try {
-    url = new URL(text);
-  } catch {
-    return LOCAL_IGNORED;
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") return LOCAL_IGNORED;
-  if (url.username !== "" || url.password !== "") return LOCAL_IGNORED;
-  return { mode: { kind: "remote", baseUrl: text.replace(/\/+$/, "") }, ignored: false };
-}
-function originOf(url) {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return "an unusable URL";
-  }
-}
-function startupLine(version2, mode2) {
-  return mode2.kind === "local" ? `paw-mcp ${version2} mode=local` : `paw-mcp ${version2} mode=remote api=${originOf(mode2.baseUrl)}`;
-}
-function ignoredLine(version2) {
-  return `paw-mcp ${version2} ignored PAW_API_URL: not a usable http(s) URL without credentials; using local mode`;
-}
-function adultConfirmedOf(raw) {
-  return raw === "yes";
-}
-
 // ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/external.js
 var external_exports = {};
 __export(external_exports, {
@@ -17466,6 +17435,56 @@ var coerce = {
   date: ((arg) => ZodDate.create({ ...arg, coerce: true }))
 };
 var NEVER2 = INVALID;
+
+// src/error-class.ts
+function errorClassOf(err) {
+  try {
+    if (err instanceof SyntaxError) return "SyntaxError";
+    if (err instanceof TypeError) return "TypeError";
+    if (err instanceof RangeError) return "RangeError";
+    if (err instanceof ZodError2) return "ZodError";
+    if (err instanceof Error) return "Error";
+  } catch {
+  }
+  return "NonError";
+}
+function errorLine(code, err) {
+  return JSON.stringify({ event: "error", code, error: errorClassOf(err) });
+}
+
+// src/mode.ts
+var LOCAL = { mode: { kind: "local" }, ignored: false };
+var LOCAL_IGNORED = { mode: { kind: "local" }, ignored: true };
+function resolveMode(raw) {
+  if (raw === void 0) return LOCAL;
+  const text = raw.trim();
+  if (text === "" || text.includes("${")) return LOCAL;
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return LOCAL_IGNORED;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return LOCAL_IGNORED;
+  if (url.username !== "" || url.password !== "") return LOCAL_IGNORED;
+  return { mode: { kind: "remote", baseUrl: text.replace(/\/+$/, "") }, ignored: false };
+}
+function originOf(url) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "an unusable URL";
+  }
+}
+function startupLine(version2, mode2) {
+  return mode2.kind === "local" ? `paw-mcp ${version2} mode=local` : `paw-mcp ${version2} mode=remote api=${originOf(mode2.baseUrl)}`;
+}
+function ignoredLine(version2) {
+  return `paw-mcp ${version2} ignored PAW_API_URL: not a usable http(s) URL without credentials; using local mode`;
+}
+function adultConfirmedOf(raw) {
+  return raw === "yes";
+}
 
 // ../../node_modules/.pnpm/zod@3.25.76/node_modules/zod/v4/mini/schemas.js
 var ZodMiniType = /* @__PURE__ */ $constructor("ZodMiniType", (inst, def) => {
@@ -21601,16 +21620,32 @@ var REQUEST_TIMEOUT_MS = 3e4;
 var MSG_BAD_SHAPE = "The Paw API answered in a shape this tool does not understand.";
 var MSG_REGION = "The paw grants no live wishes from here. The three local tools still work: paw_rules, paw_check_curses and paw_check_verdict.";
 var MSG_ADULT = "The Paw API grants live wishes only to people who confirm they are 18 or older. Only the user can confirm: ask them to set PAW_I_AM_18_OR_OLDER=yes in the server's environment themselves and restart it. Do not set it for them.";
+var API_MESSAGES = /* @__PURE__ */ new Map([
+  ["Invalid wish format", "The Paw API did not accept the requirement."],
+  [
+    "The paw trembles and refuses. Such wishes are beyond its power \u2014 and its mercy.",
+    "The paw refuses a requirement that is about harming people."
+  ],
+  ["Invalid bind request", "The Paw API did not accept the amendment."],
+  ["The paw has no memory of this curse.", "The paw has no memory of this curse. Call paw_curse again."],
+  [
+    "The paw is resting. Browse the examples until it wakes.",
+    "The paw is resting. Try again later; the three local tools still work."
+  ]
+]);
 function messageOf(text) {
   try {
     const parsed = JSON.parse(text);
     if (parsed && typeof parsed === "object" && "message" in parsed) {
       const { message } = parsed;
-      if (typeof message === "string" && message.trim() !== "") return message;
+      if (typeof message === "string") return API_MESSAGES.get(message) ?? null;
     }
   } catch {
   }
   return null;
+}
+function safeStatus(status) {
+  return typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599 ? status : 0;
 }
 function gateMessageOf(text) {
   try {
@@ -21641,7 +21676,7 @@ function createApiClient(options) {
           signal: AbortSignal.timeout(timeoutMs),
           redirect: "error"
         });
-        status = res.status;
+        status = safeStatus(res.status);
         const text = await res.text();
         if (!res.ok) {
           const gate = status === 403 ? gateMessageOf(text) : null;
@@ -21792,6 +21827,146 @@ function textResult(text, structuredContent) {
 }
 function errorResult(text) {
   return { content: [{ type: "text", text }], isError: true };
+}
+
+// src/issue.ts
+var SAFE_FIELDS = /* @__PURE__ */ new Set([
+  "requirement",
+  "context",
+  "curses",
+  "curse",
+  "amendment",
+  "kind",
+  "verdict",
+  "id",
+  "type",
+  "story",
+  "loophole",
+  "status",
+  "closed",
+  "reason",
+  "property",
+  "binding",
+  "curseId",
+  "clause",
+  "proposedAt",
+  "judgedAt"
+]);
+var MESSAGE_CODES = /* @__PURE__ */ new Set([
+  "custom",
+  "invalid_union",
+  "too_small",
+  "too_big",
+  "not_multiple_of",
+  "not_finite",
+  "invalid_date"
+]);
+function partOf(part) {
+  if (typeof part === "number") return Number.isSafeInteger(part) && part >= 0 ? `[${part}]` : "[?]";
+  return typeof part === "string" && SAFE_FIELDS.has(part) ? `.${part}` : ".field";
+}
+function pathOf(prefix, path) {
+  return [prefix, ...path.map(partOf)].join("").replace(/^\./, "");
+}
+function optionsOf(options) {
+  const list = Array.isArray(options) ? options : [];
+  return list.filter((o) => typeof o === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(o)).join(", ");
+}
+function ruleLine(path, message) {
+  const text = message.replace(/\.$/, "");
+  return text.includes(path) ? `${text}.` : `${path}: ${text}.`;
+}
+function sentenceOf(issue2, path) {
+  switch (issue2.code) {
+    case "invalid_enum_value":
+      return issue2.message.startsWith("Invalid enum value") ? `${path} must be one of: ${optionsOf(issue2.options)}.` : ruleLine(path, issue2.message);
+    case "invalid_type":
+      return issue2.received === "undefined" ? `${path} is required.` : `${path} must be a ${issue2.expected}.`;
+    case "too_small":
+      return issue2.type === "string" ? `${path} must not be empty.` : ruleLine(path, issue2.message);
+    case "too_big":
+      return issue2.type === "string" ? `${path} must be at most ${String(issue2.maximum)} characters.` : ruleLine(path, issue2.message);
+    case "unrecognized_keys":
+      return `${path} has a key that is not allowed.`;
+    default:
+      if (!MESSAGE_CODES.has(issue2.code)) return `${path} is not valid.`;
+      return ruleLine(path, issue2.message);
+  }
+}
+function describeIssue(prefix, issue2) {
+  return sentenceOf(issue2, pathOf(prefix, issue2.path));
+}
+function describeInputIssue(issue2) {
+  if (!issue2) return "Invalid input.";
+  const field = pathOf("", issue2.path);
+  const line = sentenceOf(issue2, field === "" ? "input" : field);
+  return `Invalid input: ${line.replace(/\.$/, "")}.`;
+}
+function describeInputError(error2) {
+  return describeInputIssue(error2.issues[0]);
+}
+
+// src/safe-sdk.ts
+var MSG_UNKNOWN_TOOL = "Unknown tool.";
+var MSG_TOOL_FAILED = "The Paw tool failed unexpectedly.";
+var MSG_INVALID_INPUT = "Invalid input.";
+var MCP_PREFIX = /^MCP error -?\d+: /;
+var UNKNOWN_TOOL = /^Tool [\s\S]* (?:not found|disabled)$/;
+var INPUT_MESSAGE_PREFIX = "Invalid input";
+var MAX_INPUT_MESSAGE = 300;
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function safeToolErrorText(message) {
+  const text = message.replace(MCP_PREFIX, "");
+  if (UNKNOWN_TOOL.test(text)) return MSG_UNKNOWN_TOOL;
+  if (MCP_PREFIX.test(message) && text.startsWith(INPUT_MESSAGE_PREFIX) && text.length <= MAX_INPUT_MESSAGE) {
+    return text;
+  }
+  return MSG_TOOL_FAILED;
+}
+var RPC_MESSAGES = /* @__PURE__ */ new Map([
+  [-32700, "Parse error"],
+  [-32600, "Invalid request"],
+  [-32601, "Method not found"],
+  [-32602, "Invalid params"],
+  [-32603, "Internal error"]
+]);
+function redactRpcError(message) {
+  if (!("error" in message) || !isRecord(message.error)) return message;
+  const raw = message.error.code;
+  const code = typeof raw === "number" && Number.isSafeInteger(raw) ? raw : -32603;
+  return { jsonrpc: "2.0", id: message.id, error: { code, message: RPC_MESSAGES.get(code) ?? "Request failed" } };
+}
+async function firstIssueOf(tool, args) {
+  const schema = tool.inputSchema;
+  if (typeof schema?.safeParseAsync !== "function") return void 0;
+  const parsed = await schema.safeParseAsync(args ?? {});
+  return parsed.success ? void 0 : parsed.error?.issues?.[0];
+}
+function hardenServer(server2) {
+  const internals = server2;
+  const validate = internals.validateToolInput.bind(server2);
+  internals.validateToolInput = async (tool, args, name) => {
+    try {
+      return await validate(tool, args, name);
+    } catch {
+      let text = MSG_INVALID_INPUT;
+      try {
+        const issue2 = await firstIssueOf(tool, args);
+        if (issue2) text = describeInputIssue(issue2);
+      } catch {
+      }
+      throw new McpError(ErrorCode.InvalidParams, text);
+    }
+  };
+  internals.createToolError = (text) => errorResult(safeToolErrorText(text));
+  const connect = server2.connect.bind(server2);
+  server2.connect = (transport) => {
+    const send = transport.send.bind(transport);
+    transport.send = (message, options) => send(redactRpcError(message), options);
+    return connect(transport);
+  };
 }
 
 // ../paw-core/src/schemas.ts
@@ -21947,35 +22122,12 @@ function proposeBinding(curse, clause, kind) {
   };
 }
 
-// src/issue.ts
-function describeIssue(prefix, issue2) {
-  const path = [prefix, ...issue2.path.map((part) => typeof part === "number" ? `[${part}]` : `.${part}`)].join("").replace(/^\./, "");
-  switch (issue2.code) {
-    case "invalid_enum_value":
-      return `${path} must be one of: ${issue2.options.join(", ")}.`;
-    case "invalid_type":
-      return issue2.received === "undefined" ? `${path} is required.` : `${path} must be a ${issue2.expected}.`;
-    case "too_small":
-      return issue2.type === "string" ? `${path} must not be empty.` : `${path}: ${issue2.message}.`;
-    case "too_big":
-      return issue2.type === "string" ? `${path} must be at most ${String(issue2.maximum)} characters.` : `${path}: ${issue2.message}.`;
-    default:
-      return `${path}: ${issue2.message.replace(/\.$/, "")}.`;
-  }
-}
-function describeInputError(error2) {
-  const issue2 = error2.issues[0];
-  if (!issue2) return "Invalid input.";
-  const field = issue2.path.join(".");
-  const text = field !== "" && !issue2.message.includes(field) ? `${field}: ${issue2.message}` : issue2.message;
-  return `Invalid input: ${text.replace(/\.$/, "")}.`;
-}
-
 // src/tool-bind.ts
+var MSG_UNKNOWN_CURSE = "Unknown curse. Call paw_curse first; handles last only while this server runs.";
 var inputShape = {
   curse: external_exports.string().trim().min(1, "curse must not be empty").max(100, "curse must be at most 100 characters").describe("A handle from paw_curse such as 3f2a9c1e:curse-2, or a bare id such as curse-2 for the newest grant."),
   amendment: external_exports.string().trim().min(1, "amendment must not be empty").max(500, "amendment must be at most 500 characters").describe("The EARS clause or the rewritten requirement that should close the loophole. At most 500 characters."),
-  kind: BindingKindSchema.default("ears-clause").describe(
+  kind: external_exports.enum(BindingKindSchema.options, { errorMap: () => ({ message: 'kind must be "ears-clause" or "rewrite"' }) }).default("ears-clause").describe(
     "'ears-clause' (default) adds a clause; 'rewrite' replaces the requirement."
   )
 };
@@ -21993,9 +22145,7 @@ async function handleBind(deps, args) {
   const { curse: ref, amendment, kind } = input.data;
   const found = deps.memory.resolve(ref);
   if (!found) {
-    return errorResult(
-      `Unknown curse "${ref.slice(0, 60)}". Call paw_curse first; handles last only while this server runs.`
-    );
+    return errorResult(MSG_UNKNOWN_CURSE);
   }
   const body = { grant: found.grant, curseId: found.curse.id, kind, clause: amendment };
   const res = await deps.api.postJson("paw_bind", "/api/bind", body, BindResponseSchema);
@@ -22242,7 +22392,7 @@ var inputShape3 = {
     "The curse being closed, {type, story, loophole} with an optional id (default curse-0), as paw_check_curses returns it; or a JSON string of that object."
   ),
   amendment: external_exports.string().trim().min(1, "amendment must not be empty").max(500, "amendment must be at most 500 characters").describe("The EARS clause or the rewritten requirement that should close the loophole. At most 500 characters."),
-  kind: BindingKindSchema.default("ears-clause").describe(
+  kind: external_exports.enum(BindingKindSchema.options, { errorMap: () => ({ message: 'kind must be "ears-clause" or "rewrite"' }) }).default("ears-clause").describe(
     "'ears-clause' (default) adds a clause; 'rewrite' replaces the requirement."
   ),
   verdict: external_exports.union([external_exports.record(external_exports.unknown()), external_exports.string()], {
@@ -22388,6 +22538,7 @@ function createPawServer(options) {
     { name: "paw", version: PAW_MCP_VERSION },
     { instructions: remote ? REMOTE_INSTRUCTIONS : LOCAL_INSTRUCTIONS }
   );
+  hardenServer(server2);
   const local = (tool, run) => (args) => safely(async () => {
     const started = Date.now();
     let result;
@@ -22443,6 +22594,22 @@ function createPawServer(options) {
 }
 
 // src/index.ts
+process.on("uncaughtException", (err) => {
+  try {
+    writeSync(2, `${errorLine("uncaught_exception", err)}
+`);
+  } finally {
+    process.exit(1);
+  }
+});
+process.on("unhandledRejection", (reason) => {
+  try {
+    writeSync(2, `${errorLine("unhandled_rejection", reason)}
+`);
+  } finally {
+    process.exit(1);
+  }
+});
 var { mode, ignored } = resolveMode(process.env.PAW_API_URL);
 process.stderr.write(`${startupLine(PAW_MCP_VERSION, mode)}
 `);

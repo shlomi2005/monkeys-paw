@@ -4,6 +4,7 @@ import type { CallLogger } from './call-log';
 import { createGrantMemory } from './grant-memory';
 import { LOCAL_INSTRUCTIONS, REMOTE_INSTRUCTIONS } from './instructions';
 import { errorResult, type ToolResult } from './render';
+import { hardenServer } from './safe-sdk';
 import * as bind from './tool-bind';
 import * as checkCurses from './tool-check-curses';
 import * as checkVerdict from './tool-check-verdict';
@@ -48,6 +49,9 @@ export function createPawServer(options: PawServerOptions): McpServer {
     { name: 'paw', version: PAW_MCP_VERSION },
     { instructions: remote ? REMOTE_INSTRUCTIONS : LOCAL_INSTRUCTIONS },
   );
+
+  // The SDK's own echoes (tool name, zod text, JSON-RPC error messages) are closed in one place.
+  hardenServer(server);
 
   /** Local handlers log `ok` or `invalid` and the duration, never content. */
   const local =

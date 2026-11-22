@@ -112,7 +112,12 @@ function isResourceExhausted(body: unknown): boolean {
  * body is missing, cut, unreadable or not JSON. The text is never kept or logged.
  */
 async function readErrorBody(response: Response, signal: AbortSignal): Promise<unknown> {
-  const reader = response.body?.getReader();
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  try {
+    reader = response.body?.getReader();
+  } catch {
+    return undefined; // a response that cannot be read: its error is not ours to keep
+  }
   if (!reader) return undefined;
   const cancel = () => {
     void reader.cancel().catch(() => undefined);
@@ -166,12 +171,13 @@ export interface AttemptReport extends AttemptPlan {
 export interface ModelCallLogEntry {
   event: 'model_call';
   model: string;
-  /** HTTP status, or 0 when no response arrived (timeout, network failure). */
+  /** HTTP status (an integer from 100 to 599), or 0 when no response arrived (timeout, network failure). */
   status: number;
   ms: number;
   ok: boolean;
   promptTokens?: number;
   outputTokens?: number;
+  /** One of `FINISH_REASONS`, or `OTHER`. Never the upstream text. */
   finishReason?: string;
 }
 
@@ -220,10 +226,49 @@ function candidateText(envelope: unknown): string {
     .join('');
 }
 
-/** The finish reason of the first candidate, only when it looks like an enum (e.g. STOP, MAX_TOKENS). */
+/** The finish reasons of Gemini's `FinishReason` enum. A value outside the list is logged as `OTHER`. */
+export const FINISH_REASONS: ReadonlySet<string> = new Set([
+  'FINISH_REASON_UNSPECIFIED',
+  'STOP',
+  'MAX_TOKENS',
+  'SAFETY',
+  'RECITATION',
+  'LANGUAGE',
+  'OTHER',
+  'BLOCKLIST',
+  'PROHIBITED_CONTENT',
+  'SPII',
+  'MALFORMED_FUNCTION_CALL',
+  'IMAGE_SAFETY',
+  'IMAGE_PROHIBITED_CONTENT',
+  'IMAGE_OTHER',
+  'NO_IMAGE',
+  'UNEXPECTED_TOOL_CALL',
+  'TOO_MANY_TOOL_CALLS',
+  'MISSING_THOUGHT_SIGNATURE',
+  'MALFORMED_RESPONSE',
+]);
+
+/**
+ * The finish reason of the first candidate: a string from `FINISH_REASONS`, `OTHER` for any other
+ * string, `undefined` when there is none. Upstream text never reaches the caller.
+ */
 function finishReasonOf(envelope: unknown): string | undefined {
   const reason = firstCandidate(envelope)?.finishReason;
-  return typeof reason === 'string' && /^[A-Z_]{1,40}$/.test(reason) ? reason : undefined;
+  if (typeof reason !== 'string') return undefined;
+  return FINISH_REASONS.has(reason) ? reason : 'OTHER';
+}
+
+/** A token count that may be logged: a safe integer from 0 to 1,000,000. Anything else is omitted. */
+function loggableCount(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 1_000_000
+    ? value
+    : undefined;
+}
+
+/** A status that may be logged and reported: an integer from 100 to 599, else 0. */
+function loggableStatus(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 100 && value <= 599 ? value : 0;
 }
 
 function count(value: unknown): number {
@@ -421,7 +466,7 @@ export class GeminiModelClient implements ModelClient {
           body,
           signal: abortController.signal,
         });
-        status = response.status;
+        status = loggableStatus(response.status);
 
         if (status !== 200) {
           // Read (capped, under this attempt's signal), reduced to a verdict, dropped.
@@ -494,10 +539,11 @@ export class GeminiModelClient implements ModelClient {
         ms: Date.now() - startedAt,
         ok,
       };
-      if (report.usage) {
-        entry.promptTokens = report.usage.promptTokens;
-        entry.outputTokens = report.usage.outputTokens;
-      }
+      // The charge uses report.usage as it is. The log carries a count only when it is a small integer.
+      const promptTokens = loggableCount(report.usage?.promptTokens);
+      const outputTokens = loggableCount(report.usage?.outputTokens);
+      if (promptTokens !== undefined) entry.promptTokens = promptTokens;
+      if (outputTokens !== undefined) entry.outputTokens = outputTokens;
       if (finishReason) entry.finishReason = finishReason;
       this.log(entry);
       onAttempt(report);

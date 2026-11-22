@@ -18,7 +18,9 @@ export const inputShape = {
     .min(1, 'amendment must not be empty')
     .max(500, 'amendment must be at most 500 characters')
     .describe('The EARS clause or the rewritten requirement that should close the loophole. At most 500 characters.'),
-  kind: BindingKindSchema.default('ears-clause').describe(
+  kind: z
+    .enum(BindingKindSchema.options, { errorMap: () => ({ message: 'kind must be "ears-clause" or "rewrite"' }) })
+    .default('ears-clause').describe(
     "'ears-clause' (default) adds a clause; 'rewrite' replaces the requirement.",
   ),
   verdict: z

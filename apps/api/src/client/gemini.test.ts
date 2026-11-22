@@ -726,10 +726,33 @@ describe('the model_call log line (paw-api task 103)', () => {
     expect(JSON.stringify(logs)).not.toContain(FAKE_KEY);
   });
 
-  it('drops a finishReason that is not an enum-like token', async () => {
-    const { client, logs } = setup([geminiWithUsage('{}', { finishReason: `free text ${RESPONSE_SECRET}` })]);
-    await client.generate('x');
-    expect('finishReason' in logs[0]).toBe(false);
+  it('logs OTHER for a finishReason that is not on the list of Gemini finish reasons', async () => {
+    for (const reason of [`free text ${RESPONSE_SECRET}`, 'SHOUTED_USER_TEXT', 'stop']) {
+      const { client, logs } = setup([geminiWithUsage('{}', { finishReason: reason })]);
+      await client.generate('x');
+      expect(logs[0].finishReason).toBe('OTHER');
+      expect(JSON.stringify(logs)).not.toContain(RESPONSE_SECRET);
+    }
+  });
+
+  it('logs a token count only as a safe integer from 0 to 1000000, and charges the report unchanged', async () => {
+    const odd = { promptTokenCount: 12345678, candidatesTokenCount: 1.5, thoughtsTokenCount: 0 };
+    const { client, logs } = setup([geminiWithUsage('{}', { usageMetadata: odd })]);
+    const reports: AttemptReport[] = [];
+    await client.generateMetered('x', (report) => reports.push(report));
+    expect('promptTokens' in logs[0]).toBe(false);
+    expect('outputTokens' in logs[0]).toBe(false);
+    expect(reports[0].usage).toEqual({ promptTokens: 12345678, outputTokens: 1.5 });
+  });
+
+  it('logs status 0 for a status that is not an integer from 100 to 599', async () => {
+    for (const bad of [99, 600, 200.5, 'abc']) {
+      const logs: ModelCallLogEntry[] = [];
+      const fake = vi.fn<typeof fetch>(async () => ({ status: bad }) as unknown as Response);
+      const client = new GeminiModelClient({ apiKey: FAKE_KEY, models: ['model-a'], fetch: fake, log: (e) => logs.push(e) });
+      await expect(client.generate('x')).rejects.toThrow();
+      expect(logs[0].status).toBe(0);
+    }
   });
 });
 

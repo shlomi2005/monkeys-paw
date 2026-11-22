@@ -298,12 +298,19 @@ requirements stay private (iron-rules.md §2).
 2. **THE SYSTEM SHALL NOT** log wish text alongside an IP address or any identifier.
 3. **THE SYSTEM SHALL** keep only short-lived, in-memory rate-limit counters keyed by IP; these are not
    persisted and are never written to disk.
-4. **WHEN** the server logs a request **THE SYSTEM SHALL** log only: timestamp, HTTP method, path, status
-   code, duration, and whether a model call was made. Never wish text, never the IP in combination with any
-   wish content.
+4. **WHEN** the server logs a request **THE SYSTEM SHALL** write one JSON line with only: `event`, timestamp, method,
+   path, status code, duration, and `modelCall`. The method is one of the allow-listed names, else `OTHER`. The path
+   is one of the known routes (exact match), else `other`; the query string is never logged. `modelCall` is true only
+   for a POST on a live route whose budget guard made a model call. Never wish text, never the IP.
 5. **THE SYSTEM SHALL NOT** set cookies or track users across requests.
 6. **THE SYSTEM SHALL NOT** log, in any stream, the body of a Gemini error answer, or any part of it (Requirement
    13.2). Only numbers and enums are logged (Requirement 6.5).
+7. **THE SYSTEM SHALL NOT** write to stdout, stderr or a log, or send in an error response, any text that came from a
+   user, a request (body, URL, path, query, method, header), a model or an upstream (an upstream message, status
+   text, finish reason, or the message, stack or cause of a thrown value). **WHEN** an error is logged **THE SYSTEM
+   SHALL** write one JSON line `{"event":"error","code":<fixed code>,"error":<class>}`, where the class comes from
+   `instanceof` checks against a short list of known classes, else `Error` or `NonError`, never from `name`.
+   **WHEN** a request body cannot be read **THE SYSTEM SHALL** answer 400 with the route's invalid-format message.
 
 ### Requirement 10: CORS
 

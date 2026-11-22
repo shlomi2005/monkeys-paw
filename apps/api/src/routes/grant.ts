@@ -7,6 +7,8 @@ import { GrantRequestSchema, GrantResponseSchema } from '../schemas';
 import type { BudgetedModelClient } from '../budget/guarded-client';
 import { RESTING_MESSAGE } from '../budget/messages';
 import { isHarmfulWish } from '../guardrail';
+import { logError } from '../error-log';
+import { readJsonBody } from './body';
 
 /**
  * Create the grant route handler.
@@ -18,7 +20,10 @@ export function createGrantRoute(app: Hono, createClient: () => BudgetedModelCli
   app.post('/api/grant', async (c: Context) => {
     try {
       // Validate request
-      const parsed = GrantRequestSchema.safeParse(await c.req.json());
+      // An unreadable body is a bad wish, not a server failure; nothing of it is logged.
+      const body = await readJsonBody(c);
+      if (!body.ok) return c.json({ message: 'Invalid wish format' }, 400);
+      const parsed = GrantRequestSchema.safeParse(body.value);
       if (!parsed.success) {
         return c.json({ message: 'Invalid wish format' }, 400);
       }
@@ -66,7 +71,8 @@ export function createGrantRoute(app: Hono, createClient: () => BudgetedModelCli
 
       return c.json(response.data, 200);
     } catch (err) {
-      console.error('Grant route error:', err);
+      // Fixed code and class only: the message of a thrown value can hold the wish.
+      logError('grant_failed', err);
       return c.json(
         { message: 'An error occurred while granting your wish' },
         500,

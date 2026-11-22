@@ -1,9 +1,12 @@
 // paw-power Requirement 26 and D25: the age confirmation in remote mode. A fake `fetch`, no network.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MSG_ADULT, MSG_REGION } from '../src/api-client';
+import { API_MESSAGES, MSG_ADULT, MSG_REGION } from '../src/api-client';
 import type { CallLogger } from '../src/call-log';
 import { adultConfirmedOf } from '../src/mode';
 import { makeGrant } from './fixtures';
+
+const RESTING = 'The paw is resting. Browse the examples until it wakes.';
+const MSG_RESTING = API_MESSAGES.get(RESTING) as string;
 import { connectPaw, textOf, type Connected } from './stub-api';
 
 const WISH_ID = '3f2a9c1e-0000-4000-8000-000000000001';
@@ -164,11 +167,11 @@ describe('403 with a gate code', () => {
 
   it('any other 403, and a known code on another status, follows the usual rules', async () => {
     const cases: [number, unknown, string][] = [
-      [403, { message: 'Forbidden by the host.' }, 'Forbidden by the host.'],
-      [403, { code: 'something_else', message: 'Some other refusal.' }, 'Some other refusal.'],
+      [403, { message: 'Forbidden by the host.' }, 'The Paw API answered HTTP 403.'],
+      [403, { code: 'something_else', message: 'Some other refusal.' }, 'The Paw API answered HTTP 403.'],
       [403, 'plain text', 'The Paw API answered HTTP 403.'],
-      [400, { code: 'adult_confirmation_required', message: 'Wish text cannot be empty' }, 'Wish text cannot be empty'],
-      [503, { code: 'live_region_unavailable', message: 'The paw is resting. Try the examples.' }, 'The paw is resting. Try the examples.'],
+      [400, { code: 'adult_confirmation_required', message: 'Wish text cannot be empty' }, 'The Paw API answered HTTP 400.'],
+      [503, { code: 'live_region_unavailable', message: RESTING }, MSG_RESTING],
     ];
     for (const [status, body, expected] of cases) {
       const { fn } = fakeFetch(() => json(status, body));

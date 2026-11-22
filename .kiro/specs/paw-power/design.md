@@ -350,11 +350,15 @@ Errors (every row is `isError: true`, one sentence; `<origin>` is `URL.origin`):
 | Condition | Text |
 |-----------|------|
 | Input breaks a limit | `Invalid input: <field> <rule>.` (for example `requirement must be at most 500 characters.`) |
-| `paw_bind`: curse not in memory | `Unknown curse "<first 60 chars>". Call paw_curse first; handles last only while this server runs.` |
+| `paw_bind`: curse not in memory | `Unknown curse. Call paw_curse first; handles last only while this server runs.` (the handle is not repeated) |
+| Unknown tool name (also `constructor`) | `Unknown tool.` |
+| Input fails validation (any field, including a bad `kind`) | `Invalid input: <field> <rule>.` built from the first issue; a received value and a key the caller chose are never in it |
+| Output validation, or any other error of the SDK | `The Paw tool failed unexpectedly.` |
+| Any JSON-RPC error answer (a bad `initialize`, bad params) | a fixed message per code (`Invalid params`, `Method not found`, `Internal error`, ...) and no `data` |
 | 403 with JSON `{code: 'live_region_unavailable'}` | `The paw grants no live wishes from here. The three local tools still work: paw_rules, paw_check_curses and paw_check_verdict.` |
 | 403 with JSON `{code: 'adult_confirmation_required'}` | `The Paw API grants live wishes only to people who confirm they are 18 or older. Only the user can confirm: ask them to set PAW_I_AM_18_OR_OLDER=yes in the server's environment themselves and restart it. Do not set it for them.` |
-| Non-2xx with JSON `{message}` (400, 404, 500, 503, any other 403) | the `message`, unchanged |
-| Non-2xx otherwise | `The Paw API answered HTTP <status>.` |
+| Non-2xx with JSON `{message}` equal to one of the API's five fixed messages | our own sentence for it (`API_MESSAGES` in `api-client.ts`; a test reads the API source files to catch drift) |
+| Non-2xx otherwise, any other message | `The Paw API answered HTTP <status>.` (the status is an integer from 100 to 599, else 0) |
 | `fetch` rejects, timeout, redirect | `Cannot reach the Paw API at <origin>; set PAW_API_URL.` |
 | 2xx, body not JSON or fails the schema | `The Paw API answered in a shape this tool does not understand.` |
 | Any other thrown error | `The Paw tool failed unexpectedly.` (the error is not logged with its message) |
@@ -363,7 +367,12 @@ Logging (stderr only). Start-up: `paw-mcp 0.2.0 mode=local`, or `paw-mcp 0.2.0 m
 `paw_curse 200 412ms` in remote mode, and `paw_check_curses ok 3ms` or `paw_check_curses invalid 2ms` in local mode (`invalid`
 means the tool returned an error result). The logger takes `(tool, outcome, ms)` only, so a requirement, a curse, an
 amendment or a verdict cannot be passed to it by mistake. A call that the SDK rejects before the handler runs (a missing
-field) is not logged.
+field) is not logged. `safe-sdk.ts` closes the SDK's own echoes in one place, called by `createPawServer`: it wraps
+`validateToolInput` (the input message is rebuilt from the first zod issue), overrides `createToolError`, which is private in
+the SDK's types but is the one place every tool error passes through, and wraps the transport's `send` in `connect`
+so that every JSON-RPC error answer has a fixed message and no data. Every enum field has a fixed `errorMap`. In
+`index.ts`, `uncaughtException` and `unhandledRejection` write `{"event":"error","code":...,"error":<class>}` with a
+synchronous write to stderr and exit 1; the class comes from `instanceof`, never from `name`.
 
 Local tools have their own errors, all `isError: true` with the lines of "Tool contracts" (`The curses do not pass
 yet:` and the problems; for `paw_check_verdict` the same lines under `The verdict does not pass yet:`). A thrown error
@@ -693,6 +702,7 @@ All in `packages/paw-mcp/tests/`, run with `pnpm vitest run`, no network except 
 | `check-curses.test.ts` | Good input passes: ids `curse-0`..`curse-<n-1>`, status `open`, trimmed, text and `structuredContent` agree. The JSON-string form. Extra keys such as `id` and `status` are ignored and cannot choose an id. Each bad input gives its one line with its path: not an array, 2 and 6 curses, a non-object item, a bad `type`, an empty or missing `story` or `loophole`, story of 361, loophole of 1001, a repeated type, requirement of 501 or 0 characters. Several problems at once are all reported; 11 problems are cut to 10. The failure text starts with `The curses do not pass yet:` and has `isError`. A loophole with no 4-letter word in common with the requirement gives the exact warning line and no error |
 | `check-verdict.test.ts` | Good closed and open verdicts pass, with an injected clock for `judgedAt`; `curseId` is injected; the binding comes from `proposeBinding` (shape, `proposedAt` a number); `property` is dropped when `closed` is false; a default `curse-0`; the JSON-string forms. Bad: an `ears-clause` that fails `isEarsCriterion` (the error names the keywords), a `rewrite` that does not need to; `closed` missing or not boolean; empty `reason`; `closed: true` with no property, one not starting with `For any`, one of 41 words (and 40 passes); a bad curse; amendment of 501 characters. Text starts with `CLOSED:` or `OPEN:` |
 | `roundtrip.test.ts` | Remote mode. A stub HTTP server on `127.0.0.1:0` serves `/api/grant` and `/api/bind` with schema-valid bodies. An MCP `Client` over `InMemoryTransport.createLinkedPair()` calls `paw_curse`, then `paw_bind` on a returned handle (closed and open). Asserts the stub got the whole grant, the right `curseId`, and the amendment as `clause`; the memory holds the updated grant |
+| `privacy.test.ts`, `safe-sdk.test.ts`, `api-messages.test.ts` | Random canaries (a piece of 7 characters of one must not appear) in every argument of all five tools, as a tool name, in raw JSON-RPC params, as an upstream message, body, code, status text and thrown error; the spawned bundle's stderr and error answers; the override of `createToolError`; the API's fixed messages read from its source files |
 | `errors.test.ts` | Remote mode: 400 message, 503 "The paw is resting", 500, non-JSON error, unreachable host (closed port), timeout (stub that never answers, with a short injected timeout), invalid shape, unknown curse (no API call made), requirement of 501 characters, empty requirement, context of 201 |
 | `stdio.test.ts` | Spawns `node powers/monkeys-paw/server/paw-mcp.mjs` twice. Local: no `PAW_API_URL`; `tools/list` returns the three local tools; start-up line `mode=local`; `paw_check_curses` works. Remote: `PAW_API_URL` set to the stub on `127.0.0.1`; `tools/list` returns five tools. In both, every stdout line parses as JSON-RPC, and stderr never contains the requirement text. Closes the child and the stub |
 | `bundle-fresh.test.ts` | A fresh esbuild build (aliasing `paw-core` to its `src/index.ts`) equals the committed bundle; `NOTICE.md` names every bundled package |

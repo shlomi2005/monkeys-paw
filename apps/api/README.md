@@ -230,7 +230,9 @@ Without the secret (a fork, for example) the eval is skipped and the check passe
 ## Privacy and logging
 
 - A wish is never stored. Only short-lived rate-limit counters and the daily spend live in memory.
-- The log line holds the method, the path, the status and the duration. It never holds wish text, curse text, a prompt, a model answer, an IP address or a key.
+- The request log is one JSON line from our own logger: `event`, `timestamp`, `method`, `path`, `status`, `duration` and `modelCall`. The method is an allow-listed name or `OTHER`. The path is a known route or `other`, and the query string is never logged. It never holds wish text, curse text, a prompt, a model answer, an IP address or a key.
+- Nothing that came from a caller, a model or an upstream is logged or sent back in an error: not a body, URL, header, upstream message, or the message, stack or cause of a thrown value. An error is one line, `{"event":"error","code":<fixed code>,"error":<class>}`, where the class comes from `instanceof` checks on a short list, else `Error` or `NonError`. A body that cannot be read gets a 400 with the route's usual message.
+- The Gemini line (`model_call`) holds the model name from our settings, the status (100 to 599, else 0), the duration, token counts only when they are integers from 0 to 1,000,000, and a finish reason only from Gemini's list (else `OTHER`).
 - The key is read from the environment on the server and never sent to a client.
 - The server sets no cookies.
 - The visitor's country is read from one header for one decision and is never stored, logged or echoed. The age confirmation is a header that is checked and dropped.

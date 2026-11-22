@@ -176,10 +176,15 @@ variable (and to confirm my age with a second, Requirement 26), so that I pay fo
 
 1. **THE SYSTEM SHALL** return every failure of every tool as a result with `isError: true`. The server never throws out
    of a tool handler and never exits because of a tool call.
-2. **WHEN** the API answers with a non-2xx status and a JSON `{"message": string}`, **THE SYSTEM SHALL** return that
-   message unchanged, except a 403 with a known gate code (Requirement 26.3). A 503 therefore keeps "The paw is resting...". (Remote mode.)
-3. **WHEN** the API answers non-2xx without such a body, **THE SYSTEM SHALL** return `The Paw API answered HTTP <status>.`
-   (Remote mode.)
+2. **WHEN** the API answers with a non-2xx status and a JSON `{"message": string}` that equals exactly one of the API's
+   five fixed messages (invalid wish, the harm refusal, invalid bind, no memory of this curse, resting), **THE SYSTEM
+   SHALL** return a sentence of its own for it; a 403 with a known gate code keeps its fixed text (Requirement 26.3).
+   Any other message is not repeated. (Remote mode.) No text that came from a caller, a tool argument or name, a request,
+   an upstream or a thrown value may reach stdout, stderr, a log call, an `isError` result or a JSON-RPC error answer:
+   a bad enum value, an unknown tool, a SDK validation error and a JSON-RPC error all get fixed text, and a
+   crash writes one line with a fixed code and the class.
+3. **WHEN** the API answers non-2xx with any other body or message, **THE SYSTEM SHALL** return
+   `The Paw API answered HTTP <status>.` (Remote mode.)
 4. **WHEN** the request fails at the network level or times out, **THE SYSTEM SHALL** return
    `Cannot reach the Paw API at <origin>; set PAW_API_URL.` The origin has no path and no credentials. (Remote mode.)
 5. **WHEN** a 2xx answer is not JSON or fails the `paw-core` schema, **THE SYSTEM SHALL** return a sentence that says

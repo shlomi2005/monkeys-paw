@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { logger } from 'hono/logger';
 import { cors } from 'hono/cors';
 import type { Context, Next } from 'hono';
 
@@ -20,6 +19,8 @@ import type { PriceTable } from './budget/prices';
 import { RESTING_MESSAGE } from './budget/messages';
 import { createGlobalState } from './budget/state';
 import { getCurrentMode, isModelCallAllowed } from './modes';
+import { logError } from './error-log';
+import { requestLogger, trackModelCalls } from './logger';
 
 export interface AppDeps {
   /** The model client. `available` is false when no API key is set (examples-only mode). */
@@ -60,8 +61,15 @@ export function createApp(deps: AppDeps): Hono {
     }),
   );
 
-  // Logger middleware (Req 9, Task 50)
-  app.use('*', logger());
+  // Logger middleware (Req 9, Task 50): our own line, nothing the caller chose.
+  app.use('*', requestLogger());
+
+  // Any error that reaches the app: a fixed answer, a fixed code and class in the log (Req 9.7).
+  // Hono's default handler would print the error and send the message of an HTTPException.
+  app.onError((err, c) => {
+    logError('request_failed', err);
+    return c.json({ message: 'An error occurred while handling the request' }, 500);
+  });
 
   // Live-call gate (paw-api Req 14): headers only, so it runs before the mode check, the per-IP
   // count, the body and the guard.
@@ -86,8 +94,11 @@ export function createApp(deps: AppDeps): Hono {
   }
 
   // Each request gets its own guard; all guards share the one global state.
-  const createClient = () =>
-    new BudgetedModelClient(model, globalState, budget, clock, deps.prices);
+  const createClient = () => {
+    const guard = new BudgetedModelClient(model, globalState, budget, clock, deps.prices);
+    trackModelCalls(() => guard.calls); // for the `modelCall` field of the request log
+    return guard;
+  };
 
   createHealthRoute(app, globalState, budget, () => model.available, clock);
   createLiveRoute(app, gate);

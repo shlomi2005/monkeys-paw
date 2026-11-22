@@ -5,6 +5,8 @@ import type { Curse } from 'paw-core';
 import { BindRequestSchema, BindResponseSchema, isLoopholeWithinCap } from '../schemas';
 import type { BudgetedModelClient } from '../budget/guarded-client';
 import { RESTING_MESSAGE } from '../budget/messages';
+import { logError } from '../error-log';
+import { readJsonBody } from './body';
 
 /**
  * Create the bind route handler.
@@ -16,7 +18,10 @@ export function createBindRoute(app: Hono, createClient: () => BudgetedModelClie
   app.post('/api/bind', async (c: Context) => {
     try {
       // Validate request
-      const parsed = BindRequestSchema.safeParse(await c.req.json());
+      // An unreadable body is a bad request, not a server failure; nothing of it is logged.
+      const body = await readJsonBody(c);
+      if (!body.ok) return c.json({ message: 'Invalid bind request' }, 400);
+      const parsed = BindRequestSchema.safeParse(body.value);
       if (!parsed.success) {
         return c.json({ message: 'Invalid bind request' }, 400);
       }
@@ -87,7 +92,8 @@ export function createBindRoute(app: Hono, createClient: () => BudgetedModelClie
 
       return c.json(response.data, 200);
     } catch (err) {
-      console.error('Bind route error:', err);
+      // Fixed code and class only: the message of a thrown value can hold the curse or the clause.
+      logError('bind_failed', err);
       return c.json(
         { message: 'An error occurred while binding the curse' },
         500,
