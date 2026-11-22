@@ -509,11 +509,10 @@ spend a visitor's quota.
    is parsed); story 360; loophole 1000; binding clause 1000; verdict `reason` and `property` 1000 each. **IF** a
    value is over a cap **THE SYSTEM SHALL** return the route's existing 400 and make no model call. The shared
    `paw-core` schemas keep their shape, so model output does not start failing.
-4. **THE SYSTEM SHALL** make whatever it serves from grant, bind or examples pass those caps, so it can always be
-   bound and exported. One pure `fitGrant` cuts an over-long id, loophole, clause or reason at its cap without
+4. **THE SYSTEM SHALL** make every schema-valid grant that it serves from grant, bind or examples pass those caps, so it can be bound and exported. One pure `fitGrant` cuts an over-long id, loophole, clause or reason at its cap without
    splitting a surrogate pair, and leaves out an over-long optional `userStory`, `wishCriterion` or `property`
    (export then uses its templates). A grant inside the caps is unchanged. Every ready round and cached example
-   exports.
+   exports. The one-curse fallback grant of a failed model is not schema-valid (3 to 5 curses) and does not export; that is older than this requirement and not changed by it.
 5. **THE SYSTEM SHALL** do work on caller text in linear time: `stripTrailingPunctuation` in `paw-core`, the
    guardrail's apostrophe trim, and any other regex or loop over caller text. The output of both trims is
    identical to the old expressions.
