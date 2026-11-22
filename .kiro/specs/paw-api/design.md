@@ -296,7 +296,7 @@ z.array(z.object({
 
 **Middleware (`cors`):** Runs on all routes.
 - Read `CORS_ORIGIN` env var (default `*` for local dev).
-- Check `Origin` header: if matches, set `Access-Control-Allow-Origin`, `Access-Control-Allow-Methods` (GET, POST, OPTIONS), `Access-Control-Allow-Headers` (Content-Type).
+- Check `Origin` header: if matches, set `Access-Control-Allow-Origin`, `Access-Control-Allow-Methods` (GET, POST, OPTIONS), `Access-Control-Allow-Headers` (Content-Type, X-Paw-Adult-Confirmed).
 - On `OPTIONS` preflight, return 204 with headers and no body.
 - If no match, omit CORS headers (browser blocks request).
 
@@ -367,6 +367,10 @@ z.array(z.object({
 
 **Property 10 (Quota stops the guard):** For any sequence of `generate` calls on one guard, once one of them has thrown `QuotaExhaustedError`, the inner client receives no further call from that guard.
 
+**Property 11 (An excluded country never reaches the model):** For any excluded code (or any value that is not on the allow-list), any `X-Paw-Adult-Confirmed` value and any other headers, a request to a `LIVE_ROUTES` route on the free tier gets 403, the model gets 0 calls, and `spentCents`, `reservedCents` and the IP count do not move.
+
+**Property 12 (Only the named header counts):** For any request, the gate's decision is the same whatever the headers other than `COUNTRY_HEADER` and `X-Paw-Adult-Confirmed` hold.
+
 **Test location:** `apps/api/tests/properties.test.ts` (uses Vitest + fast-check).
 
 ## Free tier (Requirement 13)
@@ -376,3 +380,22 @@ z.array(z.object({
 **Tests, stubbed `fetch` only.** In `gemini.test.ts`: a 429 on the primary with a per-model `QuotaFailure` tries the next model (two HTTP calls); a per-project `QuotaFailure` stops the chain after one attempt and throws `QuotaExhaustedError`; a 429 with an unreadable body, or no violation, tries the next model; `RESOURCE_EXHAUSTED` in a body with status 403 or 503 counts as a quota attempt; a body above 64 KB is cut and does not hang; every model answering 429 throws `QuotaExhaustedError`; a 429 on the primary and a success on the next model succeeds; a 500 still throws its own error; the log lines and the thrown message hold neither the key nor any part of the body. In `guarded-client.test.ts`: a quota attempt is charged 0 and `spentCents` does not move; reservations are released; after a quota answer `denied` is true and a second `generate` makes no inner call (counted), including through `grantWish` and `judgeBinding`, so paw-core's retry makes no second HTTP call; a budget refusal does not set the quota flag. In `app.test.ts`: a 429 on every model gives 503 with `RESTING_MESSAGE` on `/api/grant` and `/api/bind`, and `/api/health` still says `normal`. In the eval tests: a quota answer exits 1, writes no files, prints no pass. In `properties.test.ts`: properties 9 and 10.
 
 **Docs.** `apps/api/README.md`: the sentence "An attempt that reported no token counts (a timeout, a network error, an HTTP error) is charged its ceiling." gets the quota exception, and a new section "Running on the free tier" holds the steps and behaviour of Requirement 13.8.
+
+## Live-call gate (Requirement 14)
+
+**Where.** `apps/api/src/gate/regions.ts` (the table of 231 names and codes, `FREE_EXCLUDED`, the two allow-lists), `apps/api/src/gate/gate.ts` (`LIVE_ROUTES`, `GateConfig`, `countryAllowed`, the middleware), `GET /api/live` in `apps/api/src/routes/live.ts`, `createApp` and `server.ts`. Pure functions, no I/O.
+
+**Config.** `GateConfig = { tier: 'free' | 'paid'; countryHeader?: string }`. `server.ts` sets `tier` to `paid` only when `GEMINI_TIER` is exactly `paid`, and `countryHeader` from `COUNTRY_HEADER`. `createApp(deps)` without it uses `{ tier: 'free' }`, which allows no country.
+
+**Order of middleware.** CORS, logger, then the gate on each `LIVE_ROUTES` entry (method and path), then the mode check, the per-IP count, the body, the guard and the model. The gate reads headers only. `OPTIONS` preflight is answered by CORS before it.
+
+**Decision.** `countryAllowed(headers, config)`:
+1. No usable header name (unset, blank, or not an HTTP token: checked before `headers.get`, which throws on a bad name) gives `false`.
+2. The value must match `^[A-Z]{2}$` exactly (a repeated header arrives as `US, GB` and fails). No trimming, no case folding.
+3. The code must be in the allow-list of the tier.
+
+`adultConfirmed(headers)` is `headers.get('x-paw-adult-confirmed') === 'yes'`. The gate answers `live_region_unavailable` first, then `adult_confirmation_required`, each 403 with `cache-control: no-store` and `{ code, message }` (texts in Requirement 14.7). The country never enters a log line, body, header or error. `GET /api/live` calls only `countryAllowed`.
+
+**Regions table.** The names are those of the available-regions page (read 2026-11-22), each with one code. `FREE_EXCLUDED` holds the 27 EU states, `IS`, `LI`, `NO`, `CH`, `GB` and the territories of Requirement 14.3; the free list is the table minus it (172 codes), the paid list is the table (231). A test compares the names with a fixture file, so a change of the page shows as a failed test, not as a silent drift.
+
+**Tests.** `apps/api/src/gate/gate.test.ts`, route cases in `app.test.ts`, properties 11 and 12 in `tests/properties.test.ts`. Cases are in Requirement 14.12. Agents do not run them in the repository; the reviewer runs them in a clean copy without `.env`.

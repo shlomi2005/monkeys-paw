@@ -1,7 +1,7 @@
 # Paw Power — Tasks
 
 Ordered checklist for the Paw inside Kiro. Requirements are cited as `Req N.M` (see `requirements.md`), decisions as
-`D1`–`D24` (design.md, "Decisions and deviations"). Each task is sized for one agent run. Tests are in the task that adds
+`D1`–`D25` (design.md, "Decisions and deviations"). Each task is sized for one agent run. Tests are in the task that adds
 the code, run with `pnpm vitest run` in `packages/paw-mcp`. No agent can run a hook, validate an agent in the IDE or
 install a power, so tasks 7, 8, 13 and 14 are the reviewer's. Do not change `apps/api` or `apps/web` code in any task.
 Tasks 9 to 14 add local mode (the owner's decision of 20.11, D14 to D24): the power runs on the user's own Kiro agent and
@@ -237,3 +237,5 @@ or `packages/paw-mcp/src` ends with `pnpm -C packages/paw-core build` (so `paw-m
   Confirm the cost: one agent loop per save. Then run `curse-a-spec` on a spec and check the Judge step (paw_rules `bind`,
   `paw_check_verdict`). Run the `paw` and `judge` agents once each. Record the results and the date here. (Req 11,
   14.4, 14.6, 18.1, 18.2)
+- [ ] 15. Age confirmation in remote mode (`packages/paw-mcp/src`, its tests, `powers/monkeys-paw/README.md`, the bundle). Read `PAW_I_AM_18_OR_OLDER` once at start-up with `PAW_API_URL`; exactly `yes` adds `x-paw-adult-confirmed: yes` in `postJson`, only for `paw_curse` and `paw_bind`; map a 403 with the two known codes to the fixed texts of design "API client"; update the comments and tests that say the requests carry only `content-type` and `accept`. Local mode and both `mcp.json` files do not change. README: the variable, the gate, that the user sets it where Kiro starts the server, and that in remote mode wishes go to Gemini where Google may use them and people there may read them; not legal advice, not proof of age. Tests with a fake `fetch` as in Requirement 26.5. Then `pnpm -C packages/paw-core build`, `pnpm -C packages/paw-mcp bundle` and one `pnpm -C packages/paw-mcp vitest run`. Run no `apps/api` test. (Req 26, 5.4, 6.2, D25)
+

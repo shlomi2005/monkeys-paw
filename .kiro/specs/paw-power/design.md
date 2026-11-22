@@ -51,6 +51,7 @@ mode it sits behind a Paw API that the user runs, and the API's `{message}` erro
 | D22 | `zod-to-json-schema` is a direct dependency of `paw-mcp`, pinned `3.25.2` (the version the SDK resolves), installed with `pnpm --offline`. | It is already in the lockfile, the bundle and `NOTICE.md`, so no new package enters the bundle. The JSON Schemas in `paw_rules` are made from `paw-core`'s schemas, so they cannot drift. |
 | D23 | The review hook costs one agent loop per save, on the user's credits, and makes no API call: at most 1 `paw_rules` and 6 `paw_check_curses` calls (3 requirements, one retry each). | Replaces "up to 3 API calls per save" of D9. The skill and the README say it plainly. |
 | D24 | Local calls log `<tool> <ok or invalid> <ms>ms` to stderr and nothing else. The logger takes `(tool, outcome, ms)` only, where `outcome` is an HTTP status in remote mode and `ok` or `invalid` in local mode. | A requirement, a curse or a verdict cannot be passed to it by mistake (Req 7.3). |
+| D25 | Remote mode reads `PAW_I_AM_18_OR_OLDER` once at start; exactly `yes` adds `X-Paw-Adult-Confirmed: yes` to `paw_curse` and `paw_bind`, nothing else changes the header. It is never a tool argument, so an agent cannot confirm for the user. A 403 with `live_region_unavailable` or `adult_confirmation_required` gets a fixed text in `paw-mcp`. `mcp.json` (both files) does not change. | Google's terms bar the free tier for people under 18 and outside listed regions (paw-api Requirement 14). The confirmation must come from the person, not the agent. The host decides whether the variable reaches the server; the README tells the user to set it where Kiro starts the server. The text is not legal advice and not proof of age. |
 
 ---
 
@@ -341,7 +342,7 @@ URL without credentials; using local mode`.
 ### API client (remote mode only)
 
 `postJson(path, body, schema)` uses `fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json',
-accept: 'application/json' }, body, signal: AbortSignal.timeout(30_000), redirect: 'error' })`. No other header, no
+accept: 'application/json', ...adultHeader }, body, signal: AbortSignal.timeout(30_000), redirect: 'error' })`. `adultHeader` is `{ 'x-paw-adult-confirmed': 'yes' }` when `PAW_I_AM_18_OR_OLDER` was exactly `yes` at start-up (read once, with `PAW_API_URL`, in `index.ts`), else empty; only `paw_curse` and `paw_bind` use `postJson`. No other header, no
 cookie, no credentials. The client is created only in remote mode.
 
 Errors (every row is `isError: true`, one sentence; `<origin>` is `URL.origin`):
@@ -350,7 +351,9 @@ Errors (every row is `isError: true`, one sentence; `<origin>` is `URL.origin`):
 |-----------|------|
 | Input breaks a limit | `Invalid input: <field> <rule>.` (for example `requirement must be at most 500 characters.`) |
 | `paw_bind`: curse not in memory | `Unknown curse "<first 60 chars>". Call paw_curse first; handles last only while this server runs.` |
-| Non-2xx with JSON `{message}` (400, 404, 500, 503) | the `message`, unchanged |
+| 403 with JSON `{code: 'live_region_unavailable'}` | `The paw grants no live wishes from here. The three local tools still work: paw_rules, paw_check_curses and paw_check_verdict.` |
+| 403 with JSON `{code: 'adult_confirmation_required'}` | `The Paw API grants live wishes only to people who confirm they are 18 or older. Only the user can confirm: ask them to set PAW_I_AM_18_OR_OLDER=yes in the server's environment themselves and restart it. Do not set it for them.` |
+| Non-2xx with JSON `{message}` (400, 404, 500, 503, any other 403) | the `message`, unchanged |
 | Non-2xx otherwise | `The Paw API answered HTTP <status>.` |
 | `fetch` rejects, timeout, redirect | `Cannot reach the Paw API at <origin>; set PAW_API_URL.` |
 | 2xx, body not JSON or fails the schema | `The Paw API answered in a shape this tool does not understand.` |

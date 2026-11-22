@@ -34,6 +34,8 @@ Three design choices shape everything else:
 | A10 | Req 6.2 names `monkeys-paw-<wishId>.zip` but `POST /api/export` returns JSON (`SpecExport`), not a zip. | The client builds the zip from `requirementsMd` and `propertiesMd` with its own store-only zip writer (`export/zip.ts`, no dependency). |
 | A11 | Req 7.3 and task 36 expect four CC0 or original MP3/WAV files (about 128 kbps, under 500 KB) under `public/audio/`, with an `ASSETS.md` licence note. | **The four cues are original and synthesized in code at runtime with the Web Audio API** (oscillators, noise buffers filled by our own seeded generator, filters and gain envelopes). There is no audio file, no base64 audio, no audio library and no download. Why: (1) originality and licence safety in a public repo and a contest video that forbids third-party copyrighted material, with nothing to attribute or audit; (2) zero download, so the Audio budget is 0 bytes and the player chunk is about 1.3 KB gz; (3) it still satisfies Req 7.3 "CC0/original" (code we wrote is original). Only the "~128kbps MP3 or WAV, total <500KB" format clause of Req 7.3 does not apply. `public/audio/` and `ASSETS.md` are not created. |
 | A12 | Req 8.1 lists the tab order of desktop and of a phone before a Grant: wish line first. Req 1.4 and 9.1 put the curse list "below paw". At 390×844 after a Grant the first curse starts at y 1000 (1135 with the longest narration), under the wish form and the examples, so the player does not see the result. | **Result first** is the viewport under 768 px with a Grant active (`ctx.grant` not null). Then the wish line and the examples come after the actions, on screen and in the DOM, so the tab order follows what is seen. Desktop, and a phone before a Grant, while granting and after Rewrite, keep the order of Req 8.1. See "Mobile" and "Focus order". |
+| A13 | The website runs on Gemini's free tier. Google's terms allow it only in listed regions, outside the EEA, Switzerland and the UK, and not for people under 18. The server gates live calls (paw-api Requirement 14). | The page holds `live` (`unknown`, `open`, `outside`) from `GET /api/live`, an 18+ checkbox (header `X-Paw-Adult-Confirmed: yes` on live grant and bind) and three built-in ready rounds for the outside screen. The checkbox is not legal advice and not proof of age. See "Live gate and ready rounds". |
+| A14 | Bug: after a Grant the "Make the wish" seal looks active but does nothing, because the machine accepts a wish only when idle. | From the Grant until Rewrite the seal looks inert and is `aria-disabled`, focusable, with a visible reason. Native `disabled` stays for `granting`. See "Seal after the Grant". |
 
 ## Architecture
 
@@ -88,7 +90,7 @@ apps/web/
 ├── e2e/                        # Playwright specs and screenshot receipts
 └── src/
     ├── main.tsx   App.tsx
-    ├── state/        paw-machine.ts  paw-machine-types.ts  paw-selectors.ts  paw-announcer.ts
+    ├── state/        paw-machine.ts  paw-machine-types.ts  paw-selectors.ts  paw-announcer.ts  ready-rounds.ts
     │                 use-paw-session.ts  scene-bridge.ts  arbitraries.ts (test support)
     ├── api/          api-client.ts  api-errors.ts  api-messages.ts  api-schemas.ts
     ├── export/       zip.ts  slug.ts  download.ts
@@ -271,15 +273,7 @@ Everything else reflows through CSS with no remount (Req 9.4).
 visible, fed by `GET /api/examples`. Each `ExampleCard` shows a wish snippet (~50 characters with ellipsis), a
 context snippet and an "Example" label. Typing in the wish input dims the row and clears the highlighted card.
 
-**Wish privacy line (Req 3.9).** The website runs on Gemini's free tier, where Google may use what it receives, so the
-wish line says where wishes go. `api-messages.ts` exports `WISH_SENT_TO_GEMINI_MESSAGE`, proposed text: "Your wish
-travels to Google's Gemini, which writes the curses. Keep personal details out of it." (short, no exclamation mark,
-none of the words tone.md avoids; the task may reword it inside tone.md). `WishLine` renders it as a `<p id={noteId}>`
-in its own grid row under the wish row, always (also in examples-only play, where it is harmless). The wish input's
-`aria-describedby` becomes the note's id alone, or `"<messageId> <noteId>"` when a message shows, so the error is read
-first. The row uses the band's body size (at least 1rem) and its ink colour, which already meet AA on the ruled
-parchment (design section 7), and adds no other layout change: the seal, the context row and the tab order stay as
-they are, and the note is not focusable.
+**Wish privacy line (Req 3.9).** `api-messages.ts` exports `WISH_SENT_TO_GEMINI_MESSAGE`: "Wishes and clauses go to Google's Gemini. Google may use them to improve its products, and people there may read them. Keep personal details out." `WishLine` renders it as a `<p id={noteId}>` in its own grid row under the wish row, and the wish input's `aria-describedby` is the note's id alone, or `"<messageId> <noteId>"` when a message shows, so the error is read first. When `live` is `outside` the same `<p>` holds `OUTSIDE_NOTE` ("The paw grants no live wishes where you stand. Its examples still play the full round.") instead, and the live region announces it. The row uses the band's body size (at least 1rem) and ink colour, adds no other layout change and is not focusable.
 
 ### 2. React component tree
 
@@ -770,15 +764,16 @@ interface ApiError {
 }
 
 getExamples(signal?): Promise<ApiResult<ExampleEntry[]>>        // GET  /api/examples
-postGrant(wish: { text: string; context?: string }, signal?): Promise<ApiResult<{ wish: Wish; grant: Grant }>>
-postBind(req: { grant: Grant; curseId: string; kind: BindingKind; clause: string }, signal?): Promise<ApiResult<{ grant: Grant; verdict: Verdict }>>
+getLive(signal?): Promise<ApiResult<{ live: boolean }>>          // GET  /api/live, 5 s timeout
+postGrant(wish: { text: string; context?: string }, signal?, adult?: boolean): Promise<ApiResult<{ wish: Wish; grant: Grant }>>
+postBind(req: { grant: Grant; curseId: string; kind: BindingKind; clause: string }, signal?, adult?: boolean): Promise<ApiResult<{ grant: Grant; verdict: Verdict }>>
 postExport(req: { wish: Wish; grant: Grant }, signal?): Promise<ApiResult<SpecExport>>
 ```
 
 Request rules:
 
 - Every call uses `credentials: 'omit'`, `mode: 'cors'`, `cache: 'no-store'`, `referrerPolicy: 'no-referrer'`.
-  POST sends `Content-Type: application/json` (the only header the API's CORS config allows).
+  POST sends `Content-Type: application/json`, and a live grant or bind also sends `X-Paw-Adult-Confirmed: yes` (the only two headers the API's CORS config allows).
 - Wish text, context, grants and clauses travel only in the JSON body. URLs are fixed strings with no query
   string and no fragment (Req 11.6). The page URL never changes either.
 - Each call creates an `AbortController` and merges it with the caller's signal. Timeouts: grant and bind 60 s
@@ -808,6 +803,8 @@ Status mapping to in-character messages (`api-messages.ts`, one place so tone st
 | 400 on bind or export | `bad-request` | "The Judge cannot read that clause." | `bind_failed` or export notice |
 | 404 on bind | `not-found` | "The paw has no memory of this curse." | `bind_failed` |
 | 429, 503 on grant or bind | `resting` | "The paw is resting. Browse the examples until it wakes." | `grant_failed` or `bind_failed`, `examplesOnly = true` |
+| 403 `live_region_unavailable` on grant or bind | `outside` | The server's line, else "The paw grants no live wishes where you stand." | `live = outside`, `grant_failed` or `bind_failed`, ready rounds shown |
+| 403 `adult_confirmation_required` | `adult` | "The paw waits for one more word. Confirm you are 18 or older." | checkbox unticked, `grant_failed` or `bind_failed` |
 | 5xx other | `server` | "The paw stumbles. Try again in a moment." | failure event |
 | fetch rejects (offline, DNS, CORS) | `network` | "The line to the paw is cut." | failure event |
 | timeout | `timeout` | "The paw is slow to wake." | failure event |
@@ -816,10 +813,20 @@ Status mapping to in-character messages (`api-messages.ts`, one place so tone st
 
 #### Examples-only play (A9)
 
-After `examplesOnly` is set, "Make the wish" with an unmodified selected example does not call the API. The session
-dispatches `grant_requested` and then `grant_received` with that example's cached `{ wish, grant }`, so the same
-machine runs. A modified or typed wish shows the resting message. In this mode `request-bind` is not issued: the
-binding card shows "The Judge is resting too" and Accept is disabled, while Cancel and Rewrite still work.
+After `examplesOnly` is set, "Make the wish" with an unmodified selected example does not call the API. The session dispatches `grant_requested` and then `grant_received` with that example's cached `{ wish, grant }`, so the same machine runs. A modified or typed wish shows the resting message. In this mode `request-bind` is not issued; Accept follows "Replayed rounds" below. Cancel and Rewrite still work.
+
+#### Live gate and ready rounds (A13, Req 13)
+
+- **State.** The session holds `live` (`unknown`, `open`, `outside`) and `adultConfirmed` (boolean, default false), both in memory, outside `PawContext`. `getLive` runs once on mount. `outside` is sticky: a refusal sets it and no later probe clears it. `adultConfirmed` survives Rewrite and nothing else.
+- **Before a live request.** "Make the wish" checks in this order: (1) not idle: nothing; (2) an unmodified example that replays (see "Which examples replay"): replay, no tick needed; (3) outside: the outside line, "No live wishes here. Choose an example."; (4) resting: the resting line; (5) no tick: the alert of Req 13.3; (6) live request. Nothing is sent in steps 1 to 5. The header `X-Paw-Adult-Confirmed: yes` is sent only when `adult === true`, and the session passes the real state of the checkbox, never a constant. No other call sends it.
+- **Ready rounds.** `state/ready-rounds.ts` exports three `ReadyRound = { wish, grant }` where every curse has `binding` and `verdict`. A test checks each against `GrantSchema` and `VerdictSchema`, that every verdict has `closed: true`, a reason and a property, and that every `curseId` matches. Outside, `examples` is these three rounds, whatever `/api/examples` answered, and even while it is loading or after it failed.
+- **Which examples replay.** `isReadyRound(entry)` is true when every curse has both a binding and a closing verdict. A ready round replays from memory in every live state. Any other unmodified example goes live only when `live` is not `outside`, the box is ticked and `examplesOnly` is false; otherwise it replays its cached Grant.
+- **Replayed rounds.** No bind request is sent. For a ready round the card is pre-filled with the ready clause. Accept with the trimmed clause equal to it dispatches the ready verdict through the same events as a live verdict. An edited clause keeps the card open with "The Judge has an answer only for the clause as written." Without a ready verdict Accept is `aria-disabled` (still focusable) with "The Judge weighs only live wishes."; while resting the A9 line stays. Export calls `postExport`, which needs no gate.
+- **Layout.** The checkbox sits in the "for…" row on desktop, so the plate keeps its height. On a phone it takes its own row of at least 48 px, and the layout test checks the seal's bottom edge at 390×844 (within 844) and, if it fits, at 360×740 (within 740).
+
+#### Seal after the Grant (A14, Req 13.11)
+
+`WishLine` reads `phase`. In `idle` it works as today. In `granting` the controls are natively `disabled`, as today. In `curling`, `ready`, `binding`, `judging` and `ended` the seal has the class of an inert control (no red fill, no hover), `aria-disabled="true"` and `aria-describedby` pointing at a visible `<p>` "Granted already. Rewrite to wish again.". The seal stays focusable (not native `disabled`), so the tab orders of Req 8.1 and A12 and the focus rules hold. The wish and context inputs are `readOnly`, the checkbox and the example cards are `aria-disabled`, and click, Space and Enter on any of them return early: no request, no event, no state change.
 
 #### Export (`export/`)
 
@@ -1131,6 +1138,7 @@ Model output is untrusted (iron-rules §6). The client validates every response 
 |-----------|-----------|
 | Blank wish on submit | In-character line under the input, no request, no phase change (Req 3.3) |
 | Grant 400 (blank or refused wish) | Show server or local message, form re-enabled, phase back to `idle` (Req 3.3) |
+| Grant or bind 403 | `live_region_unavailable` sets `live = outside`; `adult_confirmation_required` unticks the box (A13) |
 | Grant or bind 429 or 503 | "The paw is resting…", `examplesOnly = true`, examples stay usable (A9, iron-rules §5) |
 | Grant timeout or network error | In-character message, `grant_failed`, form re-enabled |
 | Bind failure of any kind | `bind_failed`: the card stays open, the clause is kept, a message shows in the card (Req 4.3) |
@@ -1160,6 +1168,8 @@ Model output is untrusted (iron-rules §6). The client validates every response 
 
 The API is stubbed in end-to-end tests so they are deterministic and cost nothing. One optional smoke test runs
 against a local `apps/api` in examples-only mode (no model key needed).
+
+A13 and A14: unit tests for `getLive`, the header (only on live grant and bind, never in a body) and the 403 mapping; jsdom tests for `WishLine` (checkbox, alert, inert seal after the Grant, `readOnly`), the session (sticky `outside`, replay rules, no bind in a replay) and `ready-rounds.ts`. Playwright covers both screens with a stubbed API (task 57).
 
 Result first (A12): jsdom tests cover `use-media-query` (live change, missing or throwing `matchMedia`), `use-result-first`
 (the two moves, no move when in place, focus, caret and selection kept, the ring, dialogs and actions never moved) and

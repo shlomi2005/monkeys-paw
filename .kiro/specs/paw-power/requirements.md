@@ -154,7 +154,7 @@ outlives the process (iron rule 2).
 ### Requirement 5: Mode and API client
 
 **User story:** As a Kiro user, I want the power to work with nothing set, and to switch to my own Paw API with one
-variable, so that I pay for no server and still can use one.
+variable (and to confirm my age with a second, Requirement 26), so that I pay for no server and still can use one.
 
 **Acceptance criteria:**
 
@@ -164,7 +164,7 @@ variable, so that I pay for no server and still can use one.
    stripped as the base URL of every API call. The placeholder `https://paw-api.invalid` is no longer used for any call.
 3. **WHILE** the server is in remote mode, **THE SYSTEM SHALL** time out a request after 30 seconds, and refuse
    redirects.
-4. **THE SYSTEM SHALL NOT** send or ship any key, token or cookie. Requests carry only `content-type` and `accept`.
+4. **THE SYSTEM SHALL NOT** send or ship any key, token or cookie. Requests carry only `content-type` and `accept`, and `x-paw-adult-confirmed` when Requirement 26.2 says so.
 5. **THE SYSTEM SHALL** use the platform `fetch`, with no HTTP dependency.
 6. **WHILE** the server is in local mode, **THE SYSTEM SHALL NOT** create the API client (Requirement 20).
 
@@ -177,7 +177,7 @@ variable, so that I pay for no server and still can use one.
 1. **THE SYSTEM SHALL** return every failure of every tool as a result with `isError: true`. The server never throws out
    of a tool handler and never exits because of a tool call.
 2. **WHEN** the API answers with a non-2xx status and a JSON `{"message": string}`, **THE SYSTEM SHALL** return that
-   message unchanged. A 503 therefore keeps "The paw is resting...". (Remote mode.)
+   message unchanged, except a 403 with a known gate code (Requirement 26.3). A 503 therefore keeps "The paw is resting...". (Remote mode.)
 3. **WHEN** the API answers non-2xx without such a body, **THE SYSTEM SHALL** return `The Paw API answered HTTP <status>.`
    (Remote mode.)
 4. **WHEN** the request fails at the network level or times out, **THE SYSTEM SHALL** return
@@ -570,3 +570,27 @@ export needs.
    `paw-core`'s `proposeBinding`. The text has `paw_bind`'s form: `CLOSED: <reason>` and `Property: <property>`, or
    `OPEN: <reason> The loophole remains. ...`. An open verdict is not an error.
 7. **THE SYSTEM SHALL** make no network call and keep no state.
+
+### Requirement 26: Age confirmation in remote mode
+
+**User story:** As the owner, I want the remote tools to work against a gated Paw API only when the user has confirmed
+for themselves that they are 18 or older. The confirmation is not proof of age and the gate is not legal advice
+(paw-api Requirement 14).
+
+**Acceptance criteria:**
+
+1. **WHILE** the server is in local mode, **THE SYSTEM SHALL** stay as it is: the same three tools, no network call, and
+   `PAW_I_AM_18_OR_OLDER` has no effect. Both `mcp.json` files do not change.
+2. **WHILE** the server is in remote mode, **THE SYSTEM SHALL** read `PAW_I_AM_18_OR_OLDER` once at start-up. **ONLY
+   WHEN** it is exactly `yes`, `paw_curse` and `paw_bind` send the header `X-Paw-Adult-Confirmed: yes`. It is set by the
+   person in the server's environment and is never a tool argument.
+3. **WHEN** the API answers 403 with the code `live_region_unavailable` or `adult_confirmation_required`, **THE SYSTEM
+   SHALL** return an `isError` result with a fixed text, not the server's. Region: live wishes are not offered from here,
+   and the three local tools still work. Adult: only the user can confirm, they set `PAW_I_AM_18_OR_OLDER=yes` themselves
+   and restart the server, and the agent must not set it for them. Any other 403 follows Requirement 6.2 and 6.3.
+4. **THE SYSTEM SHALL** say in the power README the variable, the gate, and that in remote mode wishes go to Gemini,
+   where Google may use them and people there may read them.
+5. **THE SYSTEM SHALL** test, with a fake `fetch`: the header is absent for unset, `Yes`, ` yes`, `true` and empty, and
+   present for `yes`; no local tool sends it; both 403 texts; the value of the variable and the response body are never
+   logged. The committed bundle is rebuilt and `bundle-fresh.test.ts` stays green.
+

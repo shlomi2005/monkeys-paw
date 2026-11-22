@@ -7,7 +7,8 @@ API holds Gemini key). Renders Victorian-engraved paw and curse circles in 3D, f
 
 **Scope:** wish line and examples, 3D paw (load mobile.glb ≤768px, web.glb >768px, poster.jpg fallback),
 curl/open animations, five curse circles and binding card, Judge verdict, rest state, accessibility
-(keyboard, reduced-motion, AA contrast), mobile layout, sound (off by default), privacy (no storage), performance.
+(keyboard, reduced-motion, AA contrast), mobile layout, sound (off by default), privacy (no storage), performance, and where live wishes are offered
+(Requirement 13).
 
 **Out of scope:** API server, pure logic, Kiro power, model rigging, prompts.
 
@@ -102,22 +103,23 @@ curl/open animations.
 2. **ON USER INPUT:** clear wish, dim examples (opacity) until submit.
 3. **ON "MAKE THE WISH" OR ENTER:**
    - Validate wish non-empty (error if empty, in-character).
-   - Call `POST /api/grant` with `{ wish: { text, context } }`.
+   - Call `POST /api/grant` with `{ wish: { text, context } }`. A live wish first passes Requirement 13.
    - Show loading state (<5s typical, "The Paw stirs…" or animated blots).
    - Success: stamp "Granted." in red, play creak sound.
    - Error (400, 503): show in-character error, no Grant.
-   - Disable input/button until Grant arrives.
+   - Natively disable input and button while the Grant arrives. From the Grant until Rewrite the seal is
+     `aria-disabled` (Requirement 13.11).
 4. **EXAMPLES:** horizontal scrollable row (desktop) or vertical list (mobile), 3–5 visible, from
-   `GET /api/examples`.
+   `GET /api/examples`; outside the live region, the three ready rounds of Requirement 13.7.
 5. **EACH EXAMPLE CARD:** wish snippet (~50 chars, ellipsis), context snippet, "Example" label.
 6. **CLICK EXAMPLE:** populate input, highlight card (border glow). Modify text → highlight clears.
 7. **EXAMPLES NOT READY (503):** show placeholder, allow user wish, no block.
 8. **KEYBOARD:** example cards focusable, Enter to select.
-9. **WISH PRIVACY LINE:** near the wish input, one short line says that wishes are sent to Google's Gemini to write the
-   curses, so the user should not type personal details. It is in the page's voice (tone.md: dry, eerie, short), its
-   text is a constant in `api-messages.ts`, and it is tied to the wish input with `aria-describedby` (together with the
-   message's id when a message shows). Its text is at least 1rem and meets AA contrast. It changes no layout beyond its
-   own line.
+9. **WISH PRIVACY LINE:** near the wish input, one short note in the page's voice (tone.md: dry, eerie, short). Unless
+   live wishes are outside (Requirement 13.6), its text is "Wishes and clauses go to Google's Gemini. Google may use them
+   to improve its products, and people there may read them. Keep personal details out." The text is a constant in
+   `api-messages.ts`, tied to the wish input with `aria-describedby` (together with the message's id when a message
+   shows). It is at least 1rem, meets AA contrast and changes no layout beyond its own line.
 
 ### Requirement 4: Curse circles and binding card
 
@@ -244,7 +246,7 @@ card where I propose a fix.
 **Acceptance criteria:**
 
 1. **KEYBOARD:**
-   - Tab order: wish input → context → "Make" button → examples → circles → binding card →
+   - Tab order: wish input → context → "I am 18 or older" checkbox (when shown) → "Make" button → examples → circles → binding card →
      "Stop and take the scroll" → export buttons.
    - Enter: submit input, activate example, accept binding, click export.
    - Escape: close binding card, deselect example.
@@ -329,4 +331,47 @@ card where I propose a fix.
 4. **SOUND:** CC0 or original recordings (no copyrighted).
 5. **COLOURS:** custom palette, not brand.
 6. **LICENSE:** MIT on repo. Assets: OFL fonts, CC0 audio, original art, Blender models.
+
+### Requirement 13: Where live wishes are offered
+
+**User story:** As a visitor, I want to know before I type whether the paw can grant my wish live, and to play the
+examples when it cannot. The server decides (paw-api Requirement 14). The page never calls the 18+ checkbox legal advice
+or proof of age.
+
+**Acceptance criteria:**
+
+1. **LIVE STATE:** held in memory only: `unknown`, `open` or `outside`. On mount the client calls `GET /api/live`:
+   `false` gives outside, `true` gives open, a failure gives unknown (the server still decides). A
+   `live_region_unavailable` refusal sets outside, and a later probe never undoes it.
+2. **18+ CHECKBOX:** unless outside, the wish line has an unticked native checkbox labelled exactly "I am 18 or older",
+   a target of at least 48 px, `autocomplete="off"`. It lives in React or session memory only (no storage, no cookie, no
+   URL): unticked again after a reload, kept through Rewrite. Tab order: wish, context, checkbox, seal, examples.
+3. **NOT CONFIRMED:** **WHEN** a live wish is made without the tick, **THE SYSTEM SHALL** send nothing and show the alert
+   "The paw waits for one more word. Confirm you are 18 or older.", set the checkbox `aria-invalid`, describe it by the
+   alert and move focus to it.
+4. **HEADER:** live grant and bind send `X-Paw-Adult-Confirmed: yes`, as a header and never in the body. No other
+   request sends it.
+5. **SERVER SAYS NO:** **WHEN** the server answers `adult_confirmation_required`, **THE SYSTEM SHALL** show the line of
+   13.3 and untick the checkbox.
+6. **OUTSIDE:** there is no checkbox, and the note of 3.9 is replaced by "The paw grants no live wishes where you stand.
+   Its examples still play the full round." The line is announced. A typed or edited wish sends nothing and shows "No
+   live wishes here. Choose an example."
+7. **READY ROUNDS:** outside, the example row shows three built-in ready rounds (`src/state/ready-rounds.ts`) and not
+   `/api/examples`, whose cache holds no verdicts. Each is written in advance, with no model: a wish from
+   `docs/golden-wishes.json`, a Grant of 3 to 5 curses, and on every curse a closing EARS clause (`binding`) and its
+   Judge verdict with reason and property (`verdict`). A ready round works with no `/api/grant` and no `/api/bind`.
+8. **WHEN THE GATE APPLIES:** an unmodified example never needs the gate. A round whose every curse carries a ready
+   binding and a closing verdict always replays from memory. Any other example keeps today's live behaviour only when
+   live is open or unknown, the box is ticked and the paw is not resting; otherwise it replays its cached Grant.
+9. **IN A REPLAYED ROUND** no bind is ever sent. For a ready round the card is pre-filled with the ready clause. Accepting
+   it unchanged (trimmed) replays its verdict through the normal machine (finger, medal, rest, export). An edited clause
+   stays open with "The Judge has an answer only for the clause as written." Without a ready verdict, Accept is
+   `aria-disabled` with "The Judge weighs only live wishes." (while resting, the A9 line stays). Export still uses
+   `/api/export`, which needs no gate.
+10. **LAYOUT:** at 390×844 the checkbox and everything above the seal's bottom edge sit within the first 844 px, and at
+    360×740 within 740 px if possible. On desktop the checkbox shares the "for…" row, so the plate does not grow.
+11. **SEAL AFTER THE GRANT:** the machine accepts a wish only when idle, so from the Grant until Rewrite the seal has no
+    red fill and no hover, is `aria-disabled`, stays focusable and is described by a visible "Granted already. Rewrite to
+    wish again." The inputs are `readOnly`, and the checkbox and the example cards are `aria-disabled` and do nothing.
+    Click, Space or Enter sends no request and changes no state. While granting, the controls stay natively disabled.
 

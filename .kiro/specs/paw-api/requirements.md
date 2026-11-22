@@ -14,8 +14,8 @@ possible. When the day's free quota ends, the round falls back to the ready exam
 
 Scope of this spec: the HTTP server in `apps/api`, the `GeminiModelClient`, budget and per-IP rate-limit
 enforcement, the cached examples endpoint, CORS, the golden-wish eval script, and the schema changes for
-wish-engine task 25 (Genie returns `userStory`, Judge returns `property`), and running on Gemini's free tier
-(Requirement 13).
+wish-engine task 25 (Genie returns `userStory`, Judge returns `property`), running on Gemini's free tier
+(Requirement 13), and the live-call gate (Requirement 14).
 
 ### Out of scope
 
@@ -314,7 +314,7 @@ the browser can call the API directly.
 
 1. **WHEN** the server receives a request with an `Origin` header matching the configured web origin
    (`CORS_ORIGIN` env var) **THE SYSTEM SHALL** include `Access-Control-Allow-Origin`, `Access-Control-Allow-
-   Methods` (GET, POST, OPTIONS), and `Access-Control-Allow-Headers` (Content-Type) in the response.
+   Methods` (GET, POST, OPTIONS), and `Access-Control-Allow-Headers` (Content-Type, X-Paw-Adult-Confirmed) in the response.
 2. **WHEN** the server receives a preflight `OPTIONS` request **THE SYSTEM SHALL** return HTTP 204 with the
    CORS headers and no body.
 3. **IF** the `Origin` header does not match the configured origin **THE SYSTEM SHALL** omit the
@@ -427,3 +427,55 @@ possible and, when the day's free quota ends, visitors get the ready examples.
    model gives 503 with `RESTING_MESSAGE` on `/api/grant` and on `/api/bind`; `RESOURCE_EXHAUSTED` in a body with
    another status counts too; a quota attempt costs 0 cents and `spentCents` does not move; after a quota answer
    paw-core's retry makes no second HTTP call; the key and the body never reach a log.
+
+### Requirement 14: Live-call gate
+
+**User story:** As the operator, I want the server to call the model only for visitors in regions where Google's terms
+allow the free tier, and only after they confirm they are 18 or older, so that the site stays within those terms. The
+gate is not legal advice and the confirmation is not proof of age.
+
+Sources (read 2026-11-22): the Gemini API terms (https://ai.google.dev/gemini-api/terms, effective 2026-03-23) and the
+available regions (https://ai.google.dev/gemini-api/docs/available-regions). On unpaid services Google may use content
+to improve its products and human reviewers may read it.
+
+**Acceptance criteria:**
+
+1. **THE SYSTEM SHALL** list the routes that can call the model, `POST /api/grant` and `POST /api/bind`, in one constant
+   (`LIVE_ROUTES`) and run the gate on exactly those routes. It runs right after CORS and the logger and **BEFORE** the
+   mode check, the per-IP count, reading the body, any budget reservation and any model call.
+2. **THE SYSTEM SHALL** read `GEMINI_TIER`: exactly `paid` is the paid tier. Unset, blank and every other value is the
+   free tier (the default).
+3. **THE SYSTEM SHALL** hold one table of the 231 available regions, each name mapped to one ISO 3166-1 alpha-2 code
+   (Kosovo is `XK`, user-assigned). The paid allow-list is all 231 codes. The free allow-list is the same table without
+   the 27 EU states, `IS`, `LI`, `NO`, `CH`, `GB` and, to be conservative, their territories that have their own code
+   (`AX`; `FO` `GL`; `GF` `GP` `MQ` `RE` `YT` `MF` `BL` `PM` `PF` `NC` `WF` `TF`; `AW` `CW` `SX` `BQ`; `SJ` `BV`; `GI` `GG`
+   `JE` `IM` `AI` `BM` `IO` `VG` `KY` `FK` `GS` `MS` `PN` `SH` `TC`). That leaves 172 codes.
+4. **THE SYSTEM SHALL** read the country only from the header named by `COUNTRY_HEADER` and from no other header. It has
+   no default and no fallback. **IF** it is unset, blank or not a valid HTTP header name, **THEN THE SYSTEM SHALL** treat
+   the country as not allowed and never throw. **IF** that header is missing, empty, not exactly two uppercase ASCII
+   letters, repeated (it then arrives joined, as `US, GB`) or not on the allow-list of the tier (`XX`, `T1`, `CN`),
+   **THEN THE SYSTEM SHALL** treat the country as not allowed. Every other header is ignored.
+5. **THE SYSTEM SHALL** use the country value for that one decision only. It is never stored, logged, echoed in a body
+   or header, or put in an error.
+6. **WHEN** the country is allowed **THE SYSTEM SHALL** also require the request header `X-Paw-Adult-Confirmed` to be
+   exactly `yes`, on both tiers. It is a header and not a body field, so the gate reads no body.
+7. **IF** the gate refuses **THEN THE SYSTEM SHALL** answer HTTP 403 with `cache-control: no-store` and JSON
+   `{ code, message }`. The country is checked first: `live_region_unavailable` with "The paw grants no live wishes where
+   you stand. The examples need no permission."; then `adult_confirmation_required` with "The paw grants live wishes only
+   to those who confirm they are 18 or older." A refusal costs 0, reserves nothing, makes no model call and does not
+   count against the IP.
+8. **THE SYSTEM SHALL** serve `GET /api/live` and answer 200 `{ "live": boolean }`, `true` only when the country is
+   allowed. It ignores age, budget and mode, sets `cache-control: no-store`, makes no model call and counts nothing.
+9. **THE SYSTEM SHALL NOT** gate or change `/api/examples`, `/api/export` and `/api/health`.
+10. **THE SYSTEM SHALL** have `createApp` take the gate config; **WHEN** it is omitted the config is the free tier with
+    no country header, so the gate fails closed. `server.ts` reads the environment. The eval CLI is an operator tool, not
+    a route, and has no gate.
+11. **THE SYSTEM SHALL** document in `apps/api/README.md` and `apps/api/.env.example` both variables, the deploy
+    settings, both source URLs with their dates, the warning that `COUNTRY_HEADER` may be set only where the host
+    overwrites that header and nobody can reach the server around that host, and that Railway documents no country
+    header, so on plain Railway live wishes are off until a host in front supplies one. The README says the gate is not
+    legal advice and the confirmation is not proof of age.
+12. **THE SYSTEM SHALL** test, with a fake client and no network: the 231 names map one-to-one (against a fixture of the
+    names); `US` and `IL` pass; `GB`, `FR`, `CH`, `CN`, an unknown code and no header are refused; a missing
+    confirmation is refused; a spoofed other header is ignored; nothing is logged. **FOR ANY** excluded code, with any
+    confirmation and any other headers, on the free tier the model gets 0 calls and nothing is reserved or spent.
