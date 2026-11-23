@@ -19,7 +19,7 @@ In examples-only mode (no key, or the daily budget is spent) `grant` and `bind` 
 
 ## Environment variables
 
-Names match [`.env.example`](.env.example). `pnpm start` loads no `.env` file. Set the variables in the shell or on the host.
+On Cloudflare Workers, `COUNTRY_HEADER` and `TRUSTED_PROXY_HOPS` are fixed by the edge entry (see the root README). Names match [`.env.example`](.env.example). `pnpm start` loads no `.env` file. Set the variables in the shell or on the host.
 
 | Variable                     | Default                                                        | Meaning                                                                        |
 |------------------------------|----------------------------------------------------------------|--------------------------------------------------------------------------------|
@@ -51,6 +51,10 @@ The website runs on Gemini's free tier. No bill is possible if the key comes fro
 2. Set it as `GEMINI_API_KEY`.
 
 When the day's free quota ends, Gemini answers 429 `RESOURCE_EXHAUSTED`. The paw rests: `POST /api/grant` and `POST /api/bind` answer 503 "The paw is resting. Browse the examples until it wakes." and the site serves the ready examples. `/api/health` still says `normal`, and the next request tries the model again. A quota shared by all models stops the chain after one call. A quota of one model tries the next model. Daily free quotas reset at midnight Pacific time.
+
+A Gemini location refusal (HTTP 400 "User location is not supported") costs 0 cents. It stops the wish after one call and answers the closed gate's 403 `live_region_unavailable`, so the visitor gets the ready rounds.
+
+`/api/health` `mode`, `/api/live` `resting` and the check before grant and bind use one rule. A live wish can start only if the day's spend, the reservations in flight and the start ceiling fit under `DAILY_BUDGET_CENTS`. The start ceiling is the larger of two whole-chain ceilings: a grant's first call and a bind's first call, each at maximum size.
 
 A quota attempt costs 0 cents. So does a 400 or 500 without token counts, so refused calls do not rest the paw; the per-IP limit and Google's quota bound them. The budget guard still counts paid-tier prices on paper, as a second fence.
 

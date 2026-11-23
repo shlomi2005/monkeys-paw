@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { CallLogger } from './call-log';
 import { originOf } from './mode';
+import { PAW_MCP_VERSION } from './version';
 
 export const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -85,7 +86,7 @@ function gateMessageOf(text: string): string | null {
 }
 
 /**
- * POST JSON to the Paw API. Sends `content-type` and `accept`, and `x-paw-adult-confirmed: yes` only
+ * POST JSON to the Paw API. Sends `content-type`, `accept` and `user-agent: paw-mcp/<version>` (workers.dev blocks some default library user agents with error 1010, per Cloudflare's docs), and `x-paw-adult-confirmed: yes` only
  * when the user set `PAW_I_AM_18_OR_OLDER=yes`. Refuses redirects, times out, never retries. Failures come back as `{ ok: false, message }`; nothing throws.
  */
 export function createApiClient(options: ApiClientOptions): ApiClient {
@@ -103,7 +104,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       try {
         const res = await fetchFn(options.baseUrl + path, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', accept: 'application/json', ...adultHeader },
+          headers: { 'content-type': 'application/json', accept: 'application/json', 'user-agent': `paw-mcp/${PAW_MCP_VERSION}`, ...adultHeader },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(timeoutMs),
           redirect: 'error',

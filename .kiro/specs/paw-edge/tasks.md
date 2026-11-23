@@ -21,10 +21,12 @@ read `apps/api/.env`.
 - [x] 4. The fetch-count test: chain cut to 3, at most 42 upstream fetches for a grant and 6 for a bind, with a fake
   `fetch`. Agents run no `apps/api` test in the repository. (Req 8)
   Done: the `fetch count on the edge` block in `tests/edge.test.ts` (14 calls and 42 fetches per grant, 6 per bind); written, not run by the agent.
-- [ ] 5. The MCP `User-Agent: paw-mcp/<version>` in `packages/paw-mcp`, its tests, and the rebuilt bundle in
+- [x] 5. The MCP `User-Agent: paw-mcp/<version>` in `packages/paw-mcp`, its tests, and the rebuilt bundle in
   `powers/monkeys-paw/server/`. (Req 10.1, 10.3)
-- [ ] 6. README section "Deploy your own (Cloudflare Workers Free)" with the owner checks of task 7, and one line in
+  Done: `user-agent: paw-mcp/0.2.0` in `api-client.ts`; test in `tests/adult.test.ts` (once, on grant and bind); paw-mcp tests (316) and typecheck pass; bundle rebuilt.
+- [x] 6. README section "Deploy your own (Cloudflare Workers Free)" with the owner checks of task 7, and one line in
   the power README that `PAW_API_URL` may be the edge's https URL. (Req 10.2, 11.1)
+  Done: root README section and the apps/api row; one sentence in the power README.
 - [ ] 7. Owner task, not an agent task: create the Cloudflare account, `wrangler login`, `wrangler secret put
   GEMINI_API_KEY`, `wrangler deploy`, then the deployed checks: (1) a real live wish from the deployed site, repeated
   over a day, and from another country's network if possible; (2) forged country in both directions: from an allowed

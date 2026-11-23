@@ -24,7 +24,7 @@ They call no model and no server.
   `paw_check_verdict(curse={type, story, loophole}, amendment="WHEN the owner leaves, THE SYSTEM SHALL name a successor.", verdict={closed, reason})`.
 
 In remote mode (`PAW_API_URL` set to a usable `http(s)` URL) two more tools appear: `paw_curse` and `paw_bind`. They call the
-Paw API you run, and its Judge answers.
+Paw API you run, and its Judge answers. `PAW_API_URL` may be the https URL of a Paw API you deployed to Cloudflare Workers (see the root README), for example `https://monkeys-paw.<your-subdomain>.workers.dev`.
 
 ### Live wishes in remote mode
 

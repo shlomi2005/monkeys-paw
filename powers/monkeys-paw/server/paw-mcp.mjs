@@ -21615,6 +21615,9 @@ var EMPTY_COMPLETION_RESULT = {
   }
 };
 
+// src/version.ts
+var PAW_MCP_VERSION = "0.2.0";
+
 // src/api-client.ts
 var REQUEST_TIMEOUT_MS = 3e4;
 var MSG_BAD_SHAPE = "The Paw API answered in a shape this tool does not understand.";
@@ -21671,7 +21674,7 @@ function createApiClient(options) {
       try {
         const res = await fetchFn(options.baseUrl + path, {
           method: "POST",
-          headers: { "content-type": "application/json", accept: "application/json", ...adultHeader },
+          headers: { "content-type": "application/json", accept: "application/json", "user-agent": `paw-mcp/${PAW_MCP_VERSION}`, ...adultHeader },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(timeoutMs),
           redirect: "error"
@@ -22517,9 +22520,6 @@ async function handleRules(args) {
   const { text, kind, sections, jsonSchema, next } = buildRules(input.data.kind);
   return textResult(text, { kind, sections, jsonSchema, next });
 }
-
-// src/version.ts
-var PAW_MCP_VERSION = "0.2.0";
 
 // src/server.ts
 async function safely(run) {

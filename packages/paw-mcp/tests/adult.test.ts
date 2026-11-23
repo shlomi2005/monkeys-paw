@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { API_MESSAGES, MSG_ADULT, MSG_REGION } from '../src/api-client';
 import type { CallLogger } from '../src/call-log';
 import { adultConfirmedOf } from '../src/mode';
+import { PAW_MCP_VERSION } from '../src/version';
 import { makeGrant } from './fixtures';
 
 const RESTING = 'The paw is resting. Browse the examples until it wakes.';
@@ -88,7 +89,20 @@ describe('the header on paw_curse and paw_bind', () => {
       expect(s.headers[HEADER]).toBe('yes');
       expect(s.headers['content-type']).toBe('application/json');
       expect(s.headers.accept).toBe('application/json');
-      expect(Object.keys(s.headers).sort()).toEqual(['accept', 'content-type', HEADER]);
+      expect(Object.keys(s.headers).sort()).toEqual(['accept', 'content-type', 'user-agent', HEADER]);
+    }
+  });
+
+  it('sends user-agent paw-mcp/<version> exactly once on grant and on bind', async () => {
+    const { fn, seen } = fakeFetch((path) => (path === '/api/grant' ? grantOk() : json(500, { message: 'stop' })));
+    const client = await connect(fn);
+    await curse(client);
+    await bind(client);
+    expect(seen.map((s) => s.path)).toEqual(['/api/grant', '/api/bind']);
+    for (const s of seen) {
+      const names = Object.keys(s.headers).filter((k) => k.toLowerCase() === 'user-agent');
+      expect(names).toEqual(['user-agent']);
+      expect(s.headers['user-agent']).toBe(`paw-mcp/${PAW_MCP_VERSION}`);
     }
   });
 
@@ -98,7 +112,7 @@ describe('the header on paw_curse and paw_bind', () => {
     await curse(client);
     await bind(client);
     expect(seen).toHaveLength(2);
-    for (const s of seen) expect(Object.keys(s.headers).sort()).toEqual(['accept', 'content-type']);
+    for (const s of seen) expect(Object.keys(s.headers).sort()).toEqual(['accept', 'content-type', 'user-agent']);
   });
 });
 
