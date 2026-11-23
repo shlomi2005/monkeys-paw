@@ -387,6 +387,10 @@ The eval CLI prints the same error line for an unknown error; `EvalAbortError` k
 
 **Property 13 (A refused attempt costs nothing):** For any HTTP status and any body, an attempt without priced usage costs 0 cents iff it is a quota attempt or an unbilled attempt (status exactly 400 or 500, body not cut off by the timeout, no `usageMetadata`). With valid usage it costs the usage formula; every other attempt costs its ceiling.
 
+**Property 14 (A location refusal ends the guard):** For any sequence of `generate` calls on one guard, once the inner client has thrown `LocationRefusedError`, it receives no further call from that guard, and grant and bind answer the closed gate's 403 body.
+
+**Property 15 (One answer for live):** For any `spentCents` and `reservedCents`, health's `mode` is `normal` iff `GET /api/live` has no `resting` (for an allowed country) iff a grant passes the mode check.
+
 **Test location:** `apps/api/tests/properties.test.ts` (uses Vitest + fast-check).
 
 ## Free tier (Requirement 13)
@@ -446,3 +450,21 @@ string in one loop, instead of a regex with a quantifier that backtracks. Their 
 **Edge cases.** A timeout, also while the error body is read, keeps the ceiling. `usageMetadata` that is valid is charged by usage; one that cannot be read as usage keeps the ceiling. 401, 403, 404, 499, 501, 502, 503, 504 and a missing response keep the ceiling. A quota answer is decided first (Requirement 13.6). No report at all costs the whole ceiling. Only the flag and numeric counts are logged or kept.
 
 **Tests, stubbed `fetch` only.** `gemini.test.ts`: the flag over the statuses and bodies above. `guarded-client.test.ts`: 0 cents, usage charge, ceiling. `app.test.ts`: many 400s leave the paw awake. `properties.test.ts`: property 13. They fail on the previous commit.
+
+## Location refusal (Requirement 17)
+
+**Where.** `client/gemini.ts` decides: a 400 whose `error.message` contains "user location is not supported" (any case)
+is still an unbilled attempt, stops the chain and throws `LocationRefusedError` with a fixed message.
+`budget/guarded-client.ts` stops: it sets `locationRefused` and `denied` and makes no further inner call, so
+paw-core's retry sends no second request. `routes/grant.ts` and `routes/bind.ts` answer the gate's 403 body
+(`live_region_unavailable`, `no-store`) before the `denied` check, so the web and the power play the ready rounds.
+Nothing of the upstream text is logged or kept. `error-log.ts` lists `LocationRefusedError`. Tests: `client/gemini.test.ts`,
+`budget/guarded-client.test.ts`, `app.test.ts`; they fail on the previous commit.
+
+## Can a live wish start (Requirement 18)
+
+**Where.** `modes.ts` holds the one function: key set AND spend after the day roll + `reservedCents` + start ceiling
+<= `dailyBudgetCents`. `app.ts` computes the start ceiling once, as the larger of the whole-chain ceilings of a
+grant's first `generate` call and of a bind's, from the client's `plan()` and the price table. `routes/health.ts`,
+`routes/live.ts` and the mode check in `app.ts` all call the function. `remainingCents` is unchanged. Tests:
+`modes.test.ts`, `routes/health.test.ts`, `app.test.ts` and property 15 in `tests/properties.test.ts`.

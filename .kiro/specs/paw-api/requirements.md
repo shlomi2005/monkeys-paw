@@ -277,7 +277,8 @@ exhausted, so the app is never fully down.
 **Acceptance criteria:**
 
 1. **WHEN** the daily budget is exhausted or the `GEMINI_API_KEY` is absent **THE SYSTEM SHALL** enter
-   examples-only mode and set `mode: "examples-only"` in health responses.
+   examples-only mode and set `mode: "examples-only"` in health responses. "Exhausted" means the budget cannot cover
+   the start ceiling (Requirement 18).
 2. **WHILE** in examples-only mode **THE SYSTEM SHALL** serve `GET /api/examples` and `GET /api/health`
    normally, with no model calls.
 3. **WHILE** in examples-only mode **THE SYSTEM SHALL** reject `POST /api/grant` and `POST /api/bind` with
@@ -557,3 +558,48 @@ refusals do not rest the paw for a day.
 
 Source: Google's billing FAQ, https://ai.google.dev/gemini-api/docs/billing (read 2026-11-22): a request that fails
 with a 400 or 500 error is not charged for tokens, though it still counts against the quota.
+
+### Requirement 17: A location refusal gives the ready rounds
+
+**User story:** As a visitor, I want the ready rounds when Google refuses the server's location, so that I am not
+told to try again for nothing.
+
+#### Acceptance Criteria
+
+1. **WHEN** an attempt gets HTTP 400 and its error body has an `error.message` that contains "user location is not
+   supported" (any case) **THE SYSTEM SHALL** treat it as a location refusal: it stays an unbilled attempt
+   (Requirement 16, 0 cents), the chain does not try the next model, and the client throws `LocationRefusedError`
+   with a fixed message.
+2. **THE SYSTEM SHALL** then have the guard set `locationRefused` and `denied` and make no further inner call on that
+   guard, so paw-core's retry sends no second upstream request.
+3. **THE SYSTEM SHALL** answer `POST /api/grant` and `POST /api/bind` exactly as the closed gate does: 403,
+   `cache-control: no-store`, `{ code: "live_region_unavailable", message: <the gate's message> }`, so the web and
+   the power play the ready rounds, and not a 200 fallback with "Try again".
+4. **THE SYSTEM SHALL** log and keep nothing of the upstream text. The mode does not change and no state is kept for
+   the next request (as 8.6). The error log class list gains `LocationRefusedError`.
+5. **THE SYSTEM SHALL** test with a stubbed `fetch`, and the tests **SHALL** fail on the previous commit: grant and
+   bind get the 403 gate body and 1 upstream fetch (the previous commit gives 200 with the fallback and 2 fetches);
+   a 400 without that message keeps today's behaviour.
+
+### Requirement 18: Health and live agree on whether a live wish can start
+
+**User story:** As a visitor, I want the site to say the same thing everywhere, so that "live" is never followed by a
+503.
+
+#### Acceptance Criteria
+
+1. **THE SYSTEM SHALL** decide "a live wish can start" in one function: the key is set AND the spend of the current
+   day (after the day roll) + `reservedCents` + the start ceiling <= `dailyBudgetCents`. The start ceiling is the
+   larger of the whole-chain ceilings of the first `generate` call of a grant (the genie prompt at the maximum wish
+   and context) and of a bind (the judge prompt at the maximum clause and loophole), computed once in `createApp`
+   from the configured client's `plan()` and the price table.
+2. **THE SYSTEM SHALL** have `GET /api/health` say `mode: "normal"` iff a live wish can start, else
+   `"examples-only"`; have `GET /api/live` add `resting: true` iff the country is allowed and a live wish cannot
+   start; and have the mode check of grant and bind use the same function. `remainingCents` is unchanged.
+3. **THE SYSTEM SHALL** behave so in this example: with the budget 200 and 191.98 spent, health says `examples-only`,
+   live says `resting: true` and a grant gets the 503 resting answer (the previous commit says `normal` with no
+   `resting` while every grant gets 503). Just below the threshold both say live and a grant's first call is
+   reserved.
+4. **THE SYSTEM SHALL** test, and the tests **SHALL** fail on the previous commit, including a property: for any
+   spent and reserved, health's mode is normal iff live has no `resting` (for an allowed country) iff a grant passes
+   the mode check.

@@ -243,3 +243,9 @@ Google's terms allow the free tier only in the available regions, outside the EE
 
 - [x] 123. Client, guard and fake (`apps/api/src/client/gemini.ts`, `apps/api/src/budget/guarded-client.ts`, the fake client) with tests in `client/gemini.test.ts`, `budget/guarded-client.test.ts`, `app.test.ts` and `tests/properties.test.ts`: an unbilled attempt (HTTP 400 or 500, body not cut off, no `usageMetadata`) is reported with `unbilled: true` and costs 0; valid usage is charged by usage; unreadable usage, a timeout and every other status keep the ceiling; property 13. The tests fail on the previous commit. (Req 16) Done: client, guard, fake and tests written; the api tests were written and not run by the agent; the reviewer runs them.
 - [x] 124. Comments and `apps/api/README.md`: the sentence on attempts without token counts names the quota and unbilled exceptions, with the source and its date. (Req 16) Done: comments and README updated; the api tests that read the README were written and not run by the agent.
+
+## Location refusal and one answer for live (batch 19)
+
+- [ ] 125. Requirement 17: the client (`client/gemini.ts`), the guard (`budget/guarded-client.ts`), the routes (`routes/grant.ts`, `routes/bind.ts`) and the error log (`error-log.ts`); tests in `client/gemini.test.ts`, `budget/guarded-client.test.ts` and `app.test.ts` that fail on the previous commit. Agents run no `apps/api` test in the repository; the reviewer runs them in a clean copy without `.env`. (Req 17)
+- [ ] 126. Requirement 18: `modes.ts`, `app.ts`, `routes/health.ts`, `routes/live.ts`; tests in `modes.test.ts`, `routes/health.test.ts`, `app.test.ts` and `tests/properties.test.ts` (property 15). Agents run no `apps/api` test in the repository; the reviewer runs them in a clean copy without `.env`. (Req 18, 8.1)
+- [ ] 127. Docs (`apps/api/README.md`): the two rules, with no host-specific claim. (Req 17, 18)
