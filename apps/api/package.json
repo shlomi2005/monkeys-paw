@@ -11,6 +11,7 @@
     "start": "node dist/server.mjs",
     "test": "vitest run",
     "eval": "tsx --env-file-if-exists=.env src/eval/script.ts",
+    "examples:ready": "tsx scripts/ready-examples-cache.mjs",
     "edge:dev": "wrangler dev",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

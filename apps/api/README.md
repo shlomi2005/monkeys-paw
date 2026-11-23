@@ -11,7 +11,7 @@ Spec: [`.kiro/specs/paw-api`](../../.kiro/specs/paw-api/).
 - `POST /api/grant`: takes a wish and returns a grant with up to five curses. Calls the model, so it is gated: 403 unless the country is allowed and `X-Paw-Adult-Confirmed: yes` is sent. `wish.text` is at most 500 characters after trim and `wish.context` at most 200, else 400 and no model call.
 - `POST /api/bind`: takes a curse and an amendment and returns the Judge's verdict. Calls the model, so it is gated like `grant`. `clause` is at most 1000 characters after trim and every `loophole` at most 1000, else 400 and no model call.
 - `POST /api/export`: turns a grant into `requirements.md` and `properties.md`. No model call.
-- `GET /api/examples`: serves the cached example grants from `examples-cache.json`. No model call.
+- `GET /api/examples`: serves the cached examples from `examples-cache.json`. No model call. The committed cache holds the three ready rounds of the web app, built by `pnpm -C apps/api examples:ready` with no model call, so it answers 200. `pnpm -C apps/api eval --all` replaces it with real grants (model calls) when the owner runs it.
 
 Abuse limits: a request body is read up to 192 KiB (196608 bytes). A declared length over that is refused unread, and a stream is given up as soon as it passes the cap, whatever the headers say. The answer is 413 `{ "message": "The request is too large." }`. `export` and `bind` also cap the fields of the grant (ids 100, narration 260, story 360, loophole, clause, reason, property, `userStory` and `wishCriterion` 1000, 3 to 5 curses) and `export` the wish (id 100, text 500, context 200), else 400 and no model call. The server cuts its own grants and verdicts to these caps, so a served grant of 3 to 5 curses can be sent back. The server never serves the one-curse fallback of a failed model, so none comes back (see "Running on the free tier"). Only POSTs to `grant` and `bind` reach the mode check and the per-IP count, after the gate. An oversized live POST still counts. `RATE_WINDOW_MS` must be all digits and at least 1, else 60000.
 
@@ -210,7 +210,7 @@ docker build -f apps/api/Dockerfile .   # from the repo root
 
 Nothing is deployed and no account exists yet.
 
-1. Regenerate `apps/api/examples-cache.json` with `pnpm -C apps/api eval --all` (real model calls, about 2 per wish). The committed cache holds only fallback grants, so `/api/examples` answers 503 until then. Commit the new file.
+1. Optional: replace `apps/api/examples-cache.json` with real grants using `pnpm -C apps/api eval --all` (real model calls, about 2 per wish) and commit the new file. The committed cache already holds the three ready rounds of the web app, built by `pnpm -C apps/api examples:ready` with no model call, so `/api/examples` answers 200 without this step.
 2. Create the Gemini key as described in "Running on the free tier": in a Google AI Studio project with no billing account. Leave `GEMINI_TIER` unset (free).
 3. Create a Railway project from the GitHub repository. Set the root directory to `/`.
 4. Set these service variables:

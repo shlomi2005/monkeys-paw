@@ -1,107 +1,230 @@
 [
   {
     "wish": {
-      "id": "w01",
+      "id": "ready-1",
       "text": "Only the owner can delete a project.",
       "context": "a team project-management app",
-      "createdAt": 1794992929230
+      "createdAt": 1767225600000
     },
     "grant": {
-      "wishId": "w01",
-      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "wishId": "ready-1",
+      "narration": "Granted. Exactly one person may delete a project, and nothing says that person is still around.",
       "curses": [
         {
-          "id": "fallback-curse",
-          "type": "scale",
-          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
-          "loophole": "The wish does not bound the scale at which it must hold.",
-          "status": "open"
+          "id": "ready-1-c1",
+          "type": "permissions",
+          "story": "The owner quits the company. Granted: nobody may delete the project, ever.",
+          "loophole": "\"Only the owner\" names one account, and the wish does not say what happens when that owner leaves.",
+          "status": "closed",
+          "binding": {
+            "curseId": "ready-1-c1",
+            "kind": "ears-clause",
+            "clause": "WHEN a project's owner is removed or deactivated, THE SYSTEM SHALL transfer ownership to a team admin, or to the longest-standing member if no admin exists, so that every project always has one owner.",
+            "proposedAt": 1767225601000
+          },
+          "verdict": {
+            "curseId": "ready-1-c1",
+            "closed": true,
+            "reason": "The clause names a successor and a fallback, so a project is never left without someone who may delete it.",
+            "judgedAt": 1767225601500,
+            "property": "For any project whose owner is removed or deactivated, the project has exactly one active owner afterwards, and that owner can delete it."
+          }
+        },
+        {
+          "id": "ready-1-c2",
+          "type": "data-loss",
+          "story": "A new hire is made owner on day one. They delete the project in a minute, and nothing brings it back.",
+          "loophole": "\"Delete a project\" does not say how: at once, for good, with no way to undo it.",
+          "status": "closed",
+          "binding": {
+            "curseId": "ready-1-c2",
+            "kind": "ears-clause",
+            "clause": "WHEN the owner deletes a project, THE SYSTEM SHALL keep it in a trash for 30 days and restore it, with all its tasks and files, on the owner's request.",
+            "proposedAt": 1767225602000
+          },
+          "verdict": {
+            "curseId": "ready-1-c2",
+            "closed": true,
+            "reason": "The trash window and the restore promise make a deletion reversible, so a mistaken delete no longer costs the project.",
+            "judgedAt": 1767225602500,
+            "property": "For any project deleted by its owner, a restore requested within 30 days returns the project with every task and file it held before the deletion."
+          }
+        },
+        {
+          "id": "ready-1-c3",
+          "type": "abuse",
+          "story": "The owner is let go on Friday and deletes the project on the way out. Granted: only the owner may, and the owner did.",
+          "loophole": "\"Only the owner can delete\" gives one person an unchecked power over work the whole team still needs.",
+          "status": "closed",
+          "binding": {
+            "curseId": "ready-1-c3",
+            "kind": "ears-clause",
+            "clause": "WHEN the owner deletes a project that has other members, THE SYSTEM SHALL notify every member and every team admin at once and let any admin cancel the deletion within 7 days.",
+            "proposedAt": 1767225603000
+          },
+          "verdict": {
+            "curseId": "ready-1-c3",
+            "closed": true,
+            "reason": "Notice and a cancel window for admins limit what one departing owner can destroy, while the owner keeps the right to delete.",
+            "judgedAt": 1767225603500,
+            "property": "For any deletion of a project with other members, every member and admin is notified, and an admin's cancel within 7 days leaves the project intact."
+          }
         }
-      ]
+      ],
+      "userStory": "As a team member, I want only the owner to delete a project, so that nobody else can destroy shared work.",
+      "wishCriterion": "THE SYSTEM SHALL allow only the owner of a project to delete it."
     }
   },
   {
     "wish": {
-      "id": "w02",
-      "text": "Users must confirm their email before they can log in.",
-      "context": "a SaaS signup flow",
-      "createdAt": 1794992931643
-    },
-    "grant": {
-      "wishId": "w02",
-      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
-      "curses": [
-        {
-          "id": "fallback-curse",
-          "type": "scale",
-          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
-          "loophole": "The wish does not bound the scale at which it must hold.",
-          "status": "open"
-        }
-      ]
-    }
-  },
-  {
-    "wish": {
-      "id": "w03",
-      "text": "Send a reminder 24 hours before every appointment.",
-      "context": "a clinic booking app",
-      "createdAt": 1794992936602
-    },
-    "grant": {
-      "wishId": "w03",
-      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
-      "curses": [
-        {
-          "id": "fallback-curse",
-          "type": "scale",
-          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
-          "loophole": "The wish does not bound the scale at which it must hold.",
-          "status": "open"
-        }
-      ]
-    }
-  },
-  {
-    "wish": {
-      "id": "w04",
+      "id": "ready-2",
       "text": "Refund the customer if the order arrives late.",
       "context": "an online store",
-      "createdAt": 1794992941337
+      "createdAt": 1767225600000
     },
     "grant": {
-      "wishId": "w04",
-      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "wishId": "ready-2",
+      "narration": "Granted. Every late order is refunded. What counts as late, the paw does not say.",
       "curses": [
         {
-          "id": "fallback-curse",
-          "type": "scale",
-          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
-          "loophole": "The wish does not bound the scale at which it must hold.",
-          "status": "open"
+          "id": "ready-2-c1",
+          "type": "time",
+          "story": "A parcel due Friday lands at 00:05 on Saturday in Auckland, still Friday at the warehouse. The store calls it on time, the customer calls it late.",
+          "loophole": "\"Arrives late\" names no clock: no delivery date, no time zone, no hour at which late begins.",
+          "status": "closed",
+          "binding": {
+            "curseId": "ready-2-c1",
+            "kind": "ears-clause",
+            "clause": "IF the carrier's delivery scan is later than the end of the promised delivery date in the customer's local time zone, THEN THE SYSTEM SHALL mark the order late and start the refund.",
+            "proposedAt": 1767225601000
+          },
+          "verdict": {
+            "curseId": "ready-2-c1",
+            "closed": true,
+            "reason": "The clause fixes the clock, the time zone and the moment late begins, so both sides read the same delivery time.",
+            "judgedAt": 1767225601500,
+            "property": "For any order and any time zone, the order is marked late exactly when its delivery scan falls after the end of the promised date in the customer's local time zone."
+          }
+        },
+        {
+          "id": "ready-2-c2",
+          "type": "money",
+          "story": "The order arrives a day late and the customer keeps it. The refund covers everything paid, and the goods stay on the customer's shelf.",
+          "loophole": "\"Refund the customer\" does not say how much, nor whether the goods go back.",
+          "status": "closed",
+          "binding": {
+            "curseId": "ready-2-c2",
+            "kind": "ears-clause",
+            "clause": "WHEN an order arrives late, THE SYSTEM SHALL refund the shipping fee in full, and SHALL refund the item price only after the customer returns the goods.",
+            "proposedAt": 1767225602000
+          },
+          "verdict": {
+            "curseId": "ready-2-c2",
+            "closed": true,
+            "reason": "The clause fixes the amount: the shipping fee goes back at once and the price of the goods goes back only with the goods.",
+            "judgedAt": 1767225602500,
+            "property": "For any late order, the refund issued before a return equals the shipping fee, and the item price is refunded only once the goods are marked returned."
+          }
+        },
+        {
+          "id": "ready-2-c3",
+          "type": "concurrency",
+          "story": "The carrier's late-delivery event is sent twice, as carriers do. Granted: the customer is refunded twice.",
+          "loophole": "\"Refund the customer if\" runs every time the late event arrives, so each repeat pays out again.",
+          "status": "closed",
+          "binding": {
+            "curseId": "ready-2-c3",
+            "kind": "ears-clause",
+            "clause": "WHEN a late-delivery event arrives for an order that has already been refunded for lateness, THE SYSTEM SHALL ignore the event and issue no second refund.",
+            "proposedAt": 1767225603000
+          },
+          "verdict": {
+            "curseId": "ready-2-c3",
+            "closed": true,
+            "reason": "The clause makes the refund happen once per order, however many times the carrier repeats its event.",
+            "judgedAt": 1767225603500,
+            "property": "For any order and any number of repeated late-delivery events, the total refunded for lateness is exactly one refund."
+          }
         }
-      ]
+      ],
+      "userStory": "As a customer, I want a refund when my order arrives late, so that a delay does not cost me money.",
+      "wishCriterion": "IF an order arrives after its promised delivery date, THEN THE SYSTEM SHALL refund the customer."
     }
   },
   {
     "wish": {
-      "id": "w05",
-      "text": "Passwords must be at least 8 characters.",
-      "context": "any login form",
-      "createdAt": 1794992946172
+      "id": "ready-3",
+      "text": "Students can submit homework until midnight.",
+      "context": "a school homework portal",
+      "createdAt": 1767225600000
     },
     "grant": {
-      "wishId": "w05",
-      "narration": "The paw twitches, then lies still. Your wish is granted — in the only shape it could remember.",
+      "wishId": "ready-3",
+      "narration": "Granted. Homework closes at midnight. Whose midnight, the paw does not say.",
       "curses": [
         {
-          "id": "fallback-curse",
-          "type": "scale",
-          "story": "The wish is followed to the letter at every scale, including the scales you never named.",
-          "loophole": "The wish does not bound the scale at which it must hold.",
-          "status": "open"
+          "id": "ready-3-c1",
+          "type": "time",
+          "story": "The portal counts midnight on the server's clock, set to UTC. A student in New York finds it closed at 7 in the evening.",
+          "loophole": "\"Until midnight\" does not say whose midnight: the server's, the school's or the student's.",
+          "status": "closed",
+          "binding": {
+            "curseId": "ready-3-c1",
+            "kind": "ears-clause",
+            "clause": "THE SYSTEM SHALL close each homework deadline at 23:59:59 in the school's local time zone, and SHALL show that time and zone beside the deadline.",
+            "proposedAt": 1767225601000
+          },
+          "verdict": {
+            "curseId": "ready-3-c1",
+            "closed": true,
+            "reason": "The clause names one clock, the school's, and shows it to every student, so midnight means the same for all.",
+            "judgedAt": 1767225601500,
+            "property": "For any deadline and any student time zone, submissions are accepted until 23:59:59 in the school's time zone and rejected afterwards."
+          }
+        },
+        {
+          "id": "ready-3-c2",
+          "type": "concurrency",
+          "story": "A student presses Submit at 23:59:58 and the upload lands at 00:00:03. The portal refuses it, and the student's screen still says Sent.",
+          "loophole": "\"Until midnight\" is checked at one moment, and the wish does not say which: the start of the upload, its end or the save.",
+          "status": "closed",
+          "binding": {
+            "curseId": "ready-3-c2",
+            "kind": "ears-clause",
+            "clause": "WHEN a student starts a submission before the deadline, THE SYSTEM SHALL accept the file if its upload completes within 5 minutes after the deadline, and SHALL record the start time.",
+            "proposedAt": 1767225602000
+          },
+          "verdict": {
+            "curseId": "ready-3-c2",
+            "closed": true,
+            "reason": "The clause fixes the moment that counts, the start of the upload, with a 5-minute grace for a slow one.",
+            "judgedAt": 1767225602500,
+            "property": "For any submission started before the deadline and completed within 5 minutes after it, the submission is accepted and recorded as on time."
+          }
+        },
+        {
+          "id": "ready-3-c3",
+          "type": "accessibility",
+          "story": "A student with a 25 percent time accommodation is shut out with everyone else at midnight. The deadline is the same for all, which is the trouble.",
+          "loophole": "\"Students can submit until midnight\" gives every student the same midnight, with no room for one who is allowed more time.",
+          "status": "closed",
+          "binding": {
+            "curseId": "ready-3-c3",
+            "kind": "ears-clause",
+            "clause": "WHERE a teacher has granted a student an extension, THE SYSTEM SHALL accept that student's submissions until the extended time and keep the original deadline for all other students.",
+            "proposedAt": 1767225603000
+          },
+          "verdict": {
+            "curseId": "ready-3-c3",
+            "closed": true,
+            "reason": "A per-student extension moves one student's deadline and leaves everyone else's at midnight.",
+            "judgedAt": 1767225603500,
+            "property": "For any student with a granted extension, submissions are accepted until the extended time, and every other student's deadline is unchanged."
+          }
         }
-      ]
+      ],
+      "userStory": "As a student, I want to submit homework until midnight, so that I know exactly when the deadline falls.",
+      "wishCriterion": "WHILE the deadline has not passed, THE SYSTEM SHALL accept a student's homework submission."
     }
   }
 ]
