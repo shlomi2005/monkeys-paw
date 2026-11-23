@@ -117,6 +117,9 @@ budget.
    validation and today's 503 when it is invalid.
 2. **THE SYSTEM SHALL** let `createApp` take the examples either as today's file path (Node) or as a loader (edge).
    Node is unchanged.
+3. **THE SYSTEM SHALL** answer `GET /api/examples` with 200 and the committed file (paw-api Requirement 20).
+4. **THE SYSTEM SHALL** hold paw-api Requirement 19 through the entry: a failed live call answers 503 with the resting
+   message, never a 200 fallback, with the edge's 3-model chain.
 
 ### Requirement 8: The model on the edge
 

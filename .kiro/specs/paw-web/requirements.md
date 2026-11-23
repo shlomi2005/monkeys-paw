@@ -362,8 +362,8 @@ or proof of age.
 6. **OUTSIDE:** there is no checkbox, and the note of 3.9 is replaced by "The paw grants no live wishes where you stand.
    Its examples still play the full round." The line is announced. A typed or edited wish sends nothing and shows "No
    live wishes here. Choose an example."
-7. **READY ROUNDS:** the example row shows the ready rounds in three cases: outside, examples-only play (the paw is resting, or `GET /api/live` says `resting: true`), and when `/api/examples` fails or is empty. It shows three built-in ready rounds (`src/state/ready-rounds.ts`) and not
-   `/api/examples`, whose cache holds no verdicts. Each is written in advance, with no model: a wish from
+7. **READY ROUNDS:** the example row shows the ready rounds in three cases: outside, examples-only play (the paw is resting, or `GET /api/live` says `resting: true`), and when `/api/examples` fails or is empty. It shows three built-in ready rounds (`src/state/ready-rounds.ts`), built into the web; the committed `/api/examples` cache
+   holds the same three rounds (paw-api Requirement 20), and a cache made by the eval holds no verdicts. Each is written in advance, with no model: a wish from
    `docs/golden-wishes.json`, a Grant of 3 to 5 curses, and on every curse a closing EARS clause (`binding`) and its
    Judge verdict with reason and property (`verdict`). A ready round works with no `/api/grant` and no `/api/bind`.
 8. **WHEN THE GATE APPLIES:** an unmodified example never needs the gate. A round whose every curse carries a ready

@@ -57,6 +57,8 @@ my requirement breaks.
    again **THE SYSTEM SHALL** fall back to a safe default or return an error (iron-rules.md §6).
 6. **WHEN** a model call is about to be made **THE SYSTEM SHALL** check the budget first and never call the model
    without a budget check (iron-rules.md §5).
+7. **THE SYSTEM SHALL** export `isFallbackGrant(grant)` and `isFallbackVerdict(verdict)` from `paw-core`, true only for
+   the fallback objects that `grantWish` and `judgeBinding` themselves returned (Requirement 2.5, 4.4).
 
 ### Requirement 3: Bind a loophole
 

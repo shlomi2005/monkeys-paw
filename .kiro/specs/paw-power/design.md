@@ -313,7 +313,7 @@ Property: <property>            (only when the verdict has one)
 Still open: [3f2a9c1e:curse-1], [3f2a9c1e:curse-3]
 ```
 or `OPEN: <reason> The loophole remains. Rewrite the amendment and call paw_bind again.` An open verdict has
-`isError` unset. The API's own fallback verdict (`closed: false`, "The Judge could not be roused...") is passed through.
+`isError` unset. The API no longer sends a fallback verdict; a failed Judge is a 503, which the power reports with its resting line.
 
 ---
 

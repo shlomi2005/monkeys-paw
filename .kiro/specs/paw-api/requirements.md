@@ -61,9 +61,9 @@ runtime entry should be amended to Node 24 when convenient.
    message directing the user to the examples (Requirement 8), making no model call.
 5. **WHEN** the model call succeeds **THE SYSTEM SHALL** return HTTP 200 with the validated `Grant` as JSON,
    including `narration`, `curses`, and (after task 25) `userStory`.
-6. **IF** the model output fails zod validation after retry (iron-rules.md §6) **THE SYSTEM SHALL** return
-   the fallback `Grant` from `paw-core` (single generic curse) with HTTP 200, so the client always gets a
-   usable response.
+6. **IF** `grantWish` returns paw-core's fallback grant (every attempt of the genie call failed, was refused or gave
+   output that failed validation, for any reason) **THE SYSTEM SHALL** answer as the paw rests (Requirement 19) and
+   never send the fallback grant with HTTP 200.
 7. **WHEN** a Grant is returned **THE SYSTEM SHALL** have charged every model call of the request to the daily
    budget at its real token cost (Requirement 7), so the daily budget counter stays accurate.
 8. **IF** `wish.text` is longer than 500 characters after trimming, or `wish.context` is longer than 200
@@ -89,8 +89,9 @@ accepts it, so I can close loopholes one at a time.
 4. **WHEN** the Judge returns a verdict **THE SYSTEM SHALL** return HTTP 200 with `{ grant, verdict }` where
    `grant` has the curse updated (status set to `closed` if `verdict.closed` is true, `binding` and `verdict`
    attached) and `verdict` is the Judge's `Verdict` including (after task 25) `property` when closed.
-5. **IF** the model output fails zod validation after retry **THE SYSTEM SHALL** fall back to
-   `closed: false` (iron-rules.md §6) and return HTTP 200 with the fallback verdict.
+5. **IF** `judgeBinding` returns paw-core's fallback verdict (every attempt of the Judge call failed, was refused or
+   gave output that failed validation, for any reason) **THE SYSTEM SHALL** answer as the paw rests
+   (Requirement 19) and never send the fallback verdict with HTTP 200 (no fallback verdict on a failed Judge).
 6. **WHEN** the bind endpoint makes model calls **THE SYSTEM SHALL** have charged each of them to the daily
    budget at its real token cost (Requirement 7).
 7. **IF** `clause` is longer than 1000 characters after trimming **THE SYSTEM SHALL** return HTTP 400 with an
@@ -603,3 +604,67 @@ told to try again for nothing.
 4. **THE SYSTEM SHALL** test, and the tests **SHALL** fail on the previous commit, including a property: for any
    spent and reserved, health's mode is normal iff live has no `resting` (for an allowed country) iff a grant passes
    the mode check.
+
+### Requirement 19: A live call that fails never answers 200
+
+**User story:** As a visitor, I want a failed live wish to say that the paw rests and give me the ready rounds, so
+that I am not handed a weak made-up grant.
+
+#### Acceptance Criteria
+
+1. **WHEN** `grantWish` returns the fallback grant **THE SYSTEM SHALL** answer `POST /api/grant` with HTTP 503 and
+   `{ message: RESTING_MESSAGE }` (the same body as the quota answer of 1.9), plus `retryAfter` when known (19.4). It
+   holds for every cause: every model of the chain answered 429 (any quota), 500, 502, 503, 504, 404, 403 or another
+   error status, timed out, gave no response or an unreadable answer, or every answer failed validation.
+2. **WHEN** `judgeBinding` returns the fallback verdict **THE SYSTEM SHALL** answer `POST /api/bind` the same way.
+3. **THE SYSTEM SHALL** tell the fallback apart only by paw-core's own functions `isFallbackGrant(grant)` and
+   `isFallbackVerdict(verdict)`, true exactly for the objects that paw-core's fallback paths returned (marked in a
+   module-private `WeakSet` when they are built), so no model answer is ever taken for a fallback, even one that copies
+   the fallback text, and a real grant is never refused. The checks after the call keep their order: a failed budget
+   save (500), a location refusal (403, Requirement 17), the guard's refusal or a quota answer (503), then the
+   fallback (503). A real grant whose later calls (the quality judge, a replacement) failed is still a real grant and
+   answers 200 unless the guard refused (unchanged).
+4. **THE SYSTEM SHALL** add `retryAfter` (whole seconds, an integer from 1 to 86400) to every 503 of grant and bind
+   that follows an upstream failure, and the header `Retry-After` with the same number, only when an attempt of the
+   request gave a valid hint: the `retryDelay` of a `type.googleapis.com/google.rpc.RetryInfo` entry in
+   `error.details[]` of a non-200 body (a duration such as "37s" or "0.5s", rounded up to whole seconds), or a
+   `Retry-After` header in delta-seconds of a 429 or 503 answer. The smallest valid hint of the request wins (the
+   first model to recover can serve). A value that is missing, not a number, 0 or less, or above 86400 is no hint.
+   With no hint there is neither the field nor the header. Only that number is kept from the body, nothing is
+   logged, and nothing is kept after the request: health, live and the next request are unchanged by an upstream
+   failure. The 503 of the mode check and of a budget refusal before any upstream call are unchanged.
+5. **THE SYSTEM SHALL** keep the paper charges of Requirements 7.10, 13.6 and 16 unchanged: a quota attempt and a 400
+   or 500 without usage cost 0; an attempt with valid usage costs its usage; a 404, 502, 503, 504, any other status, a
+   timeout and no response keep the attempt's ceiling, also when the answer is now 503. `apps/api/README.md` SHALL say
+   so in plain words, including that an overloaded model (503 on every model) is charged the chain's ceilings for
+   each try on paper and so can rest the paw by budget, while the Google free tier bills nothing.
+6. **THE SYSTEM SHALL** behave the same through the Node app and through the edge entry (the Worker and the Durable
+   Object, paw-edge), with the edge's 3-model chain.
+7. **THE SYSTEM SHALL** test, with a stubbed `fetch` only and never the network, through the Node app (`createApp`
+   with the real `GeminiModelClient` and a 3-model chain) and through the edge entry: every model answers 429 with a
+   per-day per-model `QuotaFailure`; 429 with a per-minute per-model `QuotaFailure` and a `RetryInfo` of "37s"; 500;
+   503 `UNAVAILABLE`; the attempt times out; `fetch` rejects (network error); and every answer is a 200 whose text
+   fails validation. For grant and for bind: the status is 503 with the resting message, the body has no fallback
+   curse and no "could not be roused", the spend moved by exactly the rule of 19.5, and the number of upstream
+   fetches. The matrix lives in its own test file that imports only what exists on the previous commit, so it also
+   runs there; the cases that answered 200 there are the cause, recorded in tasks.md.
+
+### Requirement 20: The committed examples cache plays
+
+**User story:** As a visitor, I want `GET /api/examples` to answer, so that the console shows no error.
+
+#### Acceptance Criteria
+
+1. **THE SYSTEM SHALL** commit `apps/api/examples-cache.json` as exactly the three ready rounds of
+   `apps/web/src/state/ready-rounds.ts` (`READY_ROUNDS`), with no model call and no new wording, so
+   `GET /api/examples` answers 200 on Node and on the edge (which bundles the file).
+2. **THE SYSTEM SHALL** build it with `pnpm -C apps/api examples:ready`: a script
+   `apps/api/scripts/ready-examples-cache.mjs` run by `tsx` with no env file, which imports `READY_ROUNDS`, checks
+   the array with `ExamplesResponseSchema`, and writes `JSON.stringify(READY_ROUNDS, null, 2)` plus a final newline
+   to `apps/api/examples-cache.json` beside the package. It reads no env file and makes no network call. The eval
+   (Requirement 12) still replaces the file with real grants when it is run.
+3. **THE SYSTEM SHALL** test the committed file: its text is exactly what the script writes, it parses with
+   `ExamplesResponseSchema`, and `GET /api/examples` answers 200 with the three rounds through `createApp` with the
+   file and through the edge's `edgeAppDeps`.
+4. **THE SYSTEM SHALL** correct every note that says the committed cache holds fallback grants or that
+   `/api/examples` answers 503 with it.
