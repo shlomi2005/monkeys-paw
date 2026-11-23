@@ -92,6 +92,11 @@ export class BudgetedModelClient implements ModelClient {
   /** Cents this guard has charged to the shared state (its own spend). */
   costCents = 0;
   /**
+   * The smallest retry hint (whole seconds) of all attempt reports of all calls on this guard, or
+   * undefined when no attempt gave one (Requirement 19.4). A number only, and it dies with the guard.
+   */
+  retryAfterSeconds: number | undefined;
+  /**
    * The first error a `persist` hook threw through this guard. paw-core swallows the errors of a
    * model call (retry once, then a fallback), so the routes read this after the call and throw it:
    * a failed save ends in the app's error handler, a fixed 500, and not in a fallback answer.
@@ -146,7 +151,13 @@ export class BudgetedModelClient implements ModelClient {
 
     const reports: AttemptReport[] = [];
     try {
-      return await this.inner.generateMetered(prompt, (report) => reports.push(report));
+      return await this.inner.generateMetered(prompt, (report) => {
+        reports.push(report);
+        const hint = report.retryAfterSeconds;
+        if (typeof hint === 'number' && Number.isFinite(hint)) {
+          this.retryAfterSeconds = Math.min(this.retryAfterSeconds ?? hint, hint);
+        }
+      });
     } catch (error) {
       if (error instanceof QuotaExhaustedError) {
         this.quotaSpent = true;

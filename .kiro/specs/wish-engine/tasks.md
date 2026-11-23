@@ -88,4 +88,4 @@ component has a pure interface. All work happens in `packages/paw-core` unless n
   replacement request, specific curses cause none, and 5 generic curses make at most 2 + 2 + 5 x 2 = 14 generates.
   The paw-mcp bundle is rebuilt. The worst case per grant is now 14 generates and 115.65 cents (was 34 and
   278.51), and the CI eval cap is 579 cents (was 1393); see `apps/api/README.md` and paw-api `design.md`.
-- [ ] 28. `isFallbackGrant` and `isFallbackVerdict`: mark the fallback grant and the fallback verdict in a module-private `WeakSet` and export the two functions; tests in `packages/paw-core/tests`. (Req 2.7)
+- [x] 28. `isFallbackGrant` and `isFallbackVerdict`: mark the fallback grant and the fallback verdict in a module-private `WeakSet` and export the two functions; tests in `packages/paw-core/tests`. (Req 2.7) Done: `WeakSet` markers and the two exports in `packages/paw-core/src/grant.ts` and `judge.ts`, exported from `src/index.ts`; tests in `packages/paw-core/tests/fallback-marker.test.ts` (build, test and typecheck pass; the power bundle did not change).

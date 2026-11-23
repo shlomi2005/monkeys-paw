@@ -193,7 +193,7 @@ describe('POST /api/grant input caps (task 107)', () => {
 
   it('accepts a wish text of 500 characters and rejects 501 with 400 and no model call', async () => {
     const ok = setup();
-    expect((await ok.post({ text: 'a'.repeat(500) })).status).toBe(200);
+    expect((await ok.post({ text: 'a'.repeat(500) })).status).toBe(503); // accepted: it reached the model, whose `{ ok: true }` is no grant (Req 19)
     expect(ok.inner.calls).toBeGreaterThan(0);
 
     const over = setup();
@@ -208,7 +208,7 @@ describe('POST /api/grant input caps (task 107)', () => {
 
   it('counts the wish text after trim', async () => {
     const padded = setup();
-    expect((await padded.post({ text: `   ${'a'.repeat(500)}   ` })).status).toBe(200);
+    expect((await padded.post({ text: `   ${'a'.repeat(500)}   ` })).status).toBe(503); // accepted, then the failed model call (Req 19)
 
     const over = setup();
     expect((await over.post({ text: `   ${'a'.repeat(501)}   ` })).status).toBe(400);
@@ -217,7 +217,7 @@ describe('POST /api/grant input caps (task 107)', () => {
 
   it('accepts a context of 200 characters and rejects 201 with 400 and no model call', async () => {
     const ok = setup();
-    expect((await ok.post({ text: 'Save a draft', context: 'b'.repeat(200) })).status).toBe(200);
+    expect((await ok.post({ text: 'Save a draft', context: 'b'.repeat(200) })).status).toBe(503); // accepted, then the failed model call (Req 19)
     expect(ok.inner.calls).toBeGreaterThan(0);
 
     const over = setup();

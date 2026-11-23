@@ -391,9 +391,9 @@ describe('createApp', () => {
       '{"error":{"code":400,"status":"FAILED_PRECONDITION","message":"User location is not supported for the API use."}}';
 
     it.each([
-      [400, REFUSED_400],
-      [500, '{"error":{"code":500,"status":"INTERNAL","message":"Internal error."}}'],
-    ])('40 grants from 40 addresses, each answered %i, never rest the paw', async (code, body) => {
+      [400, REFUSED_400, 403, { code: 'live_region_unavailable' }],
+      [500, '{"error":{"code":500,"status":"INTERNAL","message":"Internal error."}}', 503, { message: RESTING }],
+    ])("40 grants from 40 addresses, each answered %i with the gate's 403 or the resting 503, never rest the paw by budget", async (code, body, answerStatus, answerBody) => {
       const fetchMock = vi.fn<typeof fetch>(async () => new Response(body, { status: code }));
       const client = new GeminiModelClient({
         apiKey: 'test-key',
@@ -405,7 +405,9 @@ describe('createApp', () => {
       const app = makeApp(client, { budget: { dailyBudgetCents: 200 } });
       for (let i = 0; i < 40; i += 1) {
         const res = await post(app, '/api/grant', grantBody, `203.0.113.${i + 1}`);
-        expect(res.status, `grant ${i}`).not.toBe(503);
+        // A location refusal is the gate's 403 (Requirement 17); any other failed model call is the resting 503 (Requirement 19).
+        expect(res.status, `grant ${i}`).toBe(answerStatus);
+        expect(await res.json(), `grant ${i}`).toMatchObject(answerBody);
       }
       expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(40);
       expect(await health(app)).toMatchObject({
@@ -767,7 +769,9 @@ describe('a location refusal gives the ready rounds (paw-api task 125, Req 17)',
       log: () => {},
     });
     const res = await post(makeApp(client), '/api/grant', grantBody);
-    expect(res.status).toBe(200);
+    // Not the gate's 403: the failed call is the resting 503 (Requirement 19).
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ message: RESTING });
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });
@@ -818,5 +822,159 @@ describe('health, live and grant agree on whether a live wish can start (paw-api
     expect(await live(app)).toEqual({ live: true });
     await post(app, '/api/grant', grantBody);
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('a failed live call gives the resting 503 (paw-api task 129, Req 19)', () => {
+  const MODELS = ['model-a', 'model-b', 'model-c'];
+  const bindBody = { grant: sampleGrant, curseId: 'c1', kind: 'rewrite', clause: 'Owner or deputy.' };
+  const PATHS: Array<[string, unknown]> = [
+    ['/api/grant', grantBody],
+    ['/api/bind', bindBody],
+  ];
+
+  const perMinute = (model: string, retryDelay?: string) =>
+    new Response(
+      JSON.stringify({
+        error: {
+          code: 429,
+          status: 'RESOURCE_EXHAUSTED',
+          message: 'quota',
+          details: [
+            {
+              '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+              violations: [
+                {
+                  quotaId: 'GenerateRequestsPerMinutePerProjectPerModel-FreeTier',
+                  quotaDimensions: { location: 'global', model },
+                },
+              ],
+            },
+            ...(retryDelay ? [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay }] : []),
+          ],
+        },
+      }),
+      { status: 429 },
+    );
+
+  /** The real client over a stubbed fetch; `answer` gets the model and the request text. Never the network. */
+  function appOver(answer: (model: string, text: string) => Response, store?: FakeBudgetStore) {
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      const model = decodeURIComponent(String(url).split('/models/')[1]?.split(':')[0] ?? '');
+      return answer(model, String((init as RequestInit).body));
+    });
+    const client = new GeminiModelClient({
+      apiKey: 'test-key',
+      models: MODELS,
+      timeoutMs: 1000,
+      fetch: fetchMock,
+      log: () => {},
+    });
+    const app = store
+      ? createApp({
+          model: client,
+          budget: BUDGET,
+          corsOrigin: '*',
+          examplesCachePath: EXAMPLES_FIXTURE,
+          clock: () => 1_000_000,
+          gate: TEST_GATE,
+          budgetStore: store,
+        })
+      : makeApp(client);
+    return { app, fetchMock };
+  }
+
+  it.each(PATHS)('POST %s: a per-minute 429 with RetryInfo "37s" on every model gives 503, retryAfter 37 and the header', async (path, body) => {
+    const { app } = appOver((model) => perMinute(model, '37s'));
+    const res = await post(app, path, body);
+    expect(res.status).toBe(503);
+    expect(res.headers.get('retry-after')).toBe('37');
+    expect(await res.json()).toEqual({ message: RESTING, retryAfter: 37 });
+  });
+
+  it.each(PATHS)('POST %s: a 503 on every model with no hint has neither the field nor the header', async (path, body) => {
+    const { app, fetchMock } = appOver(() => new Response('{"error":{"status":"UNAVAILABLE"}}', { status: 503 }));
+    const res = await post(app, path, body);
+    expect(res.status).toBe(503);
+    expect(res.headers.get('retry-after')).toBeNull();
+    expect(await res.json()).toEqual({ message: RESTING });
+    expect(fetchMock).toHaveBeenCalledTimes(2 * MODELS.length);
+  });
+
+  it.each(PATHS)('POST %s: a Retry-After header of a 503 becomes retryAfter and the header', async (path, body) => {
+    const { app } = appOver(() => new Response('{}', { status: 503, headers: { 'retry-after': '120' } }));
+    const res = await post(app, path, body);
+    expect(res.status).toBe(503);
+    expect(res.headers.get('retry-after')).toBe('120');
+    expect(await res.json()).toEqual({ message: RESTING, retryAfter: 120 });
+  });
+
+  it.each(PATHS)('POST %s: the hint is kept for no later request', async (path, body) => {
+    let hint = true;
+    const { app } = appOver((model) =>
+      hint ? perMinute(model, '37s') : new Response('{"error":{"status":"UNAVAILABLE"}}', { status: 503 }),
+    );
+    expect((await (await post(app, path, body, '203.0.113.1')).json()) as object).toHaveProperty('retryAfter', 37);
+    hint = false;
+    const second = await post(app, path, body, '203.0.113.2');
+    expect(second.headers.get('retry-after')).toBeNull();
+    expect(await second.json()).toEqual({ message: RESTING });
+  });
+
+  it.each(PATHS)('POST %s: a location refusal still gives the gate\'s 403', async (path, body) => {
+    const refusal =
+      '{"error":{"code":400,"message":"User location is not supported for the API use.","status":"FAILED_PRECONDITION"}}';
+    const { app } = appOver(() => new Response(refusal, { status: 400 }));
+    const res = await post(app, path, body);
+    expect(res.status).toBe(403);
+    expect(res.headers.get('retry-after')).toBeNull();
+    expect(await res.json()).toEqual({
+      code: 'live_region_unavailable',
+      message: GATE_MESSAGES.live_region_unavailable,
+    });
+  });
+
+  it.each([
+    ['/api/grant', grantBody, 'An error occurred while granting your wish'],
+    ['/api/bind', bindBody, 'An error occurred while binding the curse'],
+  ])('POST %s: a failed budget save after the model failed still gives the fixed 500', async (path, body, message) => {
+    const store = new FakeBudgetStore();
+    store.failWhen = (saved) => saved.spentCents > 0; // the save that settles the attempts
+    const { app } = appOver(() => new Response('{"error":{"status":"UNAVAILABLE"}}', { status: 503 }), store);
+    const res = await post(app, path, body);
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ message });
+  });
+
+  it('POST /api/grant: a valid genie answer whose quality judge fails twice is still a real grant with 200', async () => {
+    const genie = {
+      narration: 'Granted.',
+      curses: [
+        { type: 'permissions', story: 'The owner quits.', loophole: '"owner"' },
+        { type: 'time', story: 'Midnight where?', loophole: '"midnight"' },
+        { type: 'scale', story: 'Zero projects.', loophole: '"project"' },
+      ],
+    };
+    const { app, fetchMock } = appOver((_model, text) =>
+      text.includes('Task: GRANT_WISH')
+        ? new Response(
+            JSON.stringify({
+              candidates: [{ content: { parts: [{ text: JSON.stringify(genie) }] } }],
+              usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 100 },
+            }),
+            { status: 200 },
+          )
+        : new Response('{"error":{"status":"INTERNAL"}}', { status: 500 }),
+    );
+    const res = await post(app, '/api/grant', grantBody);
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { grant: { curses: Array<{ id: string; story: string }> } };
+    expect(json.grant.curses.map((curse) => curse.story)).toEqual([
+      'The owner quits.',
+      'Midnight where?',
+      'Zero projects.',
+    ]);
+    expect(JSON.stringify(json)).not.toContain('fallback-curse');
+    expect(fetchMock).toHaveBeenCalledTimes(3); // the genie once, the quality judge twice
   });
 });

@@ -259,7 +259,7 @@ describe('POST /api/bind input caps (task 107)', () => {
 
   it('accepts a clause of 1000 characters and rejects 1001 with 400 and no model call', async () => {
     const ok = setup();
-    expect((await ok.post('c'.repeat(1000), 'Loophole')).status).toBe(200);
+    expect((await ok.post('c'.repeat(1000), 'Loophole')).status).toBe(503); // accepted: it reached the model, whose `{ ok: true }` is no verdict (Req 19)
     expect(ok.inner.calls).toBeGreaterThan(0);
 
     const over = setup();
@@ -273,7 +273,7 @@ describe('POST /api/bind input caps (task 107)', () => {
 
   it('counts the clause after trim', async () => {
     const padded = setup();
-    expect((await padded.post(`  ${'c'.repeat(1000)}  `, 'Loophole')).status).toBe(200);
+    expect((await padded.post(`  ${'c'.repeat(1000)}  `, 'Loophole')).status).toBe(503); // accepted, then the failed model call (Req 19)
 
     const over = setup();
     expect((await over.post(`  ${'c'.repeat(1001)}  `, 'Loophole')).status).toBe(400);
@@ -282,7 +282,7 @@ describe('POST /api/bind input caps (task 107)', () => {
 
   it('accepts a judged loophole of 1000 characters and rejects 1001 with 400 and no model call', async () => {
     const ok = setup();
-    expect((await ok.post('Only the owner or a deputy.', 'l'.repeat(1000))).status).toBe(200);
+    expect((await ok.post('Only the owner or a deputy.', 'l'.repeat(1000))).status).toBe(503); // accepted, then the failed model call (Req 19)
     expect(ok.inner.calls).toBeGreaterThan(0);
 
     const over = setup();

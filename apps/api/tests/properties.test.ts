@@ -10,7 +10,7 @@ import { FakeBudgetStore } from '../src/budget/fake-store';
 import { applyLoaded, snapshotOf } from '../src/budget/store';
 import { DEFAULT_PRICE_TABLE, attemptCostCents, loadPriceTable, priceFor } from '../src/budget/prices';
 import type { ModelPrice } from '../src/budget/prices';
-import { GeminiModelClient, MAX_OUTPUT_TOKENS, QuotaExhaustedError } from '../src/client/gemini';
+import { DEFAULT_MODEL_CHAIN, GeminiModelClient, MAX_OUTPUT_TOKENS, QuotaExhaustedError } from '../src/client/gemini';
 import { createApp } from '../src/app';
 import { FakeMeteredModel } from '../src/budget/fake-metered';
 import { computeStartCeilingCents } from '../src/budget/worst-case';
@@ -731,7 +731,23 @@ describe('Property 15: one answer for live (paw-api task 126, Req 18)', () => {
     );
     await fc.assert(
       fc.asyncProperty(split, async ({ spent, reserved }) => {
-        const model = new FakeMeteredModel({ usage: { promptTokens: 0, outputTokens: 0 } });
+        // A model that answers with valid JSON, so a grant that passes the mode check is a real one (Req 19).
+        const model = new FakeMeteredModel({
+          usage: { promptTokens: 0, outputTokens: 0 },
+          answer: async (prompt) => {
+            if (prompt.includes('Task: GRANT_WISH')) {
+              return {
+                narration: 'Granted.',
+                curses: [
+                  { type: 'permissions', story: 'The owner quits.', loophole: '"owner"' },
+                  { type: 'time', story: 'Midnight where?', loophole: '"midnight"' },
+                  { type: 'scale', story: 'Zero projects.', loophole: '"project"' },
+                ],
+              };
+            }
+            return ['curse-0', 'curse-1', 'curse-2'].map((curseId) => ({ curseId, specific: true, reason: 'Specific.' }));
+          },
+        });
         const app = createApp({
           model,
           budget: { perIpLimit: 10, windowMs: 60_000, dailyBudgetCents: BUDGET },
@@ -756,6 +772,127 @@ describe('Property 15: one answer for live (paw-api task 126, Req 18)', () => {
         expect(health.mode === 'normal').toBe(passes);
       }),
       { numRuns: 100 },
+    );
+  });
+});
+
+describe('Property 16: no fallback answer (paw-api task 129, Req 19)', () => {
+  const EXAMPLES = fileURLToPath(new URL('./fixtures/examples-cache.json', import.meta.url));
+  const GATE = { tier: 'free' as const, countryHeader: 'x-test-country' };
+  const HEADERS = { 'x-test-country': 'US', 'x-paw-adult-confirmed': 'yes', 'content-type': 'application/json' };
+  const RESTING = 'The paw is resting. Browse the examples until it wakes.';
+  const CHAIN = [...DEFAULT_MODEL_CHAIN].slice(0, 3);
+  const LOCATION_REFUSAL = JSON.stringify({
+    error: { code: 400, status: 'FAILED_PRECONDITION', message: 'User location is not supported for the API use.' },
+  });
+
+  type Failure =
+    | { kind: 'timeout' }
+    | { kind: 'network' }
+    | { kind: 'status'; status: number; body: 'none' | 'plain' | 'error' | 'exhausted' | 'location' };
+
+  const failureArb: fc.Arbitrary<Failure> = fc.oneof(
+    fc.constant<Failure>({ kind: 'timeout' }),
+    fc.constant<Failure>({ kind: 'network' }),
+    fc.record({
+      kind: fc.constant('status' as const),
+      status: fc.integer({ min: 400, max: 599 }),
+      body: fc.constantFrom('none', 'plain', 'error', 'exhausted', 'location'),
+    }),
+  );
+
+  const sampleCurse = (id: string, type: string) => ({ id, type, story: 'Story.', loophole: 'Loophole.', status: 'open' });
+  const bindRequest = {
+    grant: {
+      wishId: 'w1',
+      narration: 'Granted.',
+      curses: [sampleCurse('curse-0', 'permissions'), sampleCurse('curse-1', 'time'), sampleCurse('curse-2', 'money')],
+    },
+    curseId: 'curse-0',
+    kind: 'rewrite',
+    clause: 'Owner or deputy.',
+  };
+  const grantRequest = { wish: { text: 'Only the owner can delete a project' } };
+
+  it('P16: any failure on every model gives the resting 503 (403 for a location refusal), never 200 or a fallback, and the spend is the sum of the attempt charges', async () => {
+    await fc.assert(
+      fc.asyncProperty(failureArb, async (failure) => {
+        const attempts: Array<{ model: string; prompt: string }> = [];
+        const fetchStub = (async (url: unknown, init?: RequestInit) => {
+          const model = decodeURIComponent(String(url).split('/models/')[1]?.split(':')[0] ?? '');
+          const sent = JSON.parse(String(init?.body)) as { contents: Array<{ parts: Array<{ text: string }> }> };
+          attempts.push({ model, prompt: sent.contents[0].parts[0].text });
+          if (failure.kind === 'network') throw new TypeError('fetch failed');
+          if (failure.kind === 'timeout') {
+            return new Promise<Response>((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+            });
+          }
+          const bodies = {
+            none: null,
+            plain: 'plain text',
+            error: JSON.stringify({ error: { code: failure.status, message: 'details' } }),
+            exhausted: JSON.stringify({ error: { status: 'RESOURCE_EXHAUSTED', message: 'quota' } }),
+            location: LOCATION_REFUSAL,
+          };
+          return new Response(bodies[failure.body], { status: failure.status });
+        }) as typeof fetch;
+
+        const client = new GeminiModelClient({
+          apiKey: 'test-key-not-real',
+          models: CHAIN,
+          timeoutMs: 5,
+          fetch: fetchStub,
+          log: () => {},
+        });
+        const app = createApp({
+          model: client,
+          budget: { perIpLimit: 100, windowMs: 60_000, dailyBudgetCents: 100_000 },
+          corsOrigin: '*',
+          examplesCachePath: EXAMPLES,
+          clock: () => 1_000_000,
+          gate: GATE,
+        });
+
+        const refused = failure.kind === 'status' && failure.status === 400 && failure.body === 'location';
+        for (const [path, body] of [
+          ['/api/grant', grantRequest],
+          ['/api/bind', bindRequest],
+        ] as const) {
+          const res = await app.request(`http://localhost${path}`, {
+            method: 'POST',
+            headers: HEADERS,
+            body: JSON.stringify(body),
+          });
+          const text = await res.text();
+          expect(res.status, path).toBe(refused ? 403 : 503);
+          expect(text).not.toContain('fallback-curse');
+          expect(text).not.toContain('could not be roused');
+          if (!refused) expect(JSON.parse(text)).toEqual({ message: RESTING });
+        }
+
+        // The sum of the attempt charges (7.10, 13.6, 16), one per upstream fetch.
+        let expected = 0;
+        for (const { model, prompt } of attempts) {
+          if (failure.kind !== 'status') {
+            const plan = client.plan(prompt).find((p) => p.model === model)!;
+            expected += attemptCostCents(priceFor(DEFAULT_PRICE_TABLE, model), plan.inputTokens, plan.maxOutputTokens);
+            continue;
+          }
+          const quota = failure.status === 429 || failure.body === 'exhausted';
+          const unbilled = failure.status === 400 || failure.status === 500;
+          if (quota || unbilled) continue;
+          const plan = client.plan(prompt).find((p) => p.model === model)!;
+          expected += attemptCostCents(priceFor(DEFAULT_PRICE_TABLE, model), plan.inputTokens, plan.maxOutputTokens);
+        }
+        const health = (await (await app.request('http://localhost/api/health')).json()) as {
+          budget: { spentCents: number };
+        };
+        expect(attempts.length).toBeGreaterThan(0);
+        // `/api/health` rounds the running total to three decimals, so allow one display unit.
+        expect(Math.abs(health.budget.spentCents - expected)).toBeLessThanOrEqual(0.0011);
+      }),
+      { numRuns: 60 },
     );
   });
 });

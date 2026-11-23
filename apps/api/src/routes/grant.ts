@@ -1,11 +1,11 @@
 import { randomUUID } from 'crypto';
 import type { Context } from 'hono';
 import type { Hono } from 'hono';
-import { grantWish } from 'paw-core';
+import { grantWish, isFallbackGrant } from 'paw-core';
 import type { Wish } from 'paw-core';
 import { GrantRequestSchema, GrantResponseSchema } from '../schemas';
 import type { BudgetedModelClient } from '../budget/guarded-client';
-import { RESTING_MESSAGE } from '../budget/messages';
+import { restingResponse } from '../budget/messages';
 import { GATE_MESSAGES } from '../gate/middleware';
 import { fitGrant } from '../fit';
 import { isHarmfulWish } from '../guardrail';
@@ -53,7 +53,7 @@ export function createGrantRoute(app: Hono, createClient: () => BudgetedModelCli
 
       // Call grantWish (Req 1.1). Every model call goes through the budget guard.
       const modelClient = createClient();
-      const grant = fitGrant(await grantWish(wish, modelClient));
+      const raw = await grantWish(wish, modelClient);
 
       // A failed budget save: paw-core would have hidden it behind a fallback. Fail closed, fixed 500.
       if (modelClient.persistFailure) throw modelClient.persistFailure.error;
@@ -69,18 +69,26 @@ export function createGrantRoute(app: Hono, createClient: () => BudgetedModelCli
 
       // The guard refused a call: paw-core would hand back its fallback grant, so say so instead.
       if (modelClient.denied) {
-        return c.json({ message: RESTING_MESSAGE }, 503);
+        return restingResponse(c, modelClient.retryAfterSeconds);
       }
 
-      // Validate response matches schema (Req 1.6)
+      // Every model failed (any status, a timeout, no response, invalid output twice): paw-core's
+      // own fallback grant. It is never sent, not even with 200 (Requirement 19).
+      if (isFallbackGrant(raw)) {
+        return restingResponse(c, modelClient.retryAfterSeconds);
+      }
+
+      const grant = fitGrant(raw);
+
+      // Validate response matches schema
       const response = GrantResponseSchema.safeParse({
         wish,
         grant,
       });
 
       if (!response.success) {
-        // Fallback: return the grant as-is with 200 (Req 1.6)
-        return c.json({ wish, grant }, 200);
+        // A grant that fails the response schema is not sent either (Requirement 19).
+        return restingResponse(c, modelClient.retryAfterSeconds);
       }
 
       return c.json(response.data, 200);

@@ -174,6 +174,56 @@ async function readErrorBody(response: Response, signal: AbortSignal): Promise<u
   }
 }
 
+/** The longest wait a hint may name: one day. */
+const MAX_RETRY_HINT_SECONDS = 86400;
+
+/** A hint counts only as a whole number of seconds from 1 to 86400. */
+function validHint(seconds: number): number | undefined {
+  return Number.isInteger(seconds) && seconds >= 1 && seconds <= MAX_RETRY_HINT_SECONDS
+    ? seconds
+    : undefined;
+}
+
+/**
+ * The wait Google hints at in a non-200 answer, in whole seconds, or `undefined` (Requirement 19.4).
+ * Two sources: the `retryDelay` of the first `error.details[]` entry whose `@type` ends with
+ * `google.rpc.RetryInfo` (a string like "37s" or "0.5s", rounded up), and, on a 429 or 503, a
+ * `Retry-After` header of digits only. Each counts only from 1 to 86400; the smaller one wins.
+ * Only that number leaves this function: nothing of the body or the header is kept or logged.
+ */
+function retryHintOf(errorBody: unknown, response: Response, status: number): number | undefined {
+  const hints: number[] = [];
+
+  if (isRecord(errorBody) && isRecord(errorBody.error) && Array.isArray(errorBody.error.details)) {
+    const info = errorBody.error.details.find(
+      (detail: unknown) =>
+        isRecord(detail) &&
+        typeof detail['@type'] === 'string' &&
+        detail['@type'].endsWith('google.rpc.RetryInfo'),
+    );
+    const delay = isRecord(info) ? info.retryDelay : undefined;
+    if (typeof delay === 'string' && /^\d+(\.\d+)?s$/.test(delay)) {
+      const hint = validHint(Math.ceil(Number(delay.slice(0, -1))));
+      if (hint !== undefined) hints.push(hint);
+    }
+  }
+
+  if (status === 429 || status === 503) {
+    let header: string | null = null;
+    try {
+      header = response.headers.get('retry-after');
+    } catch {
+      header = null; // a response without readable headers gives no hint
+    }
+    if (header !== null && /^\d+$/.test(header)) {
+      const hint = validHint(Number(header));
+      if (hint !== undefined) hints.push(hint);
+    }
+  }
+
+  return hints.length === 0 ? undefined : Math.min(...hints);
+}
+
 /** What one attempt could cost at most: the request as planned, before any call is made. */
 export interface AttemptPlan {
   model: string;
@@ -192,6 +242,8 @@ export interface AttemptReport extends AttemptPlan {
   quota?: true;
   /** HTTP 400 or 500 with no usageMetadata, not cut off by the timeout: Google does not charge it. 0 cents. */
   unbilled?: true;
+  /** On a non-200 answer: the wait Google hinted at, whole seconds from 1 to 86400 (Requirement 19.4). */
+  retryAfterSeconds?: number;
 }
 
 /** One metadata line per HTTP attempt. Numbers and enums only; never the prompt, the response text or the key. */
@@ -510,6 +562,8 @@ export class GeminiModelClient implements ModelClient {
           // Read (capped, under this attempt's signal), reduced to a verdict, dropped.
           const errorBody = await readErrorBody(response, abortController.signal);
           const error = new Error(`Model call failed (${modelName}: HTTP ${status})`);
+          const hint = retryHintOf(errorBody, response, status); // a number only; nothing else is kept
+          if (hint !== undefined) report.retryAfterSeconds = hint;
           const quota = status === 429 || isResourceExhausted(errorBody);
           if (quota) {
             report.quota = true;

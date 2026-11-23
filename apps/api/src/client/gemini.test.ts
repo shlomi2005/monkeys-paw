@@ -1221,3 +1221,165 @@ describe('a location refusal (paw-api task 125, Req 17)', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// The retry hint of a non-200 answer (paw-api task 129, Requirement 19.4)
+// ---------------------------------------------------------------------------
+
+describe('retryAfterSeconds on an attempt report (paw-api task 129, Req 19.4)', () => {
+  const RETRY_INFO = 'type.googleapis.com/google.rpc.RetryInfo';
+
+  /** Runs one call whose first attempt gets `response` and returns the first report. */
+  const firstReport = async (response: Response) => {
+    const queue = [response];
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      const next = queue.shift();
+      if (!next) throw new Error('unexpected extra fetch');
+      return next;
+    });
+    const logs: ModelCallLogEntry[] = [];
+    const client = new GeminiModelClient({
+      apiKey: FAKE_KEY,
+      models: ['model-a'],
+      timeoutMs: 1000,
+      fetch: fetchMock,
+      log: (entry) => logs.push(entry),
+    });
+    const reports: AttemptReport[] = [];
+    const error = await client.generateMetered('x', (r) => reports.push(r)).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+    return { report: reports[0], error, logs };
+  };
+
+  const withDelay = (retryDelay: unknown, code = 429) =>
+    answer(code, {
+      error: { code, status: 'RESOURCE_EXHAUSTED', details: [{ '@type': RETRY_INFO, retryDelay }] },
+    });
+
+  const withHeader = (value: string, code: number) =>
+    new Response('{"error":{"message":"details"}}', { status: code, headers: { 'retry-after': value } });
+
+  it.each([
+    ['37s', 37],
+    ['0.5s', 1],
+    ['1.2s', 2],
+    ['86400s', 86400],
+    ['1s', 1],
+  ])('a retryDelay of %s gives %i', async (delay, seconds) => {
+    const { report } = await firstReport(withDelay(delay));
+    expect(report.retryAfterSeconds).toBe(seconds);
+  });
+
+  it.each([
+    ['0s', '0s'],
+    ['0.0s', '0.0s'],
+    ['90000s', '90000s'],
+    ['abc', 'abc'],
+    ['no unit', '37'],
+    ['a negative duration', '-5s'],
+    ['a number', 37],
+    ['null', null],
+  ])('a retryDelay that is %s gives no hint', async (_name, delay) => {
+    const { report } = await firstReport(withDelay(delay));
+    expect(report.retryAfterSeconds).toBeUndefined();
+  });
+
+  it('reads the hint on any non-200 status', async () => {
+    for (const code of [400, 404, 500, 503]) {
+      const { report } = await firstReport(withDelay('12s', code));
+      expect(report.retryAfterSeconds, String(code)).toBe(12);
+    }
+  });
+
+  it('reads the first RetryInfo entry only, and skips other detail types', async () => {
+    const first = await firstReport(
+      answer(503, {
+        error: {
+          details: [
+            { '@type': 'type.googleapis.com/google.rpc.QuotaFailure', retryDelay: '5s' },
+            { '@type': RETRY_INFO, retryDelay: '9s' },
+            { '@type': RETRY_INFO, retryDelay: '2s' },
+          ],
+        },
+      }),
+    );
+    expect(first.report.retryAfterSeconds).toBe(9);
+    const second = await firstReport(
+      answer(503, {
+        error: { details: [{ '@type': RETRY_INFO, retryDelay: 'abc' }, { '@type': RETRY_INFO, retryDelay: '2s' }] },
+      }),
+    );
+    expect(second.report.retryAfterSeconds).toBeUndefined();
+  });
+
+  it('a Retry-After header of digits on a 503 gives its value, on a 429 too', async () => {
+    expect((await firstReport(withHeader('120', 503))).report.retryAfterSeconds).toBe(120);
+    expect((await firstReport(withHeader('45', 429))).report.retryAfterSeconds).toBe(45);
+  });
+
+  it.each([500, 404, 400])('a Retry-After header on a %i gives none', async (code) => {
+    const { report } = await firstReport(withHeader('120', code));
+    expect(report.retryAfterSeconds).toBeUndefined();
+  });
+
+  it.each([
+    ['zero', '0'],
+    ['above a day', '90000'],
+    ['text', 'abc'],
+    ['an HTTP date', 'Wed, 21 Oct 2026 07:28:00 GMT'],
+    ['a decimal', '1.5'],
+    ['a negative', '-3'],
+    ['empty', ''],
+  ])('a Retry-After header that is %s gives none', async (_name, value) => {
+    const { report } = await firstReport(withHeader(value, 503));
+    expect(report.retryAfterSeconds).toBeUndefined();
+  });
+
+  it('the smaller of the body hint and the header wins', async () => {
+    const body = JSON.stringify({ error: { details: [{ '@type': RETRY_INFO, retryDelay: '37s' }] } });
+    const headerSmaller = new Response(body, { status: 503, headers: { 'retry-after': '20' } });
+    const headerLarger = new Response(body, { status: 503, headers: { 'retry-after': '90' } });
+    expect((await firstReport(headerSmaller)).report.retryAfterSeconds).toBe(20);
+    expect((await firstReport(headerLarger)).report.retryAfterSeconds).toBe(37);
+  });
+
+  it('an invalid body hint does not hide a valid header, and the other way round', async () => {
+    const badBody = JSON.stringify({ error: { details: [{ '@type': RETRY_INFO, retryDelay: '0s' }] } });
+    const one = new Response(badBody, { status: 429, headers: { 'retry-after': '30' } });
+    expect((await firstReport(one)).report.retryAfterSeconds).toBe(30);
+    const goodBody = JSON.stringify({ error: { details: [{ '@type': RETRY_INFO, retryDelay: '8s' }] } });
+    const two = new Response(goodBody, { status: 503, headers: { 'retry-after': 'soon' } });
+    expect((await firstReport(two)).report.retryAfterSeconds).toBe(8);
+  });
+
+  it('a 200 answer and a failure without a response give no hint', async () => {
+    const ok = await firstReport(geminiOk('{"a":1}'));
+    expect(ok.report.retryAfterSeconds).toBeUndefined();
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      throw new Error('network down');
+    });
+    const client = new GeminiModelClient({ apiKey: FAKE_KEY, models: ['model-a'], fetch: fetchMock, log: () => undefined });
+    const reports: AttemptReport[] = [];
+    await client.generateMetered('x', (r) => reports.push(r)).catch(() => undefined);
+    expect(reports[0].retryAfterSeconds).toBeUndefined();
+  });
+
+  it('the hint changes neither the error message nor the log line, and its text is nowhere in them', async () => {
+    const withoutHint = await firstReport(answer(503, { error: { message: BODY_SECRET } }));
+    const body = { error: { message: BODY_SECRET, details: [{ '@type': RETRY_INFO, retryDelay: '7311s' }] } };
+    const response = new Response(JSON.stringify(body), { status: 503, headers: { 'retry-after': '7312' } });
+    const withHint = await firstReport(response);
+    expect(withHint.report.retryAfterSeconds).toBe(7311);
+    expect(withHint.error?.message).toBe(withoutHint.error?.message);
+    expect(withHint.error?.message).not.toContain('7311');
+    expect(withHint.error?.message).not.toContain('7312');
+    expect(withHint.logs).toHaveLength(1);
+    expect(Object.keys(withHint.logs[0]).sort()).toEqual(Object.keys(withoutHint.logs[0]).sort());
+    const logged = JSON.stringify(withHint.logs);
+    for (const text of ['7311', '7312', 'retryDelay', 'RetryInfo', BODY_SECRET]) {
+      expect(logged).not.toContain(text);
+    }
+  });
+});

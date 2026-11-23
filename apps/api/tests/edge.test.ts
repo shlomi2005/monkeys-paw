@@ -614,7 +614,7 @@ describe('fetch count on the edge', () => {
   it('a bind whose judge answers are invalid twice makes 6 fetches', async () => {
     const { fetchMock, seen } = scriptedFetch();
     const response = await post(appFor(fetchMock), '/api/bind', BIND_BODY);
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503); // the Judge could not be roused: the resting 503, not a verdict (Req 19)
     expect(seen.verdict).toBe(2);
     expect(fetchMock).toHaveBeenCalledTimes(6);
     expect(fetchMock.mock.calls.length).toBeLessThan(50);

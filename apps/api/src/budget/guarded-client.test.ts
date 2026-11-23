@@ -868,3 +868,77 @@ describe('a location refusal (paw-api task 125, Req 17)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('retryAfterSeconds: the smallest hint of all reports (paw-api task 129, Req 19.4)', () => {
+  const PROMPT = 'Task: JUDGE_VERDICT ask the judge';
+  const hintBody = (retryDelay: string) =>
+    JSON.stringify({
+      error: {
+        code: 503,
+        status: 'UNAVAILABLE',
+        details: [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay }],
+      },
+    });
+
+  /** A 3-model chain whose n-th fetch answers the n-th response; a string is a RetryInfo delay, undefined is no hint. */
+  function chainOf(delays: Array<string | undefined>) {
+    let n = 0;
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      const delay = delays[n++];
+      return new Response(delay === undefined ? '{"error":{"message":"busy"}}' : hintBody(delay), { status: 503 });
+    });
+    const client = new GeminiModelClient({
+      apiKey: 'test-key-not-real',
+      models: ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.5-flash'],
+      timeoutMs: 1000,
+      fetch: fetchMock,
+      log: () => {},
+    });
+    const guard = new BudgetedModelClient(client, createGlobalState(0), config(1000), () => 0);
+    return { guard, fetchMock };
+  }
+
+  it('is undefined before any call', () => {
+    expect(chainOf([]).guard.retryAfterSeconds).toBeUndefined();
+  });
+
+  it('is the smallest hint of the reports of one call', async () => {
+    const { guard, fetchMock } = chainOf(['40s', '12s', '90s']);
+    await expect(guard.generate(PROMPT)).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(guard.retryAfterSeconds).toBe(12);
+  });
+
+  it('is the smallest hint over several calls on the guard', async () => {
+    const { guard } = chainOf(['40s', undefined, '30s', '20s', '25s', undefined]);
+    await expect(guard.generate(PROMPT)).rejects.toThrow();
+    expect(guard.retryAfterSeconds).toBe(30);
+    await expect(guard.generate(PROMPT)).rejects.toThrow();
+    expect(guard.retryAfterSeconds).toBe(20);
+  });
+
+  it('stays undefined when no attempt gave a hint', async () => {
+    const { guard } = chainOf([undefined, undefined, undefined]);
+    await expect(guard.generate(PROMPT)).rejects.toThrow();
+    expect(guard.retryAfterSeconds).toBeUndefined();
+  });
+
+  it('takes the hint of a fake client report, and a later larger one does not raise it', async () => {
+    const options = { plan: PLAN_3_CENTS, usage: 'ceiling' as const, retryAfterSeconds: 15 };
+    const guard = guardOf(new FakeMeteredModel(options));
+    await guard.generate('p');
+    expect(guard.retryAfterSeconds).toBe(15);
+    options.retryAfterSeconds = 60;
+    await guard.generate('p');
+    expect(guard.retryAfterSeconds).toBe(15);
+    options.retryAfterSeconds = 4;
+    await guard.generate('p');
+    expect(guard.retryAfterSeconds).toBe(4);
+  });
+
+  it('does not leak between guards', async () => {
+    const { guard } = chainOf(['5s', '5s', '5s']);
+    await expect(guard.generate(PROMPT)).rejects.toThrow();
+    expect(chainOf([]).guard.retryAfterSeconds).toBeUndefined();
+  });
+});

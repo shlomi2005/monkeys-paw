@@ -34,6 +34,8 @@ export interface FakeMeteredOptions {
   quota?: boolean;
   /** Report the one attempt as unbilled (`unbilled: true`, no usage): a 400 or 500 without token counts. */
   unbilled?: boolean;
+  /** The `retryAfterSeconds` of the reported attempt. Default none. */
+  retryAfterSeconds?: number;
 }
 
 export class FakeMeteredModel implements MeteredModelClient {
@@ -89,6 +91,9 @@ export class FakeMeteredModel implements MeteredModelClient {
       report.usage = usage;
     }
     if (this.options.modelVersion) report.modelVersion = this.options.modelVersion;
+    if (this.options.retryAfterSeconds !== undefined) {
+      report.retryAfterSeconds = this.options.retryAfterSeconds;
+    }
     if (this.options.quota) {
       delete report.usage;
       report.quota = true;

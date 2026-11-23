@@ -61,11 +61,11 @@ export {
 
 export { EARS_CLAUSE_FORMAT, isEarsCriterion } from './ears';
 
-export { grantWish } from './grant';
+export { grantWish, isFallbackGrant } from './grant';
 
 export { proposeBinding } from './bind';
 
-export { judgeBinding } from './judge';
+export { judgeBinding, isFallbackVerdict } from './judge';
 
 export { computeIntegrity } from './integrity';
 

@@ -10,12 +10,27 @@ function toJson(raw: unknown): unknown {
   return typeof raw === 'string' ? JSON.parse(raw) : raw;
 }
 
-const FALLBACK_VERDICT = (curse: Curse, binding: Binding): Verdict => ({
-  curseId: curse.id,
-  closed: false,
-  reason: 'The Judge could not be roused; the loophole remains open.',
-  judgedAt: Date.now(),
-});
+/** The verdicts that `FALLBACK_VERDICT` built. Module-private: only those objects are fallbacks (Req 2.7). */
+const FALLBACK_VERDICTS = new WeakSet<object>();
+
+const FALLBACK_VERDICT = (curse: Curse, binding: Binding): Verdict => {
+  const verdict: Verdict = {
+    curseId: curse.id,
+    closed: false,
+    reason: 'The Judge could not be roused; the loophole remains open.',
+    judgedAt: Date.now(),
+  };
+  FALLBACK_VERDICTS.add(verdict);
+  return verdict;
+};
+
+/**
+ * True only for an object that the fallback path of `judgeBinding` returned. A model answer, an
+ * object literal or a clone that copies the fallback exactly is not one.
+ */
+export function isFallbackVerdict(verdict: Verdict): boolean {
+  return typeof verdict === 'object' && verdict !== null && FALLBACK_VERDICTS.has(verdict);
+}
 
 /**
  * Judge a binding: decide whether it closes the loophole in the curse.

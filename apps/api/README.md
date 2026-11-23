@@ -13,7 +13,7 @@ Spec: [`.kiro/specs/paw-api`](../../.kiro/specs/paw-api/).
 - `POST /api/export`: turns a grant into `requirements.md` and `properties.md`. No model call.
 - `GET /api/examples`: serves the cached example grants from `examples-cache.json`. No model call.
 
-Abuse limits: a request body is read up to 192 KiB (196608 bytes). A declared length over that is refused unread, and a stream is given up as soon as it passes the cap, whatever the headers say. The answer is 413 `{ "message": "The request is too large." }`. `export` and `bind` also cap the fields of the grant (ids 100, narration 260, story 360, loophole, clause, reason, property, `userStory` and `wishCriterion` 1000, 3 to 5 curses) and `export` the wish (id 100, text 500, context 200), else 400 and no model call. The server cuts its own grants and verdicts to these caps, so a served grant of 3 to 5 curses can be sent back; the one-curse fallback of a failed model cannot. Only POSTs to `grant` and `bind` reach the mode check and the per-IP count, after the gate. An oversized live POST still counts. `RATE_WINDOW_MS` must be all digits and at least 1, else 60000.
+Abuse limits: a request body is read up to 192 KiB (196608 bytes). A declared length over that is refused unread, and a stream is given up as soon as it passes the cap, whatever the headers say. The answer is 413 `{ "message": "The request is too large." }`. `export` and `bind` also cap the fields of the grant (ids 100, narration 260, story 360, loophole, clause, reason, property, `userStory` and `wishCriterion` 1000, 3 to 5 curses) and `export` the wish (id 100, text 500, context 200), else 400 and no model call. The server cuts its own grants and verdicts to these caps, so a served grant of 3 to 5 curses can be sent back. The server never serves the one-curse fallback of a failed model, so none comes back (see "Running on the free tier"). Only POSTs to `grant` and `bind` reach the mode check and the per-IP count, after the gate. An oversized live POST still counts. `RATE_WINDOW_MS` must be all digits and at least 1, else 60000.
 
 In examples-only mode (no key, or the daily budget is spent) `grant` and `bind` answer 503. `export`, `examples`, `health` and `live` keep working, and none of them is gated.
 
@@ -52,11 +52,15 @@ The website runs on Gemini's free tier. No bill is possible if the key comes fro
 
 When the day's free quota ends, Gemini answers 429 `RESOURCE_EXHAUSTED`. The paw rests: `POST /api/grant` and `POST /api/bind` answer 503 "The paw is resting. Browse the examples until it wakes." and the site serves the ready examples. `/api/health` still says `normal`, and the next request tries the model again. A quota shared by all models stops the chain after one call. A quota of one model tries the next model. Daily free quotas reset at midnight Pacific time.
 
+Any failure of every model now rests the paw the same way: an overload (503), 500, 404 or any other error status, a timeout, no response, or invalid output twice. `POST /api/grant` and `POST /api/bind` answer the same 503 "The paw is resting. Browse the examples until it wakes." as for a spent quota, never 200 with a made-up grant or verdict, and the site plays the ready rounds. When Google gave a hint (a `retryDelay` in the error body or a `Retry-After` header of a 429 or 503, in whole seconds from 1 to 86400, the smallest of the request), the body also has `retryAfter` and the response has a `Retry-After` header with the same number. With no hint there is neither. Nothing is kept for the next request: the model is tried again, and `/api/health` and `/api/live` do not change.
+
 A Gemini location refusal (HTTP 400 "User location is not supported") costs 0 cents. It stops the wish after one call and answers the closed gate's 403 `live_region_unavailable`, so the visitor gets the ready rounds.
 
 `/api/health` `mode`, `/api/live` `resting` and the check before grant and bind use one rule. A live wish can start only if the day's spend, the reservations in flight and the start ceiling fit under `DAILY_BUDGET_CENTS`. The start ceiling is the larger of two whole-chain ceilings: a grant's first call and a bind's first call, each at maximum size.
 
 A quota attempt costs 0 cents. So does a 400 or 500 without token counts, so refused calls do not rest the paw; the per-IP limit and Google's quota bound them. The budget guard still counts paid-tier prices on paper, as a second fence.
+
+The paper charges do not change with the 503 answer. A quota attempt and a 400 or 500 without usage cost 0. An attempt with usage costs its usage. A 404, a 503, any other status, a timeout and no response keep their ceilings. So an overload on every model of the 3-model edge chain costs about 15 cents per short wish on paper (about 15.1 for a grant, 14.6 for a bind; each call is tried twice), and a long overload rests the paw by budget. The free tier bills nothing.
 
 ## Who may make live wishes
 

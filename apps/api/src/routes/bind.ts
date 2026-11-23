@@ -1,10 +1,10 @@
 import type { Context } from 'hono';
 import type { Hono } from 'hono';
-import { judgeBinding, proposeBinding } from 'paw-core';
+import { isFallbackVerdict, judgeBinding, proposeBinding } from 'paw-core';
 import type { Curse } from 'paw-core';
 import { BindRequestSchema, BindResponseSchema } from '../schemas';
 import type { BudgetedModelClient } from '../budget/guarded-client';
-import { RESTING_MESSAGE } from '../budget/messages';
+import { restingResponse } from '../budget/messages';
 import { GATE_MESSAGES } from '../gate/middleware';
 import { fitVerdict } from '../fit';
 import { logError } from '../error-log';
@@ -44,7 +44,7 @@ export function createBindRoute(app: Hono, createClient: () => BudgetedModelClie
 
       // Judge the binding (Req 2). Every model call goes through the budget guard.
       const modelClient = createClient();
-      const verdict = fitVerdict(await judgeBinding(curse, binding, modelClient));
+      const raw = await judgeBinding(curse, binding, modelClient);
 
       // A failed budget save: paw-core would have hidden it behind a fallback. Fail closed, fixed 500.
       if (modelClient.persistFailure) throw modelClient.persistFailure.error;
@@ -60,8 +60,16 @@ export function createBindRoute(app: Hono, createClient: () => BudgetedModelClie
 
       // The guard refused a call: paw-core would hand back its fallback verdict, so say so instead.
       if (modelClient.denied) {
-        return c.json({ message: RESTING_MESSAGE }, 503);
+        return restingResponse(c, modelClient.retryAfterSeconds);
       }
+
+      // Every model failed (any status, a timeout, no response, invalid output twice): paw-core's
+      // own fallback verdict. It is never sent, not even with 200 (Requirement 19).
+      if (isFallbackVerdict(raw)) {
+        return restingResponse(c, modelClient.retryAfterSeconds);
+      }
+
+      const verdict = fitVerdict(raw);
 
       // Update curse status if closed (Req 2)
       const updatedCurse: Curse = {
@@ -77,26 +85,15 @@ export function createBindRoute(app: Hono, createClient: () => BudgetedModelClie
         curses: grant.curses.map((c) => (c.id === curseId ? updatedCurse : c)),
       };
 
-      // Validate response (Req 2.5)
+      // Validate response
       const response = BindResponseSchema.safeParse({
         grant: updatedGrant,
         verdict,
       });
 
       if (!response.success) {
-        // Fallback: return with closed: false (Req 2.5)
-        return c.json(
-          {
-            grant: updatedGrant,
-            verdict: {
-              ...verdict,
-              closed: false,
-              reason:
-                'The Judge could not be roused; the loophole remains open.',
-            },
-          },
-          200,
-        );
+        // A verdict that fails the response schema is not sent either (Requirement 19).
+        return restingResponse(c, modelClient.retryAfterSeconds);
       }
 
       return c.json(response.data, 200);

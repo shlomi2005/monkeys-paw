@@ -31,8 +31,21 @@ const FALLBACK_CURSE: Curse = {
   status: 'open',
 };
 
+/** The grants that `fallbackGrant` built. Module-private: only those objects are fallbacks (Req 2.7). */
+const FALLBACK_GRANTS = new WeakSet<object>();
+
 function fallbackGrant(wish: Wish): Grant {
-  return { wishId: wish.id, narration: FALLBACK_NARRATION, curses: [FALLBACK_CURSE] };
+  const grant: Grant = { wishId: wish.id, narration: FALLBACK_NARRATION, curses: [FALLBACK_CURSE] };
+  FALLBACK_GRANTS.add(grant);
+  return grant;
+}
+
+/**
+ * True only for an object that the fallback path of `grantWish` returned. A model answer, an object
+ * literal or a clone that copies the fallback exactly is not one.
+ */
+export function isFallbackGrant(grant: Grant): boolean {
+  return typeof grant === 'object' && grant !== null && FALLBACK_GRANTS.has(grant);
 }
 
 /** Accept raw model output (string or already-parsed) and return a JSON value. */
