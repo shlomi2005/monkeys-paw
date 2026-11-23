@@ -165,6 +165,8 @@ budget.
 3. **THE SYSTEM SHALL** gitignore `.wrangler/` and `.dev.vars*`.
 4. **THE SYSTEM SHALL** list `wrangler` as a devDependency of `apps/api` at an exact version at least two weeks old,
    in the lockfile. No other new runtime dependency.
+5. **WHEN** the runtime has no jurisdictions (local `wrangler dev`) **THE SYSTEM SHALL** use the plain namespace, and on
+   any other error answer the fixed 500.
 
 ### Requirement 12: Tests
 

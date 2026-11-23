@@ -20,7 +20,9 @@
    `CF-Connecting-IP`; set `x-paw-country` from `request.cf.country` if it is two uppercase letters, not `XX` or
    `T1`, and `CF-Worker` is absent.
 3. It gets the object with `const ns = env.PAW.jurisdiction("us"); ns.get(ns.idFromName(FIXED_NAME))` and forwards the
-   rewritten request. An id made by the plain namespace is not valid in the jurisdiction.
+   rewritten request. An id made by the plain namespace is not valid in the jurisdiction. Only the error "not implemented in workerd" (local `wrangler dev`, which has no
+   jurisdictions) falls back to the plain `env.PAW`; any other error fails closed with the fixed 500 JSON body, never a
+   silent move out of the US. The whole `/api/*` path is wrapped in try/catch and logs `edge_failed`.
 4. `PawObject` builds the app once with `createApp` and answers with `app.fetch`. After each POST to grant or bind it
    keeps a timer until the rate window ends.
 

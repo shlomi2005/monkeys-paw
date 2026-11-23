@@ -18,7 +18,7 @@ export interface PawObjectNamespace {
   get(id: unknown): PawObjectStub;
 }
 
-export interface PawNamespace {
+export interface PawNamespace extends PawObjectNamespace {
   jurisdiction(name: 'us'): PawObjectNamespace;
 }
 

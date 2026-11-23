@@ -110,6 +110,8 @@ function harness(settings: Record<string, string | undefined> = {}, fetchMock = 
       jurisdictions.push(name);
       return inner;
     },
+    idFromName: inner.idFromName,
+    get: inner.get,
   };
   env.ASSETS = assets;
 
@@ -178,6 +180,46 @@ describe('the entry routes', () => {
     await send(h, { path: '/api/live', cf: { country: 'IL' } });
     expect(h.jurisdictions).toEqual(['us', 'us']);
     expect(h.objects).toHaveLength(1);
+  });
+
+  it('falls back to the plain namespace when the runtime has no jurisdictions', async () => {
+    const h = harness();
+    h.env.PAW.jurisdiction = () => {
+      throw new Error('Jurisdiction restrictions are not implemented in workerd.');
+    };
+    const response = await send(h, { path: '/api/health', cf: { country: 'IL' } });
+    expect(response.status).toBe(200);
+    expect(h.objects).toHaveLength(1);
+  });
+
+  it('answers the fixed 500 on any other jurisdiction error and builds no object', async () => {
+    const h = harness();
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.env.PAW.jurisdiction = () => {
+      throw new Error('secret-detail');
+    };
+    const response = await send(h, { path: '/api/health' });
+    const text = await response.text();
+    expect(response.status).toBe(500);
+    expect(JSON.parse(text)).toEqual({ message: 'An error occurred while handling the request' });
+    expect(text).not.toContain('secret-detail');
+    expect(h.objects).toHaveLength(0);
+    spy.mockRestore();
+  });
+
+  it('answers the fixed 500 when the stub fetch rejects', async () => {
+    const h = harness();
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.env.PAW.jurisdiction = () => ({
+      idFromName: (n: string) => n,
+      get: () => ({ fetch: () => Promise.reject(new Error('stub-detail')) }),
+    });
+    const response = await send(h, { path: '/api/health' });
+    const text = await response.text();
+    expect(response.status).toBe(500);
+    expect(JSON.parse(text)).toEqual({ message: 'An error occurred while handling the request' });
+    expect(text).not.toContain('stub-detail');
+    spy.mockRestore();
   });
 
   it('sends a path outside /api/ to ASSETS and never builds the object', async () => {
