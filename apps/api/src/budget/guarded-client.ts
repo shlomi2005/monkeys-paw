@@ -1,5 +1,5 @@
 import type { ModelClient } from 'paw-core';
-import { QuotaExhaustedError } from '../client/gemini';
+import { LocationRefusedError, QuotaExhaustedError } from '../client/gemini';
 import type { AttemptPlan, AttemptReport } from '../client/gemini';
 import type { BudgetConfig } from './config';
 import { DEFAULT_PRICE_TABLE, attemptCostCents, priceFor } from './prices';
@@ -57,6 +57,9 @@ const IN_FLIGHT = new WeakMap<GlobalState, number>();
  *    sets `quotaSpent` and `denied`, then rethrows. Every later `generate` on this
  *    guard throws `BudgetExhaustedError` at once, before the day roll and before any
  *    reservation, without calling the model, so paw-core's retry spends no more quota.
+ *    A `LocationRefusedError` (Google refuses the server's location, Requirement 17) does the same
+ *    with `locationRefused`: nothing is called again on this guard, so paw-core's retry sends no
+ *    second request. The routes then answer the gate's refusal.
  *    `quotaSpent` is separate from `denied` on purpose: a budget refusal does not block
  *    a later, cheaper call that still fits under the cap, a quota answer blocks all.
  *
@@ -84,6 +87,8 @@ export class BudgetedModelClient implements ModelClient {
   denied = false;
   /** True once the model answered that the free quota is spent. Blocks every later call of this guard. */
   quotaSpent = false;
+  /** True once the model refused the server's location. Blocks every later call of this guard. */
+  locationRefused = false;
   /** Cents this guard has charged to the shared state (its own spend). */
   costCents = 0;
   /**
@@ -102,7 +107,7 @@ export class BudgetedModelClient implements ModelClient {
   ) {}
 
   async generate(prompt: string): Promise<unknown> {
-    if (this.quotaSpent) {
+    if (this.quotaSpent || this.locationRefused) {
       this.denied = true;
       throw new BudgetExhaustedError();
     }
@@ -145,6 +150,10 @@ export class BudgetedModelClient implements ModelClient {
     } catch (error) {
       if (error instanceof QuotaExhaustedError) {
         this.quotaSpent = true;
+        this.denied = true;
+      }
+      if (error instanceof LocationRefusedError) {
+        this.locationRefused = true;
         this.denied = true;
       }
       throw error;

@@ -15,12 +15,14 @@ import { checkBudget } from './budget/middleware';
 import type { BudgetConfig } from './budget/config';
 import { BudgetedModelClient } from './budget/guarded-client';
 import type { MeteredModelClient } from './budget/guarded-client';
+import { DEFAULT_PRICE_TABLE } from './budget/prices';
 import type { PriceTable } from './budget/prices';
+import { computeStartCeilingCents } from './budget/worst-case';
 import { RESTING_MESSAGE } from './budget/messages';
 import { createGlobalState } from './budget/state';
 import { applyLoaded, snapshotOf } from './budget/store';
 import type { BudgetStore } from './budget/store';
-import { getCurrentMode, isModelCallAllowed } from './modes';
+import { liveCanStart } from './modes';
 import { logError } from './error-log';
 import { requestLogger, trackModelCalls } from './logger';
 
@@ -92,9 +94,12 @@ export function createApp(deps: AppDeps): Hono {
 
   // Mode check for POSTs that need a model call (Req 8.3). It runs before the
   // budget check, so a request that cannot be served is not counted against an IP.
+  // One start ceiling, computed once, shared by the mode check, health and live (Requirement 18).
+  const startCeilingCents = computeStartCeilingCents(model, deps.prices ?? DEFAULT_PRICE_TABLE);
+  const canStart = () => liveCanStart(model.available, globalState, budget, startCeilingCents, clock());
+
   const checkMode = async (c: Context, next: Next) => {
-    const mode = getCurrentMode(model.available, globalState, budget, clock());
-    if (!isModelCallAllowed(mode)) {
+    if (!canStart()) {
       return c.json({ message: RESTING_MESSAGE }, 503);
     }
     return next();
@@ -113,8 +118,8 @@ export function createApp(deps: AppDeps): Hono {
     return guard;
   };
 
-  createHealthRoute(app, globalState, budget, () => model.available, clock);
-  createLiveRoute(app, gate, () => !isModelCallAllowed(getCurrentMode(model.available, globalState, budget, clock())));
+  createHealthRoute(app, globalState, budget, () => model.available, startCeilingCents, clock);
+  createLiveRoute(app, gate, () => !canStart());
   createGrantRoute(app, createClient);
   createBindRoute(app, createClient);
   createExportRoute(app);

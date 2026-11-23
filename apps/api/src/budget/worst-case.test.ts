@@ -11,10 +11,11 @@ import {
   GENIE_CALLS,
   GRANT_CALLS,
   REPLACEMENT_CALLS,
+  computeStartCeilingCents,
   computeWorstCase,
   formatCents,
 } from './worst-case';
-import { DEFAULT_MODEL_CHAIN, MAX_OUTPUT_TOKENS } from '../client/gemini';
+import { DEFAULT_MODEL_CHAIN, GeminiModelClient, MAX_OUTPUT_TOKENS } from '../client/gemini';
 
 const API_ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const readme = readFileSync(path.join(API_ROOT, 'README.md'), 'utf8');
@@ -104,5 +105,23 @@ describe('worst case per grant and per bind (task 108)', () => {
 
   it('never mentions a fixed per-call cost', () => {
     expect(readme).not.toContain('MODEL_CALL_COST');
+  });
+});
+
+describe('the start ceiling (paw-api task 126, Req 18.1)', () => {
+  const client = new GeminiModelClient({ apiKey: '', models: [...DEFAULT_MODEL_CHAIN] });
+
+  it('is the larger of the first grant call and the first bind call, over the whole chain', () => {
+    const ceiling = computeStartCeilingCents(client, DEFAULT_PRICE_TABLE);
+    expect(ceiling).toBeCloseTo(Math.max(worst.genie.ceilingCents, worst.judge.ceilingCents), 9);
+    expect(ceiling).toBeGreaterThan(8);
+    expect(ceiling).toBeLessThan(9);
+  });
+
+  it('follows the price table and the chain', () => {
+    const single = new GeminiModelClient({ apiKey: '', models: [DEFAULT_MODEL_CHAIN[0]] });
+    expect(computeStartCeilingCents(single, DEFAULT_PRICE_TABLE)).toBeLessThan(
+      computeStartCeilingCents(client, DEFAULT_PRICE_TABLE),
+    );
   });
 });

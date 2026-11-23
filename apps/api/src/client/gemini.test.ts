@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   DEFAULT_MODEL,
   GeminiModelClient,
+  LocationRefusedError,
   MAX_ERROR_BODY_BYTES,
   MAX_OUTPUT_TOKENS,
   QuotaExhaustedError,
@@ -1132,5 +1133,91 @@ describe('unbilled attempts: HTTP 400 and 500 without token counts (paw-api task
     const seen = JSON.stringify({ reports, logs, message: error?.message });
     expect(seen).not.toContain(canary);
     expect(seen).not.toContain(FAKE_KEY);
+  });
+});
+
+describe('a location refusal (paw-api task 125, Req 17)', () => {
+  const REFUSAL =
+    '{"error":{"code":400,"message":"User location is not supported for the API use.","status":"FAILED_PRECONDITION"}}';
+
+  function refused(body: string = REFUSAL, code = 400) {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(body, { status: code }));
+    const logs: ModelCallLogEntry[] = [];
+    const client = new GeminiModelClient({
+      apiKey: FAKE_KEY,
+      models: [...MODELS, 'model-d'],
+      timeoutMs: 1000,
+      fetch: fetchMock,
+      log: (entry) => logs.push(entry),
+    });
+    return { client, fetchMock, logs };
+  }
+
+  async function run(client: GeminiModelClient) {
+    const reports: AttemptReport[] = [];
+    const error = await client.generateMetered('x', (r) => reports.push(r)).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    );
+    return { reports, error };
+  }
+
+  it('throws LocationRefusedError after 1 fetch for a chain of 4 models', async () => {
+    const { client, fetchMock } = refused();
+    const { error } = await run(client);
+    expect(error).toBeInstanceOf(LocationRefusedError);
+    expect(error?.name).toBe('LocationRefusedError');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('the attempt is reported unbilled, with no usage and no quota flag', async () => {
+    const { client } = refused();
+    const { reports } = await run(client);
+    expect(reports).toHaveLength(1);
+    expect(reports[0].unbilled).toBe(true);
+    expect(reports[0].usage).toBeUndefined();
+    expect(reports[0].quota).toBeUndefined();
+  });
+
+  it('the message is fixed and holds no body text, and neither does the log', async () => {
+    const { client, logs } = refused();
+    const { error } = await run(client);
+    expect(error?.message).toBe("The model refused the server's location");
+    const seen = JSON.stringify({ message: error?.message, logs });
+    expect(seen).not.toMatch(/location is not supported/i);
+    expect(seen).not.toContain('FAILED_PRECONDITION');
+    expect(seen).not.toContain(FAKE_KEY);
+  });
+
+  it.each([
+    'user location is not supported for the api use.',
+    'USER LOCATION IS NOT SUPPORTED',
+    'Request failed: User Location Is Not Supported (region).',
+  ])('also for the phrase %j', async (message) => {
+    const { client, fetchMock } = refused(JSON.stringify({ error: { message } }));
+    const { error } = await run(client);
+    expect(error).toBeInstanceOf(LocationRefusedError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a 400 with another message keeps today\'s error, unbilled', async () => {
+    const { client, fetchMock } = refused(JSON.stringify({ error: { message: 'details' } }));
+    const { error, reports } = await run(client);
+    expect(error).not.toBeInstanceOf(LocationRefusedError);
+    expect(error?.message).toContain('HTTP 400');
+    expect(reports[0].unbilled).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('the phrase on another status or outside error.message is not a location refusal', async () => {
+    for (const [code, body] of [
+      [403, REFUSAL],
+      [400, JSON.stringify({ message: 'User location is not supported' })],
+      [400, JSON.stringify({ error: { message: 7 } })],
+    ] as const) {
+      const { client } = refused(body, code);
+      const { error } = await run(client);
+      expect(error, `${code} ${body}`).not.toBeInstanceOf(LocationRefusedError);
+    }
   });
 });

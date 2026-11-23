@@ -7,6 +7,7 @@ import {
 } from 'paw-core';
 import type { Binding, Curse, Wish } from 'paw-core';
 import { DEFAULT_MODEL_CHAIN, GeminiModelClient } from '../client/gemini';
+import type { AttemptPlan } from '../client/gemini';
 import {
   MAX_CLAUSE_CHARS,
   MAX_LOOPHOLE_CHARS,
@@ -221,6 +222,39 @@ export function computeWorstCase(prices: PriceTable = DEFAULT_PRICE_TABLE): Wors
     bindCents,
     ciEvalCapCents: Math.ceil(CI_EVAL_WISHES * grantCents),
   };
+}
+
+/**
+ * The start ceiling (Requirement 18.1): the larger of the whole-chain ceilings of the first
+ * `generate` call of a grant (the Paw+Genie prompt at the maximum wish and context) and of a bind
+ * (the judge prompt at the maximum clause and loophole). Pure: `client.plan` is the configured
+ * client's plan and `prices` the price table the guard uses.
+ */
+export function computeStartCeilingCents(
+  client: { plan(prompt: string): AttemptPlan[] },
+  prices: PriceTable = DEFAULT_PRICE_TABLE,
+): number {
+  const chain = (prompt: string): number =>
+    client
+      .plan(prompt)
+      .reduce(
+        (sum, attempt) =>
+          sum +
+          attemptCostCents(priceFor(prices, attempt.model), attempt.inputTokens, attempt.maxOutputTokens),
+        0,
+      );
+  const wish = wishOf(MAX_WISH_TEXT_CHARS, MAX_WISH_CONTEXT_CHARS);
+  const binding: Binding = {
+    curseId: 'curse-0',
+    kind: LONGEST_BINDING_KIND,
+    clause: filler(MAX_CLAUSE_CHARS, 'b'),
+    proposedAt: 0,
+  };
+  const grantFirst = chain(buildPawPrompt(wish) + buildGeniePrompt(wish));
+  const bindFirst = chain(
+    buildJudgePrompt(curseOf(0, MAX_STORY_CHARS, MAX_LOOPHOLE_CHARS), binding, 'verdict'),
+  );
+  return Math.max(grantFirst, bindFirst);
 }
 
 /** Cents with 2 decimals, as the README states them. */

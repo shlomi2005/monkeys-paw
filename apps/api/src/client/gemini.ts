@@ -61,6 +61,17 @@ export class QuotaExhaustedError extends Error {
   }
 }
 
+/**
+ * Thrown when Google refuses the server's location (HTTP 400, `error.message` says "user location is
+ * not supported"). The message is fixed. It holds no body and no key.
+ */
+export class LocationRefusedError extends Error {
+  constructor() {
+    super("The model refused the server's location");
+    this.name = 'LocationRefusedError';
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -106,6 +117,13 @@ export function quotaScopeOf(body: unknown): 'shared' | 'per-model' {
     );
   });
   return everyPerProject ? 'shared' : 'per-model';
+}
+
+/** Whether a parsed error body's `error.message` says the location is not supported (any case). */
+function isLocationRefusal(body: unknown): boolean {
+  if (!isRecord(body) || !isRecord(body.error)) return false;
+  const message = body.error.message;
+  return typeof message === 'string' && message.toLowerCase().includes('user location is not supported');
 }
 
 /** Whether a parsed error body says `error.status === "RESOURCE_EXHAUSTED"`. */
@@ -509,6 +527,10 @@ export class GeminiModelClient implements ModelClient {
             } else {
               report.unbilled = true;
             }
+          }
+          // A location refusal stops the chain: every model would be refused from here.
+          if (status === 400 && isLocationRefusal(errorBody)) {
+            throw new LocationRefusedError();
           }
           if (NEXT_MODEL_STATUSES.has(status)) {
             return { kind: 'next', error, quota: false, stop: false };

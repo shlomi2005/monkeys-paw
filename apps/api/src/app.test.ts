@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DAY_MS } from 'paw-core';
 import { createApp } from './app';
-import { GeminiModelClient } from './client/gemini';
+import { DEFAULT_MODEL_CHAIN, GeminiModelClient } from './client/gemini';
+import { GATE_MESSAGES } from './gate/middleware';
 import { FakeMeteredModel } from './budget/fake-metered';
 import type { FakeMeteredOptions } from './budget/fake-metered';
 import type { MeteredModelClient } from './budget/guarded-client';
@@ -575,6 +576,7 @@ describe('createApp', () => {
       const client = geminiOver(fetchMock);
       const planSpy = vi.spyOn(client, 'plan');
       const app = storeApp(client, store);
+      planSpy.mockClear(); // createApp calls plan() once itself; keep only the request's calls
       await post(app, '/api/grant', grantBody);
 
       expect(fetchMock).toHaveBeenCalled();
@@ -680,5 +682,141 @@ describe('createApp', () => {
         expect(await res.json()).toEqual({ message: 'Examples cache not yet generated' });
       });
     });
+  });
+});
+
+describe('a location refusal gives the ready rounds (paw-api task 125, Req 17)', () => {
+  const REFUSAL =
+    '{"error":{"code":400,"message":"User location is not supported for the API use.","status":"FAILED_PRECONDITION"}}';
+  const bindBody = { grant: sampleGrant, curseId: 'c1', kind: 'rewrite', clause: 'Owner or deputy.' };
+  const GATE_BODY = { code: 'live_region_unavailable', message: GATE_MESSAGES.live_region_unavailable };
+
+  /** The real client over a stubbed fetch, with its default log line on stdout. Never the network. */
+  function refusedApp() {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(REFUSAL, { status: 400 }));
+    const client = new GeminiModelClient({
+      apiKey: 'test-key',
+      models: ['model-a', 'model-b', 'model-c', 'model-d'],
+      timeoutMs: 1000,
+      fetch: fetchMock,
+    });
+    return { app: makeApp(client), fetchMock };
+  }
+
+  /** Runs `fn` with every way of printing captured; returns what was printed. */
+  async function printedDuring(fn: () => Promise<void>): Promise<string> {
+    const lines: string[] = [];
+    const take = (chunk: unknown) => {
+      lines.push(String(chunk));
+      return true;
+    };
+    const spies = [
+      vi.spyOn(process.stdout, 'write').mockImplementation(take as never),
+      vi.spyOn(process.stderr, 'write').mockImplementation(take as never),
+      vi.spyOn(console, 'log').mockImplementation(take),
+      vi.spyOn(console, 'error').mockImplementation(take),
+      vi.spyOn(console, 'warn').mockImplementation(take),
+    ];
+    try {
+      await fn();
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+    }
+    return lines.join('\n');
+  }
+
+  it.each([
+    ['/api/grant', grantBody],
+    ['/api/bind', bindBody],
+  ])('POST %s gives the gate\'s 403 body, no-store, 1 upstream fetch and 0 cents', async (path, body) => {
+    const { app, fetchMock } = refusedApp();
+    const printed = await printedDuring(async () => {
+      const res = await post(app, path, body);
+      expect(res.status).toBe(403);
+      expect(res.headers.get('cache-control')).toBe('no-store');
+      expect(await res.json()).toEqual(GATE_BODY);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((await health(app)).budget.spentCents).toBe(0);
+    expect(printed).not.toMatch(/location is not supported/i);
+    expect(printed).not.toContain('FAILED_PRECONDITION');
+  });
+
+  it.each([
+    ['/api/grant', grantBody],
+    ['/api/bind', bindBody],
+  ])('POST %s keeps nothing: the next request tries the model again, and health says normal', async (path, body) => {
+    const { app, fetchMock } = refusedApp();
+    await post(app, path, body, '203.0.113.1');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const second = await post(app, path, body, '203.0.113.2');
+    expect(second.status).toBe(403);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(await health(app)).toMatchObject({ mode: 'normal', budget: { spentCents: 0 } });
+  });
+
+  it('a 400 with another message is not the gate\'s 403', async () => {
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response('{"error":{"message":"details"}}', { status: 400 }),
+    );
+    const client = new GeminiModelClient({
+      apiKey: 'test-key',
+      models: ['model-a'],
+      timeoutMs: 1000,
+      fetch: fetchMock,
+      log: () => {},
+    });
+    const res = await post(makeApp(client), '/api/grant', grantBody);
+    expect(res.status).toBe(200);
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('health, live and grant agree on whether a live wish can start (paw-api task 126, Req 18)', () => {
+  /** The real client, default chain, over a stubbed fetch that answers 500. Never the network. */
+  function startApp(spentCents: number) {
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response('{"error":{"message":"details"}}', { status: 500 }),
+    );
+    const client = new GeminiModelClient({
+      apiKey: 'test-key',
+      models: [...DEFAULT_MODEL_CHAIN],
+      timeoutMs: 1000,
+      fetch: fetchMock,
+      log: () => {},
+    });
+    const store = new FakeBudgetStore({ spentCents, reservedCents: 0, dayStart: 1_000_000 });
+    const app = createApp({
+      model: client,
+      budget: { ...BUDGET, perIpLimit: 100, dailyBudgetCents: 200 },
+      corsOrigin: '*',
+      examplesCachePath: EXAMPLES_FIXTURE,
+      clock: () => 1_000_000,
+      gate: TEST_GATE,
+      budgetStore: store,
+    });
+    return { app, fetchMock };
+  }
+
+  const live = async (app: App) =>
+    (await app.request('http://localhost/api/live', { headers: GATE_HEADERS })).json();
+
+  it('budget 200 at 191.98 spent: examples-only, resting, and the grant gets 503 with 0 fetches', async () => {
+    // The start ceiling of the default chain is about 8.38 cents, so 191.98 + 8.38 passes 200.
+    const { app, fetchMock } = startApp(191.98);
+    expect((await health(app)).mode).toBe('examples-only');
+    expect(await live(app)).toEqual({ live: true, resting: true });
+    const res = await post(app, '/api/grant', grantBody);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ message: RESTING });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('just under the threshold: normal, live without resting, the first call of a grant is reserved', async () => {
+    const { app, fetchMock } = startApp(191.6); // 191.6 + 8.38 is 199.98
+    expect((await health(app)).mode).toBe('normal');
+    expect(await live(app)).toEqual({ live: true });
+    await post(app, '/api/grant', grantBody);
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(1);
   });
 });

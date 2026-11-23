@@ -7,6 +7,7 @@ import { loadGateConfig } from './gate/config';
 import { loadPriceTable } from './budget/prices';
 import { createGlobalState } from './budget/state';
 import { getCurrentMode } from './modes';
+import { computeStartCeilingCents } from './budget/worst-case';
 import { defaultExamplesCachePath } from './paths';
 import { logError } from './error-log';
 import { logErrorSync } from './error-log-sync';
@@ -26,17 +27,24 @@ const budget = loadBudgetConfig();
 const model = new GeminiModelClient();
 const port = Number(process.env.PORT) || 8787;
 
+const prices = loadPriceTable();
+
 const app = createApp({
   model,
   budget,
   corsOrigin: process.env.CORS_ORIGIN || '*',
   examplesCachePath: defaultExamplesCachePath(),
-  prices: loadPriceTable(),
+  prices,
   trustedProxyHops: loadTrustedProxyHops(),
   gate: loadGateConfig(process.env),
 });
 
-const mode = getCurrentMode(model.available, createGlobalState(), budget);
+const mode = getCurrentMode(
+  model.available,
+  createGlobalState(),
+  budget,
+  computeStartCeilingCents(model, prices),
+);
 
 const EDGE_FAILURE_BODY = JSON.stringify({ message: 'An error occurred while handling the request' });
 

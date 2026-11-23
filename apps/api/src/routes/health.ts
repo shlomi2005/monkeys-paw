@@ -20,13 +20,14 @@ export function createHealthRoute(
   globalState: GlobalState,
   config: BudgetConfig,
   hasApiKey: () => boolean,
+  startCeilingCents: number,
   clock: () => number = Date.now,
 ): void {
   app.get('/api/health', async (c: Context) => {
     const now = clock();
     rollDayIfElapsed(globalState, now);
 
-    const mode = getCurrentMode(hasApiKey(), globalState, config, now);
+    const mode = getCurrentMode(hasApiKey(), globalState, config, startCeilingCents, now);
     const remainingCents = Math.max(
       0,
       config.dailyBudgetCents - globalState.spentCents - globalState.reservedCents,

@@ -8,6 +8,8 @@ import type { BudgetConfig } from '../budget/config';
 
 const config: BudgetConfig = { perIpLimit: 10, windowMs: 60_000, dailyBudgetCents: 500 };
 
+const CEILING = 3;
+
 async function getHealth(app: Hono) {
   const res = await app.request(new Request('http://localhost/api/health', { method: 'GET' }));
   expect(res.status).toBe(200);
@@ -21,7 +23,7 @@ async function getHealth(app: Hono) {
 describe('GET /api/health', () => {
   it('returns ok status and mode (Task 40, Req 5.1)', async () => {
     const app = new Hono();
-    createHealthRoute(app, createGlobalState(), config, () => true);
+    createHealthRoute(app, createGlobalState(), config, () => true, CEILING);
 
     const data = await getHealth(app);
     expect(data.status).toBe('ok');
@@ -33,7 +35,7 @@ describe('GET /api/health', () => {
     const app = new Hono();
     const state = createGlobalState();
     state.spentCents = 500; // At budget limit
-    createHealthRoute(app, state, config, () => true);
+    createHealthRoute(app, state, config, () => true, CEILING);
 
     const data = await getHealth(app);
     expect(data.status).toBe('ok');
@@ -42,14 +44,14 @@ describe('GET /api/health', () => {
 
   it('returns examples-only mode when there is no key (Req 8.1)', async () => {
     const app = new Hono();
-    createHealthRoute(app, createGlobalState(), config, () => false);
+    createHealthRoute(app, createGlobalState(), config, () => false, CEILING);
     expect((await getHealth(app)).mode).toBe('examples-only');
   });
 
   it('computes the mode on every request, not once at startup (Req 7.7, 8.1)', async () => {
     const app = new Hono();
     const state = createGlobalState();
-    createHealthRoute(app, state, config, () => true);
+    createHealthRoute(app, state, config, () => true, CEILING);
 
     expect((await getHealth(app)).mode).toBe('normal');
     state.spentCents = 500;
@@ -64,7 +66,7 @@ describe('GET /api/health', () => {
     let now = 0;
     const state = createGlobalState(0);
     state.spentCents = 500;
-    createHealthRoute(app, state, config, () => true, () => now);
+    createHealthRoute(app, state, config, () => true, CEILING, () => now);
 
     expect((await getHealth(app)).mode).toBe('examples-only');
     now = DAY_MS;
@@ -78,7 +80,7 @@ describe('GET /api/health', () => {
     const state = createGlobalState();
     state.spentCents = 1.65;
     state.reservedCents = 3.1;
-    createHealthRoute(app, state, config, () => true);
+    createHealthRoute(app, state, config, () => true, CEILING);
 
     const data = await getHealth(app);
     expect(data.budget).toEqual({ dailyBudgetCents: 500, spentCents: 1.65, remainingCents: 495.25 });
@@ -89,7 +91,7 @@ describe('GET /api/health', () => {
     const state = createGlobalState();
     state.spentCents = 499.5;
     state.reservedCents = 3;
-    createHealthRoute(app, state, config, () => true);
+    createHealthRoute(app, state, config, () => true, CEILING);
 
     const data = await getHealth(app);
     expect(data.budget.remainingCents).toBe(0);

@@ -7,7 +7,12 @@ import { FakeMeteredModel } from './fake-metered';
 import { createGlobalState } from './state';
 import type { BudgetConfig } from './config';
 import { DEFAULT_PRICE_TABLE } from './prices';
-import { GeminiModelClient, MAX_OUTPUT_TOKENS, QuotaExhaustedError } from '../client/gemini';
+import {
+  GeminiModelClient,
+  LocationRefusedError,
+  MAX_OUTPUT_TOKENS,
+  QuotaExhaustedError,
+} from '../client/gemini';
 
 const config = (dailyBudgetCents: number): BudgetConfig => ({
   perIpLimit: 10,
@@ -810,5 +815,56 @@ describe('unbilled attempts are charged 0 (paw-api task 123, Req 16)', () => {
     await expect(guard.generate(PROMPT)).rejects.toThrow('HTTP 400');
     expect(state.spentCents).toBeCloseTo(first, 9);
     expect(state.reservedCents).toBe(0);
+  });
+});
+
+describe('a location refusal (paw-api task 125, Req 17)', () => {
+  const PROMPT = 'Task: JUDGE_VERDICT ask the judge';
+  const REFUSAL = {
+    error: { code: 400, message: 'User location is not supported for the API use.', status: 'FAILED_PRECONDITION' },
+  };
+
+  function refusedSetup() {
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(REFUSAL), { status: 400 }));
+    const client = new GeminiModelClient({
+      apiKey: 'test-key-not-real',
+      models: ['gemini-3.6-flash', 'gemini-3.8-flash'],
+      timeoutMs: 1000,
+      fetch: fetchMock,
+      log: () => {},
+    });
+    const state = createGlobalState(0);
+    const guard = new BudgetedModelClient(client, state, config(1000), () => 0);
+    return { guard, client, state, fetchMock };
+  }
+
+  it('costs 0 cents, sets locationRefused and denied, and rethrows', async () => {
+    const { guard, state, fetchMock } = refusedSetup();
+    expect(guard.locationRefused).toBe(false);
+    await expect(guard.generate(PROMPT)).rejects.toBeInstanceOf(LocationRefusedError);
+    expect(guard.locationRefused).toBe(true);
+    expect(guard.denied).toBe(true);
+    expect(guard.quotaSpent).toBe(false);
+    expect(state.spentCents).toBe(0);
+    expect(guard.costCents).toBe(0);
+    expect(state.reservedCents).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a second generate throws BudgetExhaustedError and makes no fetch', async () => {
+    const { guard, fetchMock } = refusedSetup();
+    await expect(guard.generate(PROMPT)).rejects.toBeInstanceOf(LocationRefusedError);
+    await expect(guard.generate(PROMPT)).rejects.toBeInstanceOf(BudgetExhaustedError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(guard.calls).toBe(1);
+  });
+
+  it('another guard on the same state tries the model again', async () => {
+    const { guard, client, state, fetchMock } = refusedSetup();
+    await expect(guard.generate(PROMPT)).rejects.toBeInstanceOf(LocationRefusedError);
+    const other = new BudgetedModelClient(client, state, config(1000), () => 0);
+    expect(other.locationRefused).toBe(false);
+    await expect(other.generate(PROMPT)).rejects.toBeInstanceOf(LocationRefusedError);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

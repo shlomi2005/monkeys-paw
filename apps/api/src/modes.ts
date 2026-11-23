@@ -17,29 +17,38 @@ import type { BudgetConfig } from './budget/config';
 export type Mode = 'normal' | 'examples-only';
 
 /**
- * Determine the current mode based on API key availability and budget state.
- * A day that has elapsed counts as a reset, so the mode returns to normal at
- * the day boundary (Req 8.5). Does not mutate the state.
- * (Task 47)
+ * The one decision "a live wish can start" (Requirement 18.1): the key is set AND the spend of the
+ * current day (after the day roll) + `reservedCents` + the start ceiling fits in the daily budget.
+ * A ceiling that is not a finite number does not fit. Does not mutate the state.
+ */
+export function liveCanStart(
+  hasApiKey: boolean,
+  globalState: GlobalState,
+  config: BudgetConfig,
+  startCeilingCents: number,
+  now: number = Date.now(),
+): boolean {
+  if (!hasApiKey) return false;
+  if (!Number.isFinite(startCeilingCents)) return false;
+  const spentCents = isDayElapsed(globalState, now) ? 0 : globalState.spentCents;
+  return spentCents + globalState.reservedCents + startCeilingCents <= config.dailyBudgetCents;
+}
+
+/**
+ * Determine the current mode: `normal` iff a live wish can start (`liveCanStart`), else
+ * `examples-only`. A day that has elapsed counts as a reset (Req 8.5).
+ * (Task 47, Requirement 18)
  */
 export function getCurrentMode(
   hasApiKey: boolean,
   globalState: GlobalState,
   config: BudgetConfig,
+  startCeilingCents: number,
   now: number = Date.now(),
 ): Mode {
-  // Missing API key → examples-only (Req 8.1)
-  if (!hasApiKey) {
-    return 'examples-only';
-  }
-
-  // Budget exhausted → examples-only (Req 8.1), unless the day has rolled over (Req 8.5)
-  const spentCents = isDayElapsed(globalState, now) ? 0 : globalState.spentCents;
-  if (spentCents >= config.dailyBudgetCents) {
-    return 'examples-only';
-  }
-
-  return 'normal';
+  return liveCanStart(hasApiKey, globalState, config, startCeilingCents, now)
+    ? 'normal'
+    : 'examples-only';
 }
 
 /**

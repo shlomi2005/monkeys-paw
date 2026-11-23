@@ -5,6 +5,7 @@ import type { Curse } from 'paw-core';
 import { BindRequestSchema, BindResponseSchema } from '../schemas';
 import type { BudgetedModelClient } from '../budget/guarded-client';
 import { RESTING_MESSAGE } from '../budget/messages';
+import { GATE_MESSAGES } from '../gate/middleware';
 import { fitVerdict } from '../fit';
 import { logError } from '../error-log';
 import { bodyTooLarge, readJsonBody } from './body';
@@ -47,6 +48,15 @@ export function createBindRoute(app: Hono, createClient: () => BudgetedModelClie
 
       // A failed budget save: paw-core would have hidden it behind a fallback. Fail closed, fixed 500.
       if (modelClient.persistFailure) throw modelClient.persistFailure.error;
+
+      // Google refused the server's location: answer as the closed gate does, so the ready rounds play.
+      if (modelClient.locationRefused) {
+        return c.json(
+          { code: 'live_region_unavailable', message: GATE_MESSAGES.live_region_unavailable },
+          403,
+          { 'cache-control': 'no-store' },
+        );
+      }
 
       // The guard refused a call: paw-core would hand back its fallback verdict, so say so instead.
       if (modelClient.denied) {

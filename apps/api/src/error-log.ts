@@ -1,7 +1,7 @@
 import { HTTPException } from 'hono/http-exception';
 import { ZodError } from 'zod';
 import { BudgetExhaustedError } from './budget/guarded-client';
-import { QuotaExhaustedError } from './client/gemini';
+import { LocationRefusedError, QuotaExhaustedError } from './client/gemini';
 
 /**
  * The one way the API reports an error (paw-api Requirement 9.7). A line is
@@ -30,6 +30,7 @@ export type ErrorClass =
   | 'HTTPException'
   | 'BudgetExhaustedError'
   | 'QuotaExhaustedError'
+  | 'LocationRefusedError'
   | 'Error'
   | 'NonError';
 
@@ -47,6 +48,7 @@ export function errorClassOf(err: unknown): ErrorClass {
     if (err instanceof HTTPException) return 'HTTPException';
     if (err instanceof BudgetExhaustedError) return 'BudgetExhaustedError';
     if (err instanceof QuotaExhaustedError) return 'QuotaExhaustedError';
+    if (err instanceof LocationRefusedError) return 'LocationRefusedError';
     if (err instanceof Error) return 'Error';
   } catch {
     // A hostile prototype chain (a throwing Proxy trap) is not an error we can classify.

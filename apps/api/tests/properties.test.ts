@@ -11,6 +11,10 @@ import { applyLoaded, snapshotOf } from '../src/budget/store';
 import { DEFAULT_PRICE_TABLE, attemptCostCents, loadPriceTable, priceFor } from '../src/budget/prices';
 import type { ModelPrice } from '../src/budget/prices';
 import { GeminiModelClient, MAX_OUTPUT_TOKENS, QuotaExhaustedError } from '../src/client/gemini';
+import { createApp } from '../src/app';
+import { FakeMeteredModel } from '../src/budget/fake-metered';
+import { computeStartCeilingCents } from '../src/budget/worst-case';
+import { fileURLToPath } from 'url';
 import type { AttemptPlan, AttemptReport } from '../src/client/gemini';
 
 /**
@@ -704,6 +708,52 @@ describe('Property 4 (paw-edge): a reload keeps the spend', () => {
         // Let the guards that are still waiting finish, so no promise is left behind.
         while (settlers.length > 0) settlers.shift()?.();
         await Promise.all(pending);
+      }),
+      { numRuns: 100 },
+    );
+  });
+});
+
+describe('Property 15: one answer for live (paw-api task 126, Req 18)', () => {
+  const EXAMPLES = fileURLToPath(new URL('./fixtures/examples-cache.json', import.meta.url));
+  const GATE = { tier: 'free' as const, countryHeader: 'x-test-country' };
+  const HEADERS = { 'x-test-country': 'US', 'x-paw-adult-confirmed': 'yes', 'content-type': 'application/json' };
+  const BUDGET = 200;
+  const CEILING = computeStartCeilingCents(new FakeMeteredModel());
+
+  it('P15: health mode is normal iff live has no resting iff a grant passes the mode check', async () => {
+    // Spend anywhere in and above the day, and spend placed within a cent of the threshold.
+    const split = fc.oneof(
+      fc.record({ spent: fc.double({ min: 0, max: 205, noNaN: true }), reserved: fc.double({ min: 0, max: 10, noNaN: true }) }),
+      fc
+        .record({ reserved: fc.double({ min: 0, max: 10, noNaN: true }), delta: fc.double({ min: -1, max: 1, noNaN: true }) })
+        .map(({ reserved, delta }) => ({ spent: Math.max(0, BUDGET - CEILING - reserved + delta), reserved })),
+    );
+    await fc.assert(
+      fc.asyncProperty(split, async ({ spent, reserved }) => {
+        const model = new FakeMeteredModel({ usage: { promptTokens: 0, outputTokens: 0 } });
+        const app = createApp({
+          model,
+          budget: { perIpLimit: 10, windowMs: 60_000, dailyBudgetCents: BUDGET },
+          corsOrigin: '*',
+          examplesCachePath: EXAMPLES,
+          clock: () => 1_000_000,
+          gate: GATE,
+          budgetStore: new FakeBudgetStore({ spentCents: spent, reservedCents: reserved, dayStart: 1_000_000 }),
+        });
+        const health = (await (await app.request('http://localhost/api/health')).json()) as { mode: string };
+        const live = (await (await app.request('http://localhost/api/live', { headers: HEADERS })).json()) as {
+          resting?: boolean;
+        };
+        const grant = await app.request('http://localhost/api/grant', {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify({ wish: { text: 'Only the owner can delete a project' } }),
+        });
+        const passes = model.calls >= 1;
+        expect(grant.status === 503).toBe(!passes);
+        expect(health.mode === 'normal').toBe(live.resting === undefined);
+        expect(health.mode === 'normal').toBe(passes);
       }),
       { numRuns: 100 },
     );
