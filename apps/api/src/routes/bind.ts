@@ -45,6 +45,9 @@ export function createBindRoute(app: Hono, createClient: () => BudgetedModelClie
       const modelClient = createClient();
       const verdict = fitVerdict(await judgeBinding(curse, binding, modelClient));
 
+      // A failed budget save: paw-core would have hidden it behind a fallback. Fail closed, fixed 500.
+      if (modelClient.persistFailure) throw modelClient.persistFailure.error;
+
       // The guard refused a call: paw-core would hand back its fallback verdict, so say so instead.
       if (modelClient.denied) {
         return c.json({ message: RESTING_MESSAGE }, 503);

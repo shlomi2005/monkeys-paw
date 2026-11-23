@@ -5,7 +5,7 @@ import type { Context, Next } from 'hono';
 import { createGrantRoute } from './routes/grant';
 import { createBindRoute } from './routes/bind';
 import { createExportRoute } from './routes/export';
-import { createExamplesRoute } from './routes/examples';
+import { createExamplesRoute, fileExamplesLoader } from './routes/examples';
 import { createHealthRoute } from './routes/health';
 import { createLiveRoute } from './routes/live';
 import { DEFAULT_GATE_CONFIG } from './gate/config';
@@ -18,6 +18,8 @@ import type { MeteredModelClient } from './budget/guarded-client';
 import type { PriceTable } from './budget/prices';
 import { RESTING_MESSAGE } from './budget/messages';
 import { createGlobalState } from './budget/state';
+import { applyLoaded, snapshotOf } from './budget/store';
+import type { BudgetStore } from './budget/store';
 import { getCurrentMode, isModelCallAllowed } from './modes';
 import { logError } from './error-log';
 import { requestLogger, trackModelCalls } from './logger';
@@ -27,8 +29,12 @@ export interface AppDeps {
   model: MeteredModelClient;
   budget: BudgetConfig;
   corsOrigin: string;
-  /** Absolute path of the examples cache file. */
-  examplesCachePath: string;
+  /** Absolute path of the examples cache file. Read with a dynamic `node:fs/promises` import. */
+  examplesCachePath?: string;
+  /** Gives the raw JSON text of the examples cache. Wins over `examplesCachePath`. */
+  loadExamples?: () => Promise<string>;
+  /** Keeps the three budget numbers over restarts. Omitted is memory only, as before. */
+  budgetStore?: BudgetStore;
   /** Epoch-ms clock. Defaults to Date.now. */
   clock?: () => number;
   /** Model prices for the budget guard. Defaults to the 1.1.2027 table. */
@@ -40,16 +46,24 @@ export interface AppDeps {
 }
 
 /**
- * Build the whole Hono app with fresh in-memory budget state. No module-level
+ * Build the whole Hono app with fresh in-memory budget state (or the state of `budgetStore`, when given). No module-level
  * side effects: it reads no environment and starts no server.
  */
 export function createApp(deps: AppDeps): Hono {
-  const { model, budget, corsOrigin, examplesCachePath } = deps;
+  const { model, budget, corsOrigin, examplesCachePath, budgetStore } = deps;
   const clock = deps.clock ?? Date.now;
 
   const app = new Hono();
   const globalState = createGlobalState(clock());
   const gate = deps.gate ?? DEFAULT_GATE_CONFIG;
+
+  // With a store: load once (an unreadable row is a spent day), save the loaded state, and let the
+  // guard and the day roll save after every change. Without a store nothing is saved.
+  if (budgetStore) {
+    applyLoaded(globalState, budgetStore.load(), budget.dailyBudgetCents, clock());
+    globalState.persist = () => budgetStore.save(snapshotOf(globalState));
+    globalState.persist();
+  }
 
   // CORS middleware (Req 10, Task 53)
   app.use(
@@ -104,7 +118,15 @@ export function createApp(deps: AppDeps): Hono {
   createGrantRoute(app, createClient);
   createBindRoute(app, createClient);
   createExportRoute(app);
-  createExamplesRoute(app, examplesCachePath);
+  createExamplesRoute(
+    app,
+    deps.loadExamples ??
+      (examplesCachePath !== undefined
+        ? fileExamplesLoader(examplesCachePath)
+        : async () => {
+            throw new Error('no examples source');
+          }),
+  );
 
   return app;
 }

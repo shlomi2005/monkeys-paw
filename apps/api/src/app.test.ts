@@ -8,6 +8,9 @@ import type { MeteredModelClient } from './budget/guarded-client';
 import type { BudgetConfig } from './budget/config';
 import type { GateConfig } from './gate/config';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
+import { FakeBudgetStore } from './budget/fake-store';
+import { attemptCostCents, priceFor, DEFAULT_PRICE_TABLE } from './budget/prices';
 
 // A small valid cache, so the tests do not depend on the generated apps/api/examples-cache.json.
 const EXAMPLES_FIXTURE = fileURLToPath(new URL('../tests/fixtures/examples-cache.json', import.meta.url));
@@ -444,6 +447,238 @@ describe('createApp', () => {
 
       expect(model.calls).toBe(0);
       expect((await health(app)).budget.spentCents).toBe(0);
+    });
+  });
+
+  describe('budget store and examples loader (paw-edge task 2, Req 5, 7)', () => {
+    const RESTART_BUDGET: BudgetConfig = { perIpLimit: 100, windowMs: 60_000, dailyBudgetCents: 500 };
+    const GEMINI_GRANT = JSON.stringify({
+      narration: 'Granted.',
+      curses: [
+        { id: 'x', type: 'permissions', story: 'The owner quits.', loophole: '"owner"' },
+        { id: 'x', type: 'time', story: 'Midnight where?', loophole: '"midnight"' },
+        { id: 'x', type: 'scale', story: 'Zero projects.', loophole: '"project"' },
+      ],
+    });
+    const okResponse = () =>
+      new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: GEMINI_GRANT }] } }],
+          usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 100 },
+        }),
+        { status: 200 },
+      );
+
+    function storeApp(
+      model: MeteredModelClient,
+      store: FakeBudgetStore | undefined,
+      clock: () => number = () => 1_000_000,
+    ) {
+      return createApp({
+        model,
+        budget: RESTART_BUDGET,
+        corsOrigin: '*',
+        examplesCachePath: EXAMPLES_FIXTURE,
+        clock,
+        gate: TEST_GATE,
+        budgetStore: store,
+      });
+    }
+
+    function geminiOver(fetchMock: typeof fetch) {
+      return new GeminiModelClient({
+        apiKey: 'test-key',
+        models: ['model-a'],
+        timeoutMs: 60_000,
+        fetch: fetchMock,
+        log: () => {},
+      });
+    }
+
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    it('no store: nothing is saved and the numbers are as before', async () => {
+      const store = new FakeBudgetStore();
+      const withoutStore = storeApp(new FakeModel(), undefined);
+      expect((await post(withoutStore, '/api/grant', grantBody)).status).toBe(200);
+      const spent = (await health(withoutStore)).budget.spentCents;
+      expect(spent).toBeGreaterThan(0);
+      expect(spent).toBeLessThan(1);
+      expect(store.saves).toHaveLength(0);
+      expect(store.load()).toBeUndefined();
+    });
+
+    it('with a store, the state is saved once at creation', () => {
+      const store = new FakeBudgetStore();
+      storeApp(new FakeModel(), store);
+      expect(store.saves).toEqual([{ spentCents: 0, reservedCents: 0, dayStart: 1_000_000 }]);
+    });
+
+    it('restart: a second app over the same store reports the same spentCents', async () => {
+      const store = new FakeBudgetStore();
+      const one = storeApp(new FakeModel(), store);
+      expect((await post(one, '/api/grant', grantBody)).status).toBe(200);
+      const before = await health(one);
+      expect(before.budget.spentCents).toBeGreaterThan(0);
+
+      const two = storeApp(new FakeModel(), store);
+      const after = await health(two);
+      expect(after.budget.spentCents).toBe(before.budget.spentCents);
+      expect(after.budget.remainingCents).toBe(before.budget.remainingCents);
+    });
+
+    it('a leftover reservation counts as spent after a restart', async () => {
+      const store = new FakeBudgetStore({ spentCents: 20, reservedCents: 0, dayStart: 1_000_000 });
+      const never = vi.fn<typeof fetch>(() => new Promise<Response>(() => {}));
+      const one = storeApp(geminiOver(never), store);
+      void post(one, '/api/grant', grantBody); // never settles
+      while (never.mock.calls.length === 0) await tick();
+
+      const saved = store.last!;
+      expect(saved.spentCents).toBe(20);
+      expect(saved.reservedCents).toBeGreaterThan(0);
+
+      const two = storeApp(new FakeModel(), store);
+      const h = await health(two);
+      expect(h.budget.spentCents).toBeCloseTo(20 + saved.reservedCents, 3);
+      expect(h.budget.remainingCents).toBeCloseTo(500 - 20 - saved.reservedCents, 3);
+      expect(store.last!.reservedCents).toBe(0);
+      expect(store.last!.spentCents).toBeCloseTo(20 + saved.reservedCents, 9);
+    });
+
+    const unreadable: Array<[string, unknown]> = [
+      ['a missing field', { spentCents: 1, dayStart: 1_000_000 }],
+      ['NaN', { spentCents: NaN, reservedCents: 0, dayStart: 1_000_000 }],
+      ['Infinity', { spentCents: 1, reservedCents: Infinity, dayStart: 1_000_000 }],
+      ['a negative number', { spentCents: -5, reservedCents: 0, dayStart: 1_000_000 }],
+      ['a wrong type', { spentCents: '1', reservedCents: 0, dayStart: 1_000_000 }],
+    ];
+    for (const [name, row] of unreadable) {
+      it(`an unreadable row (${name}) is a spent day: examples-only, nothing remaining`, async () => {
+        const model = new FakeModel();
+        const app = storeApp(model, new FakeBudgetStore(row));
+        const h = await health(app);
+        expect(h.mode).toBe('examples-only');
+        expect(h.budget).toMatchObject({ spentCents: 500, remainingCents: 0 });
+        expect((await post(app, '/api/grant', grantBody)).status).toBe(503);
+        expect(model.calls).toBe(0);
+      });
+    }
+
+    it('the reservation is saved before the first upstream fetch, at least at the ceiling', async () => {
+      const store = new FakeBudgetStore();
+      const seen: Array<{ reservedCents: number }> = [];
+      const fetchMock = vi.fn<typeof fetch>(async () => {
+        seen.push({ reservedCents: store.last!.reservedCents });
+        return okResponse();
+      });
+      const client = geminiOver(fetchMock);
+      const planSpy = vi.spyOn(client, 'plan');
+      const app = storeApp(client, store);
+      await post(app, '/api/grant', grantBody);
+
+      expect(fetchMock).toHaveBeenCalled();
+      const ceiling = (planSpy.mock.results[0].value as ReturnType<GeminiModelClient['plan']>).reduce(
+        (sum, a) =>
+          sum + attemptCostCents(priceFor(DEFAULT_PRICE_TABLE, a.model), a.inputTokens, a.maxOutputTokens),
+        0,
+      );
+      expect(ceiling).toBeGreaterThan(0);
+      expect(seen[0].reservedCents).toBeGreaterThanOrEqual(ceiling);
+    });
+
+    it('a day roll is saved', async () => {
+      let now = 1_000_000;
+      const store = new FakeBudgetStore();
+      const app = storeApp(new FakeModel(), store, () => now);
+      await post(app, '/api/grant', grantBody);
+      expect(store.last!.spentCents).toBeGreaterThan(0);
+
+      now += DAY_MS;
+      await health(app);
+      expect(store.last).toEqual({ spentCents: 0, reservedCents: 0, dayStart: now });
+    });
+
+    it('a store whose save throws at the reservation: fixed 500 and the model is never called', async () => {
+      const store = new FakeBudgetStore();
+      store.failWhen = (s) => s.reservedCents > 0;
+      const fetchMock = vi.fn<typeof fetch>(async () => okResponse());
+      const app = storeApp(geminiOver(fetchMock), store);
+      const res = await post(app, '/api/grant', grantBody);
+      expect(res.status).toBe(500);
+      expect(await res.json()).toEqual({ message: 'An error occurred while granting your wish' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('only spentCents, reservedCents and dayStart are saved, whatever the addresses', async () => {
+      const store = new FakeBudgetStore();
+      const app = storeApp(new FakeModel(), store);
+      const ips = Array.from({ length: 20 }, (_, i) => `198.51.100.${i + 1}`);
+      for (const ip of ips) expect((await post(app, '/api/grant', grantBody, ip)).status).toBe(200);
+      expect(store.saves.length).toBeGreaterThan(ips.length);
+      for (const saved of store.saves) {
+        expect(Object.keys(saved).sort()).toEqual(['dayStart', 'reservedCents', 'spentCents']);
+        for (const value of Object.values(saved)) expect(typeof value).toBe('number');
+      }
+      const text = JSON.stringify(store.saves);
+      for (const ip of ips) expect(text).not.toContain(ip);
+    });
+
+    describe('examples loader', () => {
+      const examplesText = readFileSync(EXAMPLES_FIXTURE, 'utf-8');
+      const getExamples = (app: App) => app.request('http://localhost/api/examples');
+      const base = { model: new FakeModel(), budget: BUDGET, corsOrigin: '*', gate: TEST_GATE };
+
+      it('a loader with the valid fixture gives 200', async () => {
+        const app = createApp({ ...base, loadExamples: async () => examplesText });
+        const res = await getExamples(app);
+        expect(res.status).toBe(200);
+        expect(Array.isArray(await res.json())).toBe(true);
+      });
+
+      it('the loader wins over the path', async () => {
+        const app = createApp({
+          ...base,
+          examplesCachePath: '/nonexistent/cache.json',
+          loadExamples: async () => examplesText,
+        });
+        expect((await getExamples(app)).status).toBe(200);
+      });
+
+      it('text that is not JSON gives the "not yet generated" 503', async () => {
+        const app = createApp({ ...base, loadExamples: async () => 'not json' });
+        const res = await getExamples(app);
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({ message: 'Examples cache not yet generated' });
+      });
+
+      it('a throwing loader gives the "not yet generated" 503', async () => {
+        const app = createApp({
+          ...base,
+          loadExamples: async () => {
+            throw new Error('boom');
+          },
+        });
+        const res = await getExamples(app);
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({ message: 'Examples cache not yet generated' });
+      });
+
+      it('valid JSON of the wrong shape still gives the corrupted 503', async () => {
+        const app = createApp({ ...base, loadExamples: async () => '{"a":1}' });
+        const res = await getExamples(app);
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({ message: 'Examples cache is corrupted' });
+      });
+
+      it('the path form is unchanged, and neither source gives the 503', async () => {
+        const withPath = createApp({ ...base, examplesCachePath: EXAMPLES_FIXTURE });
+        expect((await getExamples(withPath)).status).toBe(200);
+        const neither = createApp({ ...base });
+        const res = await getExamples(neither);
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({ message: 'Examples cache not yet generated' });
+      });
     });
   });
 });

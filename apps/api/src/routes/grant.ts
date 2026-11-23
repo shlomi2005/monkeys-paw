@@ -54,6 +54,9 @@ export function createGrantRoute(app: Hono, createClient: () => BudgetedModelCli
       const modelClient = createClient();
       const grant = fitGrant(await grantWish(wish, modelClient));
 
+      // A failed budget save: paw-core would have hidden it behind a fallback. Fail closed, fixed 500.
+      if (modelClient.persistFailure) throw modelClient.persistFailure.error;
+
       // The guard refused a call: paw-core would hand back its fallback grant, so say so instead.
       if (modelClient.denied) {
         return c.json({ message: RESTING_MESSAGE }, 503);

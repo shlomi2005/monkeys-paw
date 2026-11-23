@@ -16,6 +16,12 @@ export interface GlobalState {
   reservedCents: number;
   dayStart: number;
   ipStates: Map<string, IpState>;
+  /**
+   * Called after the day roll, and by the guard after a reservation and after a settle. It saves the
+   * three numbers `spentCents`, `reservedCents` and `dayStart` and nothing else: `ipStates` is never saved.
+   * Unset means memory only.
+   */
+  persist?: () => void;
 }
 
 export function createGlobalState(now: number = Date.now()): GlobalState {
@@ -65,5 +71,6 @@ export function rollDayIfElapsed(state: GlobalState, now: number): boolean {
   if (!isDayElapsed(state, now)) return false;
   state.spentCents = 0;
   state.dayStart = now;
+  state.persist?.();
   return true;
 }

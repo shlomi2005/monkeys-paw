@@ -5,7 +5,9 @@ import type { BudgetState } from 'paw-core';
 import type { BudgetConfig } from '../src/budget/config';
 import { BudgetedModelClient, BudgetExhaustedError } from '../src/budget/guarded-client';
 import type { MeteredModelClient } from '../src/budget/guarded-client';
-import { createGlobalState } from '../src/budget/state';
+import { createGlobalState, rollDayIfElapsed } from '../src/budget/state';
+import { FakeBudgetStore } from '../src/budget/fake-store';
+import { applyLoaded, snapshotOf } from '../src/budget/store';
 import { DEFAULT_PRICE_TABLE, attemptCostCents, loadPriceTable, priceFor } from '../src/budget/prices';
 import type { ModelPrice } from '../src/budget/prices';
 import { GeminiModelClient, MAX_OUTPUT_TOKENS, QuotaExhaustedError } from '../src/client/gemini';
@@ -637,6 +639,73 @@ describe('Property 13: refused calls are not billed (paw-api task 123, Req 16)',
         },
       ),
       { numRuns: 50 },
+    );
+  });
+});
+
+describe('Property 4 (paw-edge): a reload keeps the spend', () => {
+  it('after any sequence of reserve, settle and day roll, a reload gives spent + reserved and 0 reserved', async () => {
+    const op = fc.constantFrom('reserve', 'settle', 'roll');
+    await fc.assert(
+      fc.asyncProperty(fc.array(op, { maxLength: 30 }), async (ops) => {
+        let now = 1_000;
+        const settlers: Array<() => void> = [];
+        const inner: MeteredModelClient = {
+          available: true,
+          plan: () => [{ model: 'gemini-3.6-flash', inputTokens: 1000, maxOutputTokens: 1000 }],
+          generate: async () => ({}),
+          generateMetered: (_prompt, onAttempt) =>
+            new Promise((resolve) => {
+              settlers.push(() => {
+                onAttempt({
+                  model: 'gemini-3.6-flash',
+                  inputTokens: 1000,
+                  maxOutputTokens: 1000,
+                  usage: { promptTokens: 500, outputTokens: 200 },
+                });
+                resolve({});
+              });
+            }),
+        };
+        const config: BudgetConfig = { perIpLimit: 100, windowMs: 60_000, dailyBudgetCents: 1_000_000 };
+        const store = new FakeBudgetStore();
+        const state = createGlobalState(now);
+        state.persist = () => store.save(snapshotOf(state));
+        const pending: Array<Promise<unknown>> = [];
+
+        for (const step of ops) {
+          if (step === 'reserve') {
+            pending.push(new BudgetedModelClient(inner, state, config, () => now).generate('p'));
+            await Promise.resolve();
+          } else if (step === 'settle') {
+            settlers.shift()?.();
+            await Promise.resolve();
+            await Promise.resolve();
+          } else {
+            now += DAY_MS;
+            rollDayIfElapsed(state, now);
+          }
+        }
+
+        const saved = store.last;
+        if (saved === undefined) {
+          // Nothing was saved: a reload is the fresh state.
+          const fresh = createGlobalState(now);
+          applyLoaded(fresh, store.load(), config.dailyBudgetCents, now);
+          expect(fresh.spentCents).toBe(0);
+          expect(fresh.reservedCents).toBe(0);
+        } else {
+          const reloaded = createGlobalState(now);
+          applyLoaded(reloaded, store.load(), config.dailyBudgetCents, now);
+          expect(reloaded.spentCents).toBe(saved.spentCents + saved.reservedCents);
+          expect(reloaded.reservedCents).toBe(0);
+          expect(reloaded.dayStart).toBe(saved.dayStart);
+        }
+        // Let the guards that are still waiting finish, so no promise is left behind.
+        while (settlers.length > 0) settlers.shift()?.();
+        await Promise.all(pending);
+      }),
+      { numRuns: 100 },
     );
   });
 });

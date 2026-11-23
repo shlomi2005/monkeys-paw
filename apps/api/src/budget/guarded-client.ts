@@ -67,6 +67,13 @@ const IN_FLIGHT = new WeakMap<GlobalState, number>();
  * only by that excess, and every later call is then refused because `spentCents`
  * alone is above the cap.
  *
+ * When the state has a `persist` hook (a budget store), the guard calls it right after the reservation,
+ * in the same tick and before `generateMetered`, so the reserve is saved before the first upstream fetch,
+ * and again after the settle. The hook is not swallowed: if it throws, the error goes up, and a
+ * throw at the reservation means the model is not called. paw-core hides the errors of a model call
+ * behind a fallback, so the guard also keeps the first one in `persistFailure` and the grant and bind
+ * routes throw it, which ends in the app's error handler (a fixed 500).
+ *
  * The per-IP limit is not applied here. It counts HTTP requests and is
  * enforced by `checkBudget`.
  */
@@ -79,6 +86,12 @@ export class BudgetedModelClient implements ModelClient {
   quotaSpent = false;
   /** Cents this guard has charged to the shared state (its own spend). */
   costCents = 0;
+  /**
+   * The first error a `persist` hook threw through this guard. paw-core swallows the errors of a
+   * model call (retry once, then a fallback), so the routes read this after the call and throw it:
+   * a failed save ends in the app's error handler, a fixed 500, and not in a fallback answer.
+   */
+  persistFailure: { error: unknown } | undefined;
 
   constructor(
     private readonly inner: MeteredModelClient,
@@ -94,7 +107,7 @@ export class BudgetedModelClient implements ModelClient {
       throw new BudgetExhaustedError();
     }
 
-    rollDayIfElapsed(this.state, this.now());
+    this.remember(() => rollDayIfElapsed(this.state, this.now()));
 
     if (!this.inner.available) {
       this.denied = true;
@@ -116,6 +129,15 @@ export class BudgetedModelClient implements ModelClient {
     this.state.reservedCents += ceiling;
     IN_FLIGHT.set(this.state, (IN_FLIGHT.get(this.state) ?? 0) + 1);
     this.calls += 1;
+    // Same tick, before the first upstream fetch. A failed save is not swallowed: the reservation is
+    // given back, nothing was charged, the error goes up and the model is not called.
+    try {
+      this.remember(() => this.state.persist?.());
+    } catch (error) {
+      this.calls -= 1;
+      this.release(ceiling);
+      throw error;
+    }
 
     const reports: AttemptReport[] = [];
     try {
@@ -134,6 +156,8 @@ export class BudgetedModelClient implements ModelClient {
           : reports.reduce((sum, report) => sum + this.chargeOf(report), 0);
       this.state.spentCents += charge;
       this.costCents += charge;
+      // Not caught: a failed save reaches the route's error handler (a fixed 500).
+      this.remember(() => this.state.persist?.());
     }
   }
 
@@ -163,6 +187,16 @@ export class BudgetedModelClient implements ModelClient {
     }
     if (report.unbilled && !report.usage) return 0;
     return this.ceilingOf(report);
+  }
+
+  /** Runs `fn`; an error it throws is kept in `persistFailure` (the first one) and thrown again. */
+  private remember<T>(fn: () => T): T {
+    try {
+      return fn();
+    } catch (error) {
+      this.persistFailure ??= { error };
+      throw error;
+    }
   }
 
   private release(ceiling: number): void {

@@ -6,10 +6,12 @@ read `apps/api/.env`.
 - [x] 1. `wrangler` as a devDependency of `apps/api` at an exact version at least two weeks old, in the lockfile;
   `.wrangler/` and `.dev.vars*` in `.gitignore`. No other new runtime dependency. (Req 11.3, 11.4)
   Done: `wrangler` 4.158.0 is an exact devDependency of `apps/api` and in the lockfile; `workerd: false` under `allowBuilds`; `.wrangler/` and `.dev.vars*` are in `.gitignore`.
-- [ ] 2. The store seam and the examples loader in `apps/api` (`src/budget/store.ts`, `budget/state.ts`,
+- [x] 2. The store seam and the examples loader in `apps/api` (`src/budget/store.ts`, `budget/state.ts`,
   `budget/guarded-client.ts`, `app.ts`, `routes/examples.ts`), with tests: no store is as today, the load rule, a
   leftover reservation counts as spent, an unreadable row is a spent day, the save before the first upstream fetch,
   the examples loader and Node's path unchanged. Agents run no `apps/api` test in the repository. (Req 5, 7)
+  Done: store, hook, loader and `error-log-sync.ts` written, with tests in `budget/store.test.ts`, `app.test.ts` and
+  `tests/properties.test.ts` (property 4); typecheck passes, the tests are written and not run by the agent.
 - [ ] 3. The edge modules (`src/edge/headers.ts`, `sql-store.ts`, `config.ts`, `types.ts`, `worker.ts` with
   `PawObject`) and `apps/api/wrangler.json`, with tests: forged headers in both directions, `CF-Worker`, `XX` and
   `T1`, the XFF overwrite and the per-IP limit, no IP in storage, the budget across an object restart, the config file

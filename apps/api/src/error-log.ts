@@ -1,4 +1,3 @@
-import { writeSync } from 'node:fs';
 import { HTTPException } from 'hono/http-exception';
 import { ZodError } from 'zod';
 import { BudgetExhaustedError } from './budget/guarded-client';
@@ -66,14 +65,5 @@ export function logError(code: ErrorCode, err: unknown): void {
     console.error(errorLine(code, err));
   } catch {
     // Logging must not turn one failure into another.
-  }
-}
-
-/** Same line, written synchronously to fd 2, for a process that is about to exit. Never throws. */
-export function logErrorSync(code: ErrorCode, err: unknown): void {
-  try {
-    writeSync(2, `${errorLine(code, err)}\n`);
-  } catch {
-    // Nothing left to try.
   }
 }

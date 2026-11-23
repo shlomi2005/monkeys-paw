@@ -45,11 +45,11 @@ export function parseTrustedProxyHops(raw: string | undefined): number {
  * Load budget configuration from environment variables with sensible defaults.
  * (Task 14, Req 7; task 108)
  */
-export function loadBudgetConfig(): BudgetConfig {
+export function loadBudgetConfig(env: Record<string, string | undefined> = process.env): BudgetConfig {
   return {
-    perIpLimit: parseInt(process.env.PER_IP_LIMIT || '10', 10),
-    windowMs: parseWindowMs(process.env.RATE_WINDOW_MS),
-    dailyBudgetCents: parseDailyBudgetCents(process.env.DAILY_BUDGET_CENTS),
+    perIpLimit: parseInt(env.PER_IP_LIMIT || '10', 10),
+    windowMs: parseWindowMs(env.RATE_WINDOW_MS),
+    dailyBudgetCents: parseDailyBudgetCents(env.DAILY_BUDGET_CENTS),
   };
 }
 

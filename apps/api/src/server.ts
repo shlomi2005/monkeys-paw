@@ -8,7 +8,8 @@ import { loadPriceTable } from './budget/prices';
 import { createGlobalState } from './budget/state';
 import { getCurrentMode } from './modes';
 import { defaultExamplesCachePath } from './paths';
-import { logError, logErrorSync } from './error-log';
+import { logError } from './error-log';
+import { logErrorSync } from './error-log-sync';
 
 // A crash writes one fixed line (code and class) and exits 1. Without these handlers Node prints
 // the message and the stack of the error, which can hold part of a request.
