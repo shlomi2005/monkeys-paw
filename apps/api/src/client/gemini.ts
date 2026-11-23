@@ -9,7 +9,7 @@ const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 export const DEFAULT_MODEL = 'gemini-3.6-flash';
 
 /** `gemini-3.1-flash-lite` shuts down on 2027-05-07. It stays as the last fallback until then. */
-const DEFAULT_FALLBACKS = 'gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite';
+export const DEFAULT_FALLBACKS = 'gemini-3.8-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite';
 
 /** The default chain, primary first, as it is when no model variable is set. */
 export const DEFAULT_MODEL_CHAIN: readonly string[] = [DEFAULT_MODEL, ...DEFAULT_FALLBACKS.split(',')];
@@ -213,9 +213,14 @@ function modelsFromEnv(): string[] {
   return [primary, ...fallbacks.split(',')];
 }
 
-function timeoutFromEnv(): number {
-  const parsed = Number(process.env.GEMINI_TIMEOUT_MS);
+/** `GEMINI_TIMEOUT_MS` as text: a finite number above 0, else 30000. Pure. */
+export function parseTimeoutMs(raw: string | undefined): number {
+  const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
+}
+
+function timeoutFromEnv(): number {
+  return parseTimeoutMs(process.env.GEMINI_TIMEOUT_MS);
 }
 
 /** The first candidate of the response envelope, if any. */

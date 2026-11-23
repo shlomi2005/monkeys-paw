@@ -12,12 +12,15 @@ read `apps/api/.env`.
   the examples loader and Node's path unchanged. Agents run no `apps/api` test in the repository. (Req 5, 7)
   Done: store, hook, loader and `error-log-sync.ts` written, with tests in `budget/store.test.ts`, `app.test.ts` and
   `tests/properties.test.ts` (property 4); typecheck passes, the tests are written and not run by the agent.
-- [ ] 3. The edge modules (`src/edge/headers.ts`, `sql-store.ts`, `config.ts`, `types.ts`, `worker.ts` with
+- [x] 3. The edge modules (`src/edge/headers.ts`, `sql-store.ts`, `config.ts`, `types.ts`, `worker.ts` with
   `PawObject`) and `apps/api/wrangler.json`, with tests: forged headers in both directions, `CF-Worker`, `XX` and
   `T1`, the XFF overwrite and the per-IP limit, no IP in storage, the budget across an object restart, the config file
   checks, and properties 1 to 5. Agents run no `apps/api` test in the repository. (Req 1 to 4, 6, 9, 12)
-- [ ] 4. The fetch-count test: chain cut to 3, at most 42 upstream fetches for a grant and 6 for a bind, with a fake
+  Done: `src/edge/` (types, headers, sql-store, config, worker with `PawObject`), `wrangler.json`, the `edge:dev` script and
+  `rootDir` set to `.` in tsconfig for the JSON import; tests written, not run by the agent.
+- [x] 4. The fetch-count test: chain cut to 3, at most 42 upstream fetches for a grant and 6 for a bind, with a fake
   `fetch`. Agents run no `apps/api` test in the repository. (Req 8)
+  Done: the `fetch count on the edge` block in `tests/edge.test.ts` (14 calls and 42 fetches per grant, 6 per bind); written, not run by the agent.
 - [ ] 5. The MCP `User-Agent: paw-mcp/<version>` in `packages/paw-mcp`, its tests, and the rebuilt bundle in
   `powers/monkeys-paw/server/`. (Req 10.1, 10.3)
 - [ ] 6. README section "Deploy your own (Cloudflare Workers Free)" with the owner checks of task 7, and one line in
